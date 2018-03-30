@@ -1,0 +1,21 @@
+#!/bin/sh
+
+set -e
+
+if [ ! -f "$1" ]; then
+        echo "usage: $(basename "$0") FILE"
+        exit 1
+fi
+
+. "$(readlink -f "$1")"
+
+DEV="gt${HOST:+c}-$(basename "$1")"
+
+exec glorytun-tcp \
+	${SERVER:+listener} \
+	keyfile "$1".key \
+	${DEV:+dev "$DEV"} \
+	${HOST:+host "$HOST"} \
+	${PORT:+port "$PORT"} \
+	${MPTCP:+mptcp} \
+	${OPTIONS:+$OPTIONS}

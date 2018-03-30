@@ -1,0 +1,5 @@
+PORT=65001
+DEV=tun0
+SERVER=true
+MPTCP=true
+OPTIONS="chacha20 multiqueue keepalive"

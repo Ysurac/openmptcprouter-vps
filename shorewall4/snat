@@ -1,0 +1,23 @@
+#
+# Shorewall - Sample SNAT/Masqueradee File for two-interface configuration.
+# Copyright (C) 2006-2016 by the Shorewall Team
+#
+# This library is free software; you can redistribute it and/or
+# modify it under the terms of the GNU Lesser General Public
+# License as published by the Free Software Foundation; either
+# version 2.1 of the License, or (at your option) any later version.
+#
+# See the file README.txt for further details.
+#------------------------------------------------------------------------------
+# For information about entries in this file, type "man shorewall-snat"
+#
+# See http://shorewall.net/manpages/shorewall-snat.html for more information
+###########################################################################################################################################
+#ACTION			SOURCE			DEST            PROTO	PORT	IPSEC	MARK	USER	SWITCH	ORIGDEST	PROBABILITY
+#
+MASQUERADE		10.0.0.0/8,\
+			169.254.0.0/16,\
+			172.16.0.0/12,\
+			192.168.0.0/16		eth0
+# SNAT from VPN server for all VPN clients
+SNAT(10.0.0.1)		0.0.0.0/0		gt-tun0

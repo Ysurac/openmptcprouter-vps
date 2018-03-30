@@ -1,0 +1,23 @@
+#
+# Shorewall6 -- /etc/shorewall6/params
+#
+# Assign any variables that you need here.
+#
+# It is suggested that variable names begin with an upper case letter
+# to distinguish them from variables used internally within the
+# Shorewall6 programs
+#
+# Example:
+#
+#	NET_IF=eth0
+#	NET_OPTIONS=dhcp,nosmurfs
+#
+# Example (/etc/shorewall6/interfaces record):
+#
+#	net	$NET_IF		-	$NET_OPTIONS
+#
+# The result will be the same as if the record had been written
+#
+#	net	eth0		-	dhcp,nosmurfs
+#
+###############################################################################

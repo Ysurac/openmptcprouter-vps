@@ -1,0 +1,61 @@
+#
+# Shorewall version 4.0 - Sample Rules File for two-interface configuration.
+# Copyright (C) 2006-2014,2007 by the Shorewall Team
+#
+# This library is free software; you can redistribute it and/or
+# modify it under the terms of the GNU Lesser General Public
+# License as published by the Free Software Foundation; either
+# version 2.1 of the License, or (at your option) any later version.
+#
+# See the file README.txt for further details.
+#------------------------------------------------------------------------------
+# For information about entries in this file, type "man shorewall-rules"
+######################################################################################################################################################################################################
+#ACTION         SOURCE          DEST            PROTO   DEST    SOURCE          ORIGINAL        RATE            USER/   MARK    CONNLIMIT       TIME            HEADERS         SWITCH          HELPER
+#                                                       PORT    PORT(S)         DEST            LIMIT           GROUP
+?SECTION ALL
+?SECTION ESTABLISHED
+?SECTION RELATED
+?SECTION INVALID
+?SECTION UNTRACKED
+?SECTION NEW
+
+#       Don't allow connection pickup from the net
+#
+Invalid(DROP)   net             all             tcp
+#
+#       Accept DNS connections from the firewall to the network
+#
+DNS(ACCEPT)     $FW             net
+#
+#       Allow Ping from/to the VPN
+#
+Ping(ACCEPT)    vpn             $FW
+Ping(ACCEPT)    $FW             vpn
+#
+#       Allow Ping from the firewall to the network
+#
+Ping(ACCEPT)    $FW             net
+#
+# Drop Ping from the "bad" net zone.. and prevent your log from being flooded..
+#
+#Ping(DROP)     net             $FW
+Ping(ACCEPT)    net             $FW
+#
+#	Accept connection from port > 65000 for shadowsocks and glorytun on the firewall
+#
+ACCEPT          net             $FW             tcp     65000-65535
+ACCEPT          net             $FW             udp     65000-65535
+#
+#	Accept connection from SSH to the firewall
+#
+ACCEPT          net             $FW             tcp     65222
+#
+#	DHCP forward to the VPN from the firewall
+#
+DHCPfwd(ACCEPT)	$FW		vpn
+#
+#	Redirect all port from 1 to 64999 to the VPN client from the network
+#
+#DNAT		net		vpn:10.0.0.2	tcp	1-64999
+#DNAT		net		vpn:10.0.0.2	udp	1-64999

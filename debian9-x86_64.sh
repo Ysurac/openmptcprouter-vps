@@ -11,7 +11,7 @@ umask 0022
 
 # Install mptcp kernel and shadowsocks
 apt-get update
-apt-get -y install dirmngr
+apt-get -y install dirmngr patch
 #apt-key adv --keyserver hkp://keys.gnupg.net --recv-keys 379CE192D401AB61
 #echo 'deb http://dl.bintray.com/cpaasch/deb jessie main' >> /etc/apt/sources.list
 echo 'deb http://deb.debian.org/debian stretch-backports main' > /etc/apt/sources.list.d/stretch-backports.list
@@ -142,9 +142,9 @@ systemctl enable shorewall6
 
 # Add OpenMPTCProuter VPS script version to /etc/motd
 if grep --quiet 'OpenMPTCProuter VPS' /etc/motd; then
-	sed -i 's:< OpenMPTCProuter VPS [0-9]*\.[0-9]* >:< OpenMPCTProuter VPS 0.14 >:' /etc/motd
+	sed -i 's:< OpenMPTCProuter VPS [0-9]*\.[0-9]* >:< OpenMPCTProuter VPS 0.15 >:' /etc/motd
 else
-	echo '< OpenMPCTProuter VPS 0.14 >' >> /etc/motd
+	echo '< OpenMPCTProuter VPS 0.15 >' >> /etc/motd
 fi
 
 # Display important info

@@ -1,0 +1,13 @@
+[Unit]
+Description=Glorytun UDP on %I
+After=network.target network-online.target
+
+[Service]
+Type=simple
+Restart=always
+EnvironmentFile=/etc/glorytun-udp/%i
+ExecStart=/usr/local/bin/glorytun-run keyfile /etc/glorytun-udp/%i.key
+CapabilityBoundingSet=CAP_NET_ADMIN
+
+[Install]
+WantedBy=multi-user.target

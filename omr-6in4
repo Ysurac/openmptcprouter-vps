@@ -1,0 +1,27 @@
+#!/bin/sh
+
+set -e
+
+if [ ! -f "$1" ]; then
+        echo "usage: $(basename "$0") FILE"
+        exit 1
+fi
+
+. "$(readlink -f "$1")"
+
+if [ "$2" = "start" ]; then
+	if [ "$IPV6" = true ]; then
+		# Add IPv6 tunnel
+		if [ "$(ip link show omr-6in4 up)" ]; then
+			ip tunnel change omr-6in4 mode sit remote 10.0.0.2 local 10.0.0.1
+		else
+			ip tunnel add omr-6in4 mode sit remote 10.0.0.2 local 10.0.0.1
+		fi
+		ip link set omr-6in4 up
+		ip route replace fd00::/8 via fe80::a00:2 dev omr-6in4
+	fi
+elif [ "$(ip link show omr-6in4 up)" ]; then
+	ip route del fd00::/8 via fe80::a00:2 dev omr-6in4
+	ip link set omr-6in4 down
+	ip tunnel del omr-6in4
+fi

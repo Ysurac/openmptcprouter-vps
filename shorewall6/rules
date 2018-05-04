@@ -31,6 +31,7 @@ DNS(ACCEPT)     $FW             net
 #       Allow Ping from/to the VPN
 #
 Ping(ACCEPT)    vpn             $FW
+Ping(ACCEPT)    vpn             net
 Ping(ACCEPT)    $FW             vpn
 #
 #       Allow Ping from the firewall to the network

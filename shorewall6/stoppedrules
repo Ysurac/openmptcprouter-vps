@@ -13,6 +13,6 @@
 ###############################################################################
 #ACTION         SOURCE          DEST            PROTO   DEST            SOURCE
 #                                                       PORT(S)         PORT(S)
-ACCEPT          gt-tun0         -
-ACCEPT          -               gt-tun0
+ACCEPT		omr-6in4	-
+ACCEPT		-		omr-6in4
 

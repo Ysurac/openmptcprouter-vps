@@ -5,9 +5,15 @@ GLORYTUN_PASS=${GLORYTUN_PASS:-$(od  -vN "32" -An -tx1 /dev/urandom | tr '[:lowe
 NBCPU=${NBCPU:-$(grep -c '^processor' /proc/cpuinfo | tr -d "\n")}
 OBFS=${OBFS:-no}
 INTERFACE=${INTERFACE:-$(ip -o -4 route show to default | awk '{print $5}' | tr -d "\n")}
+DEBIAN_VERSION=$(sed 's/\..*//' /etc/debian_version)
 
 set -e
 umask 0022
+
+if [ $DEBIAN_VERSION -ne 9 ]; then
+	echo "This script only work with Debian Stretch (9.x)"
+	exit 1
+fi
 
 # Install mptcp kernel and shadowsocks
 apt-get update
@@ -32,10 +38,11 @@ wget http://github.com/Ysurac/openmptcprouter-feeds/raw/master/shadowsocks-libev
 patch -p1 < 020-NOCRYPTO.patch
 apt-get -y install --no-install-recommends devscripts equivs apg libcap2-bin libpam-cap
 apt -y -t stretch-backports install libsodium-dev
-mk-build-deps --root-cmd sudo --install --tool "apt-get -o Debug::pkgProblemResolver=yes --no-install-recommends -y"
+mk-build-deps --install --tool "apt-get -o Debug::pkgProblemResolver=yes --no-install-recommends -y"
 dpkg-buildpackage -b -us -uc
 cd ..
 dpkg -i shadowsocks-libev_3.1.3-1_amd64.deb
+rm -r /tmp/shadowsocks-libev-3.1.3
 
 # Load OLIA Congestion module at boot time
 if ! grep -q olia /etc/modules ; then
@@ -79,13 +86,27 @@ fi
 
 # Install Glorytun UDP
 #apt-get -y install meson pkg-config ca-certificates
-#cd /root
-#wget https://github.com/angt/glorytun/releases/download/v0.0.93-mud/glorytun-0.0.93-mud.tar.gz
-#tar xzf glorytun-0.0.93-mud.tar.gz
-#cd glorytun-0.0.93-mud
+#cd /tmp
+#wget -O /tmp/glorytun-0.0.98-mud.tar.gz https://github.com/angt/glorytun/releases/download/v0.0.98-mud/glorytun-0.0.98-mud.tar.gz
+#tar xzf glorytun-0.0.98-mud.tar.gz
+#cd glorytun-0.0.98-mud
 #meson build
 #ninja -C build install
 #sed -i 's:EmitDNS=yes:EmitDNS=no:g' /lib/systemd/network/glorytun.network
+#rm /lib/systemd/system/glorytun*
+#rm /lib/systemd/network/glorytun*
+#wget -O /usr/local/bin/glorytun-run http://www.openmptcprouter.com/server/glorytun-udp-run
+#chmod 755 /usr/local/bin/glorytun-run
+#wget -O /lib/systemd/system/glorytun-udp@.service http://www.openmptcprouter.com/server/glorytun-udp%40.service.in
+#wget -O /lib/systemd/network/glorytun-udp.network http://www.openmptcprouter.com/server/glorytun-udp.network
+#mkdir -p /etc/glorytun-udp
+#wget -O /etc/glorytun-udp/tun0 http://www.openmptcprouter.com/server/tun0.glorytun-udp
+#echo "$GLORYTUN_PASS" > /etc/glorytun-udp/tun0.key
+#systemctl enable glorytun-udp@tun0.service
+#systemctl enable systemd-networkd.service
+#cd /tmp
+#rm -r /tmp/glorytun-0.0.98-mud
+
 
 # Install Glorytun TCP
 apt -t stretch-backports -y install libsodium-dev
@@ -101,8 +122,10 @@ make
 cp glorytun /usr/local/bin/glorytun-tcp
 wget -O /usr/local/bin/glorytun-tcp-run http://www.openmptcprouter.com/server/glorytun-tcp-run
 chmod 755 /usr/local/bin/glorytun-tcp-run
+wget -O /usr/local/bin/omr-6in4 http://www.openmptcprouter.com/server/omr-6in4
+chmod 755 /usr/local/bin/omr-6in4
 wget -O /lib/systemd/system/glorytun-tcp@.service http://www.openmptcprouter.com/server/glorytun-tcp%40.service.in
-wget -O /lib/systemd/network/glorytun.network http://www.openmptcprouter.com/server/glorytun.network
+wget -O /lib/systemd/network/glorytun-tcp.network http://www.openmptcprouter.com/server/glorytun.network
 mkdir -p /etc/glorytun-tcp
 wget -O /etc/glorytun-tcp/tun0 http://www.openmptcprouter.com/server/tun0.glorytun
 echo "$GLORYTUN_PASS" > /etc/glorytun-tcp/tun0.key
@@ -142,9 +165,9 @@ systemctl enable shorewall6
 
 # Add OpenMPTCProuter VPS script version to /etc/motd
 if grep --quiet 'OpenMPTCProuter VPS' /etc/motd; then
-	sed -i 's:< OpenMPTCProuter VPS [0-9]*\.[0-9]* >:< OpenMPCTProuter VPS 0.15 >:' /etc/motd
+	sed -i 's:< OpenMPTCProuter VPS [0-9]*\.[0-9]* >:< OpenMPCTProuter VPS 0.17 >:' /etc/motd
 else
-	echo '< OpenMPCTProuter VPS 0.15 >' >> /etc/motd
+	echo '< OpenMPCTProuter VPS 0.17 >' >> /etc/motd
 fi
 
 # Display important info
@@ -159,5 +182,6 @@ echo 'Glorytun port: 65001'
 echo 'Glorytun encryption: chacha20'
 echo 'Your glorytun key: '
 echo $GLORYTUN_PASS
-echo 'You need to reboot to enable MPTCP, shadowsocks, glorytun and shorewall'
+echo '================================================================================'
+echo '/!\ You need to reboot to enable MPTCP, shadowsocks, glorytun and shorewall /!\'
 echo '================================================================================'

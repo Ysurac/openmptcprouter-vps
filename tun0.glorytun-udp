@@ -1,0 +1,4 @@
+BIND=0.0.0.0
+BIND_PORT=65001
+DEV=tun0
+OPTIONS="chacha persist"

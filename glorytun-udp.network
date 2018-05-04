@@ -1,0 +1,16 @@
+[Match]
+Name=gt-udp-*
+
+[Network]
+Description=Glorytun server device
+Address=0.0.0.0/24
+DHCPServer=yes
+IPMasquerade=yes
+
+[DHCPServer]
+PoolOffset=2
+PoolSize=1
+EmitDNS=no
+DNS=9.9.9.9
+DefaultLeaseTimeSec=12h
+MaxLeaseTimeSec=24h

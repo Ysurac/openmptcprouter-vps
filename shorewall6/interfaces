@@ -14,6 +14,6 @@
 ?FORMAT 2
 ###############################################################################
 #ZONE   INTERFACE       OPTIONS
-net	eth0            dhcp,tcpflags,nosmurfs,sourceroute=0
-vpn	gt-tun0        nosmurfs,tcpflags
+net	eth0            dhcp,tcpflags,rpfilter,forward=1
+vpn	omr-6in4        tcpflags,forward=1
 

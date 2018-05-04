@@ -1,0 +1,18 @@
+#!/bin/sh
+
+set -e
+
+if [ ! -f "$1" ]; then
+        echo "usage: $(basename "$0") FILE"
+        exit 1
+fi
+
+. "$(readlink -f "$1")"
+
+DEV="gt${HOST:+c}-udp-$(basename "$1")"
+
+exec glorytun \
+	bin $BIND $BIND_PORT
+	${DEV:+dev "$DEV"} \
+	${HOST:+to "$HOST" "$PORT"} \
+	${OPTIONS:+$OPTIONS}

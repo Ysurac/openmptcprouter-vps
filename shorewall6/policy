@@ -13,10 +13,8 @@
 ###############################################################################
 #SOURCE         DEST            POLICY          LOG LEVEL       LIMIT:BURST
 
-vpn             net             ACCEPT
-vpn             fw              ACCEPT
-fw              vpn             ACCEPT
-fw              net             ACCEPT
+vpn             all             ACCEPT		info
+fw              all             ACCEPT
 net             all             DROP            info
 # THE FOLLOWING POLICY MUST BE LAST
 all             all             REJECT          info

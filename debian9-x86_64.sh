@@ -27,6 +27,9 @@ wget -O /tmp/linux-headers-4.14.24-mptcp-64056fa.amd64.deb http://www.openmptcpr
 #apt-get -y install linux-mptcp
 dpkg -i /tmp/linux-image-4.14.24-mptcp-64056fa.amd64.deb
 dpkg -i /tmp/linux-headers-4.14.24-mptcp-64056fa.amd64.deb
+# Ensure that the default kernel is well the Debian one
+sed -i 's#GRUB_DEFAULT=.*#GRUB_DEFAULT="Debian GNU/Linux"#g' /etc/default/grub
+update-grub
 
 #apt -t stretch-backports -y install shadowsocks-libev
 ## Compile Shadowsocks

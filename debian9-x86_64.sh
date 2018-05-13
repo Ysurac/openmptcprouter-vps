@@ -24,9 +24,12 @@ echo 'deb http://deb.debian.org/debian stretch-backports main' > /etc/apt/source
 apt-get update
 wget -O /tmp/linux-image-4.14.24-mptcp-64056fa.amd64.deb http://www.openmptcprouter.com/kernel/linux-image-4.14.24-mptcp-64056fa.amd64.deb
 wget -O /tmp/linux-headers-4.14.24-mptcp-64056fa.amd64.deb http://www.openmptcprouter.com/kernel/linux-headers-4.14.24-mptcp-64056fa.amd64.deb
+cd /boot
+for file in bzImage* ; do mv $file ${file/bzImage/vmlinuz} ; done
 #apt-get -y install linux-mptcp
 dpkg -i /tmp/linux-image-4.14.24-mptcp-64056fa.amd64.deb
 dpkg -i /tmp/linux-headers-4.14.24-mptcp-64056fa.amd64.deb
+
 
 #apt -t stretch-backports -y install shadowsocks-libev
 ## Compile Shadowsocks

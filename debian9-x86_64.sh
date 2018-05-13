@@ -165,9 +165,9 @@ systemctl enable shorewall6
 
 # Add OpenMPTCProuter VPS script version to /etc/motd
 if grep --quiet 'OpenMPTCProuter VPS' /etc/motd; then
-	sed -i 's:< OpenMPTCProuter VPS [0-9]*\.[0-9]* >:< OpenMPCTProuter VPS 0.17 >:' /etc/motd
+	sed -i 's:< OpenMPTCProuter VPS [0-9]*\.[0-9]* >:< OpenMPCTProuter VPS 0.18 >:' /etc/motd
 else
-	echo '< OpenMPCTProuter VPS 0.17 >' >> /etc/motd
+	echo '< OpenMPCTProuter VPS 0.18 >' >> /etc/motd
 fi
 
 # Display important info
@@ -184,4 +184,7 @@ echo 'Your glorytun key: '
 echo $GLORYTUN_PASS
 echo '================================================================================'
 echo '/!\ You need to reboot to enable MPTCP, shadowsocks, glorytun and shorewall /!\'
+echo '--------------------------------------------------------------------------------'
+echo ' After reboot, check with uname -a that the kernel name contain mptcp.'
+echo ' You may have to modify GRUB_DEFAULT in /etc/defaut/grub'
 echo '================================================================================'

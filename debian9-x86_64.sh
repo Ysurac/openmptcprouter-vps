@@ -24,8 +24,10 @@ echo 'deb http://deb.debian.org/debian stretch-backports main' > /etc/apt/source
 apt-get update
 wget -O /tmp/linux-image-4.14.24-mptcp-64056fa.amd64.deb http://www.openmptcprouter.com/kernel/linux-image-4.14.24-mptcp-64056fa.amd64.deb
 wget -O /tmp/linux-headers-4.14.24-mptcp-64056fa.amd64.deb http://www.openmptcprouter.com/kernel/linux-headers-4.14.24-mptcp-64056fa.amd64.deb
+# Rename bzImage to vmlinuz, needed when custom kernel was used
 cd /boot
-for file in bzImage* ; do mv $file ${file/bzImage/vmlinuz} ; done
+apt-get install rename
+rename 's/^bzImage/vmlinuz/s' *
 #apt-get -y install linux-mptcp
 dpkg -i /tmp/linux-image-4.14.24-mptcp-64056fa.amd64.deb
 dpkg -i /tmp/linux-headers-4.14.24-mptcp-64056fa.amd64.deb

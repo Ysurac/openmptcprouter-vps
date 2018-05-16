@@ -26,7 +26,7 @@ wget -O /tmp/linux-image-4.14.24-mptcp-64056fa.amd64.deb http://www.openmptcprou
 wget -O /tmp/linux-headers-4.14.24-mptcp-64056fa.amd64.deb http://www.openmptcprouter.com/kernel/linux-headers-4.14.24-mptcp-64056fa.amd64.deb
 # Rename bzImage to vmlinuz, needed when custom kernel was used
 cd /boot
-apt-get install rename
+apt-get -y install rename
 rename 's/^bzImage/vmlinuz/s' * >/dev/null 2>&1
 #apt-get -y install linux-mptcp
 dpkg -i /tmp/linux-image-4.14.24-mptcp-64056fa.amd64.deb

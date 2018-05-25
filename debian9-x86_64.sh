@@ -176,7 +176,7 @@ else
 fi
 
 # Display important info
-echo '================================================================================'
+echo '===================================================================================='
 echo 'OpenMPTCProuter VPS is now configured !'
 echo 'SSH port: 65222 (instead of port 22)'
 echo 'Shadowsocks port: 65101'
@@ -187,9 +187,24 @@ echo 'Glorytun port: 65001'
 echo 'Glorytun encryption: chacha20'
 echo 'Your glorytun key: '
 echo $GLORYTUN_PASS
-echo '================================================================================'
-echo '/!\ You need to reboot to enable MPTCP, shadowsocks, glorytun and shorewall /!\'
-echo '--------------------------------------------------------------------------------'
+echo '===================================================================================='
+echo 'Keys are also saved in /root/openmptcprouter_config.txt, you are free to remove them'
+echo '===================================================================================='
+echo '  /!\ You need to reboot to enable MPTCP, shadowsocks, glorytun and shorewall /!\'
+echo '------------------------------------------------------------------------------------'
 echo ' After reboot, check with uname -a that the kernel name contain mptcp.'
-echo ' You may have to modify GRUB_DEFAULT in /etc/defaut/grub'
-echo '================================================================================'
+echo ' Else, you may have to modify GRUB_DEFAULT in /etc/defaut/grub'
+echo '===================================================================================='
+
+# Save info in file
+cat > /root/openmptcprouter_config.txt <<EOF
+SSH port: 65222 (instead of port 22)
+Shadowsocks port: 65101
+Shadowsocks encryption: aes-256-cfb
+Your shadowsocks key:
+${SHADOWSOCKS_PASS}
+Glorytun port: 65001
+Glorytun encryption: chacha20
+Your glorytun key:
+${GLORYTUN_PASS}
+EOF

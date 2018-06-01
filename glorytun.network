@@ -11,6 +11,7 @@ IPMasquerade=yes
 PoolOffset=2
 PoolSize=1
 EmitDNS=no
+EmitNTP=no
 DNS=9.9.9.9
 DefaultLeaseTimeSec=12h
 MaxLeaseTimeSec=24h

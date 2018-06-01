@@ -55,7 +55,12 @@ ACCEPT          net             $FW             tcp     65222
 #
 DHCPfwd(ACCEPT)	$FW		vpn
 #
-#	Redirect all port from 1 to 64999 to the VPN client from the network
+#	Redirect all port from 1 to 64999 to the VPN UDP client from the network
+#
+#DNAT		net		vpn:10.0.1.2	tcp	1-64999
+#DNAT		net		vpn:10.0.1.2	udp	1-64999
+#
+#	Redirect all port from 1 to 64999 to the VPN TCP client from the network
 #
 #DNAT		net		vpn:10.0.0.2	tcp	1-64999
 #DNAT		net		vpn:10.0.0.2	udp	1-64999

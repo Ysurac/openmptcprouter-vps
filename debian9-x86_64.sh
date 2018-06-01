@@ -32,6 +32,10 @@ rename 's/^bzImage/vmlinuz/s' * >/dev/null 2>&1
 dpkg -i /tmp/linux-image-4.14.24-mptcp-64056fa.amd64.deb
 dpkg -i /tmp/linux-headers-4.14.24-mptcp-64056fa.amd64.deb
 
+# Check if mptcp kernel is grub default kernel
+wget -O /tmp/update-grub.sh http://www.openmptcprouter.com/server/update-grub.sh
+cd /tmp
+bash update-grub.sh 4.14.24-mptcp
 
 #apt -t stretch-backports -y install shadowsocks-libev
 ## Compile Shadowsocks
@@ -90,27 +94,27 @@ if [ "$OBFS" = "yes" ]; then
 fi
 
 # Install Glorytun UDP
-#apt-get -y install meson pkg-config ca-certificates
-#cd /tmp
-#wget -O /tmp/glorytun-0.0.98-mud.tar.gz https://github.com/angt/glorytun/releases/download/v0.0.98-mud/glorytun-0.0.98-mud.tar.gz
-#tar xzf glorytun-0.0.98-mud.tar.gz
-#cd glorytun-0.0.98-mud
-#meson build
-#ninja -C build install
-#sed -i 's:EmitDNS=yes:EmitDNS=no:g' /lib/systemd/network/glorytun.network
-#rm /lib/systemd/system/glorytun*
-#rm /lib/systemd/network/glorytun*
-#wget -O /usr/local/bin/glorytun-run http://www.openmptcprouter.com/server/glorytun-udp-run
-#chmod 755 /usr/local/bin/glorytun-run
-#wget -O /lib/systemd/system/glorytun-udp@.service http://www.openmptcprouter.com/server/glorytun-udp%40.service.in
-#wget -O /lib/systemd/network/glorytun-udp.network http://www.openmptcprouter.com/server/glorytun-udp.network
-#mkdir -p /etc/glorytun-udp
-#wget -O /etc/glorytun-udp/tun0 http://www.openmptcprouter.com/server/tun0.glorytun-udp
-#echo "$GLORYTUN_PASS" > /etc/glorytun-udp/tun0.key
-#systemctl enable glorytun-udp@tun0.service
-#systemctl enable systemd-networkd.service
-#cd /tmp
-#rm -r /tmp/glorytun-0.0.98-mud
+apt-get -y install meson pkg-config ca-certificates
+cd /tmp
+wget -O /tmp/glorytun-0.0.99-mud.tar.gz https://github.com/angt/glorytun/releases/download/v0.0.99-mud/glorytun-0.0.99-mud.tar.gz
+tar xzf glorytun-0.0.99-mud.tar.gz
+cd glorytun-0.0.99-mud
+meson build
+ninja -C build install
+sed -i 's:EmitDNS=yes:EmitDNS=no:g' /lib/systemd/network/glorytun.network
+rm /lib/systemd/system/glorytun*
+rm /lib/systemd/network/glorytun*
+wget -O /usr/local/bin/glorytun-run http://www.openmptcprouter.com/server/glorytun-udp-run
+chmod 755 /usr/local/bin/glorytun-run
+wget -O /lib/systemd/system/glorytun-udp@.service http://www.openmptcprouter.com/server/glorytun-udp%40.service.in
+wget -O /lib/systemd/network/glorytun-udp.network http://www.openmptcprouter.com/server/glorytun-udp.network
+mkdir -p /etc/glorytun-udp
+wget -O /etc/glorytun-udp/tun0 http://www.openmptcprouter.com/server/tun0.glorytun-udp
+echo "$GLORYTUN_PASS" > /etc/glorytun-udp/tun0.key
+systemctl enable glorytun-udp@tun0.service
+systemctl enable systemd-networkd.service
+cd /tmp
+rm -r /tmp/glorytun-0.0.99-mud
 
 
 # Install Glorytun TCP
@@ -127,8 +131,6 @@ make
 cp glorytun /usr/local/bin/glorytun-tcp
 wget -O /usr/local/bin/glorytun-tcp-run http://www.openmptcprouter.com/server/glorytun-tcp-run
 chmod 755 /usr/local/bin/glorytun-tcp-run
-wget -O /usr/local/bin/omr-6in4 http://www.openmptcprouter.com/server/omr-6in4
-chmod 755 /usr/local/bin/omr-6in4
 wget -O /lib/systemd/system/glorytun-tcp@.service http://www.openmptcprouter.com/server/glorytun-tcp%40.service.in
 wget -O /lib/systemd/network/glorytun-tcp.network http://www.openmptcprouter.com/server/glorytun.network
 mkdir -p /etc/glorytun-tcp
@@ -143,6 +145,14 @@ rm -r /tmp/glorytun-0.0.35
 if ! grep -q tun /etc/modules ; then
 	echo tun >> /etc/modules
 fi
+
+# Add 6in4 support
+wget -O /usr/local/bin/omr-6in4 http://www.openmptcprouter.com/server/omr-6in4
+chmod 755 /usr/local/bin/omr-6in4
+wget -O /usr/local/bin/omr-6in4-service http://www.openmptcprouter.com/server/omr-6in4-service
+chmod 755 /usr/local/bin/omr-6in4-service
+wget -O /lib/systemd/system/omr-6in4.service http://www.openmptcprouter.com/server/omr-6in4.service.in
+
 
 
 # Change SSH port to 65222
@@ -170,9 +180,9 @@ systemctl enable shorewall6
 
 # Add OpenMPTCProuter VPS script version to /etc/motd
 if grep --quiet 'OpenMPTCProuter VPS' /etc/motd; then
-	sed -i 's:< OpenMPTCProuter VPS [0-9]*\.[0-9]* >:< OpenMPCTProuter VPS 0.18 >:' /etc/motd
+	sed -i 's:< OpenMPTCProuter VPS [0-9]*\.[0-9]* >:< OpenMPCTProuter VPS 0.19 >:' /etc/motd
 else
-	echo '< OpenMPCTProuter VPS 0.18 >' >> /etc/motd
+	echo '< OpenMPCTProuter VPS 0.19 >' >> /etc/motd
 fi
 
 # Display important info

@@ -15,4 +15,6 @@
 #                                                       PORT(S)         PORT(S)
 ACCEPT          gt-tun0         -
 ACCEPT          -               gt-tun0
+ACCEPT          gt-udp-tun0     -
+ACCEPT          -               gt-udp-tun0
 

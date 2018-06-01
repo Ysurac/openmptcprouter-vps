@@ -12,7 +12,8 @@ fi
 DEV="gt${HOST:+c}-udp-$(basename "$1")"
 
 exec glorytun \
-	bind $BIND $BIND_PORT
+	bind $BIND $BIND_PORT \
+	keyfile "$1".key \
 	${DEV:+dev "$DEV"} \
 	${HOST:+to "$HOST" "$PORT"} \
 	${OPTIONS:+$OPTIONS}

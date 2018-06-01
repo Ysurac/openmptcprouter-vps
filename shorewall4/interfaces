@@ -14,6 +14,7 @@
 ?FORMAT 2
 ###############################################################################
 #ZONE   INTERFACE       OPTIONS
-net	eth0            dhcp,tcpflags,routefilter,nosmurfs,logmartians,sourceroute=0
-vpn	gt-tun0        nosmurfs,routefilter,logmartians,tcpflags
+net	eth0		dhcp,tcpflags,routefilter,nosmurfs,logmartians,sourceroute=0
+vpn	gt-tun0		nosmurfs,routefilter,logmartians,tcpflags
+vpn	gt-udp-tun0	nosmurfs,routefilter,logmartians,tcpflags
 

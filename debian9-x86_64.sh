@@ -99,7 +99,7 @@ if [ "$OBFS" = "yes" ]; then
 fi
 
 # Install Glorytun UDP
-if systemctl -q is_active glorytun-udp@tun0.service; then
+if systemctl -q is-active glorytun-udp@tun0.service; then
 	systemctl -q stop glorytun-udp@tun0 > /dev/null 2>&1
 fi
 apt-get -y install meson pkg-config ca-certificates
@@ -112,8 +112,8 @@ ninja -C build install
 sed -i 's:EmitDNS=yes:EmitDNS=no:g' /lib/systemd/network/glorytun.network
 rm /lib/systemd/system/glorytun*
 rm /lib/systemd/network/glorytun*
-wget -O /usr/local/bin/glorytun-run http://www.openmptcprouter.com/server/glorytun-udp-run
-chmod 755 /usr/local/bin/glorytun-run
+wget -O /usr/local/bin/glorytun-udp-run http://www.openmptcprouter.com/server/glorytun-udp-run
+chmod 755 /usr/local/bin/glorytun-udp-run
 wget -O /lib/systemd/system/glorytun-udp@.service http://www.openmptcprouter.com/server/glorytun-udp%40.service.in
 wget -O /lib/systemd/network/glorytun-udp.network http://www.openmptcprouter.com/server/glorytun-udp.network
 mkdir -p /etc/glorytun-udp
@@ -129,7 +129,7 @@ cd /tmp
 rm -rf /tmp/glorytun-0.0.99-mud
 
 # Install Glorytun TCP
-if systemctl -q is_active glorytun-tcp@tun0.service; then
+if systemctl -q is-active glorytun-tcp@tun0.service; then
 	systemctl -q stop glorytun-tcp@tun0 > /dev/null 2>&1
 fi
 apt -t stretch-backports -y install libsodium-dev
@@ -262,6 +262,6 @@ else
 	systemctl -q restart shorewall6
 	echo 'done'
 	echo 'Restarting shadowsocks...'
-	systemctl -q restart shadowsocks
+	systemctl -q restart shadowsocks-libev
 	echo 'done'
 fi

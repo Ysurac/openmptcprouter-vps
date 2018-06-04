@@ -1,6 +1,9 @@
 [Match]
 Name=gt-*
 
+[Link]
+MTUBytes=1280
+
 [Network]
 Description=Glorytun server device
 Address=0.0.0.0/24

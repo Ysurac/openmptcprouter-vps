@@ -44,7 +44,7 @@ wget -O /tmp/shadowsocks-libev-3.1.3.tar.gz http://github.com/shadowsocks/shadow
 cd /tmp
 tar xzf shadowsocks-libev-3.1.3.tar.gz
 cd shadowsocks-libev-3.1.3
-wget http://github.com/Ysurac/openmptcprouter-feeds/raw/master/shadowsocks-libev/patches/020-NOCRYPTO.patch
+wget https://github.com/Ysurac/openmptcprouter-feeds/raw/5b2caab3f98cc14e6b5fdb80a95fcd1ac61630ff/shadowsocks-libev/patches/020-NOCRYPTO.patch
 patch -p1 < 020-NOCRYPTO.patch
 apt-get -y install --no-install-recommends devscripts equivs apg libcap2-bin libpam-cap
 apt -y -t stretch-backports install libsodium-dev

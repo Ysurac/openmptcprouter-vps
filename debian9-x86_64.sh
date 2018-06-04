@@ -9,7 +9,7 @@ DEBIAN_VERSION=$(sed 's/\..*//' /etc/debian_version)
 
 set -e
 umask 0022
-
+update=0
 if [ $DEBIAN_VERSION -ne 9 ]; then
 	echo "This script only work with Debian Stretch (9.x)"
 	exit 1
@@ -33,6 +33,7 @@ dpkg -i /tmp/linux-image-4.14.24-mptcp-64056fa.amd64.deb
 dpkg -i /tmp/linux-headers-4.14.24-mptcp-64056fa.amd64.deb
 
 # Check if mptcp kernel is grub default kernel
+echo "Set MPTCP kernel as grub default..."
 wget -O /tmp/update-grub.sh http://www.openmptcprouter.com/server/update-grub.sh
 cd /tmp
 bash update-grub.sh 4.14.24-mptcp
@@ -62,9 +63,13 @@ fi
 wget -O /etc/sysctl.d/90-shadowsocks.conf http://www.openmptcprouter.com/server/shadowsocks.conf
 
 # Install shadowsocks config and add a shadowsocks by CPU
-wget -O /etc/shadowsocks-libev/config.json http://www.openmptcprouter.com/server/config.json
-SHADOWSOCKS_PASS_JSON=$(echo $SHADOWSOCKS_PASS | sed 's/+/-/g; s/\//_/g;')
-sed -i "s:MySecretKey:$SHADOWSOCKS_PASS_JSON:g" /etc/shadowsocks-libev/config.json
+if [ ! -f /etc/shadowsocks-libev/config.json ]; then
+	wget -O /etc/shadowsocks-libev/config.json http://www.openmptcprouter.com/server/config.json
+	SHADOWSOCKS_PASS_JSON=$(echo $SHADOWSOCKS_PASS | sed 's/+/-/g; s/\//_/g;')
+	sed -i "s:MySecretKey:$SHADOWSOCKS_PASS_JSON:g" /etc/shadowsocks-libev/config.json
+else
+	update=1
+fi
 #sed -i 's:json:json --mptcp:g' /lib/systemd/system/shadowsocks-libev-server@.service
 systemctl disable shadowsocks-libev
 systemctl enable shadowsocks-libev-server@config.service
@@ -94,6 +99,9 @@ if [ "$OBFS" = "yes" ]; then
 fi
 
 # Install Glorytun UDP
+if systemctl -q is_active glorytun-udp@tun0.service; then
+	systemctl -q stop glorytun-udp@tun0 > /dev/null 2>&1
+fi
 apt-get -y install meson pkg-config ca-certificates
 cd /tmp
 wget -O /tmp/glorytun-0.0.99-mud.tar.gz https://github.com/angt/glorytun/releases/download/v0.0.99-mud/glorytun-0.0.99-mud.tar.gz
@@ -110,14 +118,20 @@ wget -O /lib/systemd/system/glorytun-udp@.service http://www.openmptcprouter.com
 wget -O /lib/systemd/network/glorytun-udp.network http://www.openmptcprouter.com/server/glorytun-udp.network
 mkdir -p /etc/glorytun-udp
 wget -O /etc/glorytun-udp/tun0 http://www.openmptcprouter.com/server/tun0.glorytun-udp
-echo "$GLORYTUN_PASS" > /etc/glorytun-udp/tun0.key
+if [ "$update" -eq "0" ]; then
+	echo "$GLORYTUN_PASS" > /etc/glorytun-udp/tun0.key
+elif [ ! -f /etc/glorytun-udp/tun0.key ] && [ -f /etc/glorytun-tcp/tun0.key ]; then
+	cp /etc/glorytun-tcp/tun0.key /etc/glorytun-udp/tun0.key
+fi
 systemctl enable glorytun-udp@tun0.service
 systemctl enable systemd-networkd.service
 cd /tmp
-rm -r /tmp/glorytun-0.0.99-mud
-
+rm -rf /tmp/glorytun-0.0.99-mud
 
 # Install Glorytun TCP
+if systemctl -q is_active glorytun-tcp@tun0.service; then
+	systemctl -q stop glorytun-tcp@tun0 > /dev/null 2>&1
+fi
 apt -t stretch-backports -y install libsodium-dev
 apt-get -y install build-essential pkg-config autoconf automake
 cd /tmp
@@ -135,7 +149,9 @@ wget -O /lib/systemd/system/glorytun-tcp@.service http://www.openmptcprouter.com
 wget -O /lib/systemd/network/glorytun-tcp.network http://www.openmptcprouter.com/server/glorytun.network
 mkdir -p /etc/glorytun-tcp
 wget -O /etc/glorytun-tcp/tun0 http://www.openmptcprouter.com/server/tun0.glorytun
-echo "$GLORYTUN_PASS" > /etc/glorytun-tcp/tun0.key
+if [ "$update" -eq "0" ]; then
+	echo "$GLORYTUN_PASS" > /etc/glorytun-tcp/tun0.key
+fi
 systemctl enable glorytun-tcp@tun0.service
 systemctl enable systemd-networkd.service
 cd /tmp
@@ -152,6 +168,7 @@ chmod 755 /usr/local/bin/omr-6in4
 wget -O /usr/local/bin/omr-6in4-service http://www.openmptcprouter.com/server/omr-6in4-service
 chmod 755 /usr/local/bin/omr-6in4-service
 wget -O /lib/systemd/system/omr-6in4.service http://www.openmptcprouter.com/server/omr-6in4.service.in
+systemctl enable omr-6in4.service
 
 
 
@@ -165,56 +182,86 @@ sed -i 's:Port 22:Port 65222:g' /etc/ssh/sshd_config
 # Remove fail2ban if available
 #systemctl -q disable fail2ban
 
-# Install and configure the firewall using shorewall
-apt-get -y install shorewall shorewall6
-wget -O /etc/shorewall/openmptcprouter-shorewall.tar.gz http://www.openmptcprouter.com/server/openmptcprouter-shorewall.tar.gz
-tar xzf /etc/shorewall/openmptcprouter-shorewall.tar.gz -C /etc/shorewall
-rm /etc/shorewall/openmptcprouter-shorewall.tar.gz
-sed -i "s:eth0:$INTERFACE:g" /etc/shorewall/*
-systemctl enable shorewall
-wget -O /etc/shorewall6/openmptcprouter-shorewall6.tar.gz http://www.openmptcprouter.com/server/openmptcprouter-shorewall6.tar.gz
-tar xzf /etc/shorewall6/openmptcprouter-shorewall6.tar.gz -C /etc/shorewall6
-rm /etc/shorewall6/openmptcprouter-shorewall6.tar.gz
-sed -i "s:eth0:$INTERFACE:g" /etc/shorewall6/*
-systemctl enable shorewall6
+if [ "$update" -eq "0" ]; then
+	# Install and configure the firewall using shorewall
+	apt-get -y install shorewall shorewall6
+	wget -O /etc/shorewall/openmptcprouter-shorewall.tar.gz http://www.openmptcprouter.com/server/openmptcprouter-shorewall.tar.gz
+	tar xzf /etc/shorewall/openmptcprouter-shorewall.tar.gz -C /etc/shorewall
+	rm /etc/shorewall/openmptcprouter-shorewall.tar.gz
+	sed -i "s:eth0:$INTERFACE:g" /etc/shorewall/*
+	systemctl enable shorewall
+	wget -O /etc/shorewall6/openmptcprouter-shorewall6.tar.gz http://www.openmptcprouter.com/server/openmptcprouter-shorewall6.tar.gz
+	tar xzf /etc/shorewall6/openmptcprouter-shorewall6.tar.gz -C /etc/shorewall6
+	rm /etc/shorewall6/openmptcprouter-shorewall6.tar.gz
+	sed -i "s:eth0:$INTERFACE:g" /etc/shorewall6/*
+	systemctl enable shorewall6
+else
+	# Update only needed firewall files
+	wget -O /etc/shorewall/interfaces http://www.openmptcprouter.com/server/shorewall4/interfaces
+	wget -O /etc/shorewall/snat http://www.openmptcprouter.com/server/shorewall4/snat
+	wget -O /etc/shorewall/stoppedrules http://www.openmptcprouter.com/server/shorewall4/stoppedrules
+	sed -i "s:eth0:$INTERFACE:g" /etc/shorewall/*
+	wget -O /etc/shorewall6/interfaces http://www.openmptcprouter.com/server/shorewall6/interfaces
+	wget -O /etc/shorewall6/stoppedrules http://www.openmptcprouter.com/server/shorewall6/stoppedrules
+	sed -i "s:eth0:$INTERFACE:g" /etc/shorewall6/*
+fi
 
 # Add OpenMPTCProuter VPS script version to /etc/motd
 if grep --quiet 'OpenMPTCProuter VPS' /etc/motd; then
-	sed -i 's:< OpenMPTCProuter VPS [0-9]*\.[0-9]* >:< OpenMPCTProuter VPS 0.19 >:' /etc/motd
+	sed -i 's:< OpenMPTCProuter VPS [0-9]*\.[0-9]* >:< OpenMPCTProuter VPS 0.20 >:' /etc/motd
 else
-	echo '< OpenMPCTProuter VPS 0.19 >' >> /etc/motd
+	echo '< OpenMPCTProuter VPS 0.20 >' >> /etc/motd
 fi
 
-# Display important info
-echo '===================================================================================='
-echo 'OpenMPTCProuter VPS is now configured !'
-echo 'SSH port: 65222 (instead of port 22)'
-echo 'Shadowsocks port: 65101'
-echo 'Shadowsocks encryption: aes-256-cfb'
-echo 'Your shadowsocks key: '
-echo $SHADOWSOCKS_PASS
-echo 'Glorytun port: 65001'
-echo 'Glorytun encryption: chacha20'
-echo 'Your glorytun key: '
-echo $GLORYTUN_PASS
-echo '===================================================================================='
-echo 'Keys are also saved in /root/openmptcprouter_config.txt, you are free to remove them'
-echo '===================================================================================='
-echo '  /!\ You need to reboot to enable MPTCP, shadowsocks, glorytun and shorewall /!\'
-echo '------------------------------------------------------------------------------------'
-echo ' After reboot, check with uname -a that the kernel name contain mptcp.'
-echo ' Else, you may have to modify GRUB_DEFAULT in /etc/defaut/grub'
-echo '===================================================================================='
+if [ "$update" -eq "0" ]; then
+	# Display important info
+	echo '===================================================================================='
+	echo 'OpenMPTCProuter VPS is now configured !'
+	echo 'SSH port: 65222 (instead of port 22)'
+	echo 'Shadowsocks port: 65101'
+	echo 'Shadowsocks encryption: aes-256-cfb'
+	echo 'Your shadowsocks key: '
+	echo $SHADOWSOCKS_PASS
+	echo 'Glorytun port: 65001'
+	echo 'Glorytun encryption: chacha20'
+	echo 'Your glorytun key: '
+	echo $GLORYTUN_PASS
+	echo '===================================================================================='
+	echo 'Keys are also saved in /root/openmptcprouter_config.txt, you are free to remove them'
+	echo '===================================================================================='
+	echo '  /!\ You need to reboot to enable MPTCP, shadowsocks, glorytun and shorewall /!\'
+	echo '------------------------------------------------------------------------------------'
+	echo ' After reboot, check with uname -a that the kernel name contain mptcp.'
+	echo ' Else, you may have to modify GRUB_DEFAULT in /etc/defaut/grub'
+	echo '===================================================================================='
 
-# Save info in file
-cat > /root/openmptcprouter_config.txt <<EOF
-SSH port: 65222 (instead of port 22)
-Shadowsocks port: 65101
-Shadowsocks encryption: aes-256-cfb
-Your shadowsocks key:
-${SHADOWSOCKS_PASS}
-Glorytun port: 65001
-Glorytun encryption: chacha20
-Your glorytun key:
-${GLORYTUN_PASS}
-EOF
+	# Save info in file
+	cat > /root/openmptcprouter_config.txt <<-EOF
+	SSH port: 65222 (instead of port 22)
+	Shadowsocks port: 65101
+	Shadowsocks encryption: aes-256-cfb
+	Your shadowsocks key:
+	${SHADOWSOCKS_PASS}
+	Glorytun port: 65001
+	Glorytun encryption: chacha20
+	Your glorytun key:
+	${GLORYTUN_PASS}
+	EOF
+else
+	echo '===================================================================================='
+	echo 'OpenMPTCProuter VPS is now updated !'
+	echo 'Keys are not changed, shorewall rules files preserved'
+	echo '===================================================================================='
+	echo 'Restarting glorytun and omr-6in4...'
+	systemctl -q start glorytun-tcp@tun0
+	systemctl -q start glorytun-udp@tun0
+	systemctl -q restart omr-6in4
+	echo 'done'
+	echo 'Restarting shorewall...'
+	systemctl -q restart shorewall
+	systemctl -q restart shorewall6
+	echo 'done'
+	echo 'Restarting shadowsocks...'
+	systemctl -q restart shadowsocks
+	echo 'done'
+fi

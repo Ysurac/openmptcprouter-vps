@@ -15,6 +15,9 @@ if [ $DEBIAN_VERSION -ne 9 ]; then
 	exit 1
 fi
 
+if grep -q OpenMPTCProuter /etc/motd ; then
+	update=1
+fi
 # Install mptcp kernel and shadowsocks
 apt-get update
 apt-get -y install dirmngr patch
@@ -63,12 +66,10 @@ fi
 wget -O /etc/sysctl.d/90-shadowsocks.conf http://www.openmptcprouter.com/server/shadowsocks.conf
 
 # Install shadowsocks config and add a shadowsocks by CPU
-if [ ! -f /etc/shadowsocks-libev/config.json ]; then
+if [ "$update" -eq "0" ]; then
 	wget -O /etc/shadowsocks-libev/config.json http://www.openmptcprouter.com/server/config.json
 	SHADOWSOCKS_PASS_JSON=$(echo $SHADOWSOCKS_PASS | sed 's/+/-/g; s/\//_/g;')
 	sed -i "s:MySecretKey:$SHADOWSOCKS_PASS_JSON:g" /etc/shadowsocks-libev/config.json
-else
-	update=1
 fi
 #sed -i 's:json:json --mptcp:g' /lib/systemd/system/shadowsocks-libev-server@.service
 systemctl disable shadowsocks-libev

@@ -15,7 +15,7 @@ if [ $DEBIAN_VERSION -ne 9 ]; then
 	exit 1
 fi
 
-if grep -q OpenMPTCProuter /etc/motd ; then
+if grep --quiet 'OpenMPTCProuter VPS' /etc/motd ; then
 	update=1
 fi
 # Install mptcp kernel and shadowsocks
@@ -211,7 +211,7 @@ fi
 if grep --quiet 'OpenMPTCProuter VPS' /etc/motd; then
 	sed -i 's:< OpenMPTCProuter VPS [0-9]*\.[0-9]* >:< OpenMPCTProuter VPS 0.20 >:' /etc/motd
 else
-	echo '< OpenMPCTProuter VPS 0.20 >' >> /etc/motd
+	echo '< OpenMPTCProuter VPS 0.20 >' >> /etc/motd
 fi
 
 if [ "$update" -eq "0" ]; then

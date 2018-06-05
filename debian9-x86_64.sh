@@ -9,14 +9,14 @@ DEBIAN_VERSION=$(sed 's/\..*//' /etc/debian_version)
 
 set -e
 umask 0022
-update=0
+update="0"
 if [ $DEBIAN_VERSION -ne 9 ]; then
 	echo "This script only work with Debian Stretch (9.x)"
 	exit 1
 fi
 
 if grep --quiet 'OpenMPTCProuter VPS' /etc/motd ; then
-	update=1
+	update="1"
 fi
 # Install mptcp kernel and shadowsocks
 apt-get update
@@ -66,7 +66,7 @@ fi
 wget -O /etc/sysctl.d/90-shadowsocks.conf http://www.openmptcprouter.com/server/shadowsocks.conf
 
 # Install shadowsocks config and add a shadowsocks by CPU
-if [ "$update" -eq "0" ]; then
+if [ "$update" = "0" ]; then
 	wget -O /etc/shadowsocks-libev/config.json http://www.openmptcprouter.com/server/config.json
 	SHADOWSOCKS_PASS_JSON=$(echo $SHADOWSOCKS_PASS | sed 's/+/-/g; s/\//_/g;')
 	sed -i "s:MySecretKey:$SHADOWSOCKS_PASS_JSON:g" /etc/shadowsocks-libev/config.json
@@ -119,7 +119,7 @@ wget -O /lib/systemd/system/glorytun-udp@.service http://www.openmptcprouter.com
 wget -O /lib/systemd/network/glorytun-udp.network http://www.openmptcprouter.com/server/glorytun-udp.network
 mkdir -p /etc/glorytun-udp
 wget -O /etc/glorytun-udp/tun0 http://www.openmptcprouter.com/server/tun0.glorytun-udp
-if [ "$update" -eq "0" ]; then
+if [ "$update" = "0" ]; then
 	echo "$GLORYTUN_PASS" > /etc/glorytun-udp/tun0.key
 elif [ ! -f /etc/glorytun-udp/tun0.key ] && [ -f /etc/glorytun-tcp/tun0.key ]; then
 	cp /etc/glorytun-tcp/tun0.key /etc/glorytun-udp/tun0.key
@@ -150,7 +150,7 @@ wget -O /lib/systemd/system/glorytun-tcp@.service http://www.openmptcprouter.com
 wget -O /lib/systemd/network/glorytun-tcp.network http://www.openmptcprouter.com/server/glorytun.network
 mkdir -p /etc/glorytun-tcp
 wget -O /etc/glorytun-tcp/tun0 http://www.openmptcprouter.com/server/tun0.glorytun
-if [ "$update" -eq "0" ]; then
+if [ "$update" = "0" ]; then
 	echo "$GLORYTUN_PASS" > /etc/glorytun-tcp/tun0.key
 fi
 systemctl enable glorytun-tcp@tun0.service
@@ -183,7 +183,7 @@ sed -i 's:Port 22:Port 65222:g' /etc/ssh/sshd_config
 # Remove fail2ban if available
 #systemctl -q disable fail2ban
 
-if [ "$update" -eq "0" ]; then
+if [ "$update" = "0" ]; then
 	# Install and configure the firewall using shorewall
 	apt-get -y install shorewall shorewall6
 	wget -O /etc/shorewall/openmptcprouter-shorewall.tar.gz http://www.openmptcprouter.com/server/openmptcprouter-shorewall.tar.gz
@@ -214,7 +214,7 @@ else
 	echo '< OpenMPTCProuter VPS 0.20 >' >> /etc/motd
 fi
 
-if [ "$update" -eq "0" ]; then
+if [ "$update" = "0" ]; then
 	# Display important info
 	echo '===================================================================================='
 	echo 'OpenMPTCProuter VPS is now configured !'

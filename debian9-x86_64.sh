@@ -14,7 +14,10 @@ if [ $DEBIAN_VERSION -ne 9 ]; then
 	echo "This script only work with Debian Stretch (9.x)"
 	exit 1
 fi
-
+# Fix old string...
+if grep --quiet 'OpenMPCTProuter VPS' /etc/motd ; then
+	sed -i 's/OpenMPCTProuter/OpenMPTCProuter/g' /etc/motd
+fi
 if grep --quiet 'OpenMPTCProuter VPS' /etc/motd ; then
 	update="1"
 fi

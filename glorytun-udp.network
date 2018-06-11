@@ -3,7 +3,7 @@ Name=gt-udp-*
 
 [Network]
 Description=Glorytun server device
-Address=0.0.0.0/24
+Address=10.255.254.1/24
 DHCPServer=yes
 IPMasquerade=yes
 

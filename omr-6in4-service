@@ -10,9 +10,9 @@ fi
 
 # Add IPv6 tunnel
 if [ "$(ip link show omr-6in4 up)" ]; then
-	ip tunnel change omr-6in4 mode sit remote 10.0.0.2 local 10.0.0.1
+	ip tunnel change omr-6in4 mode sit remote 10.255.255.2 local 10.255.255.1
 else
-	ip tunnel add omr-6in4 mode sit remote 10.0.0.2 local 10.0.0.1
+	ip tunnel add omr-6in4 mode sit remote 10.255.255.2 local 10.255.255.1
 fi
 ip link set omr-6in4 up
 ip route replace fd00::/8 via fe80::a00:2 dev omr-6in4
@@ -38,8 +38,10 @@ while true; do
 		if ! $(exit $status); then
 			allip_tcp=$(ip -4 addr show gt-tun0 | grep inet)
 			allip_udp=$(ip -4 addr show gt-udp-tun0 | grep inet)
+			allip_mlvpn=$(ip -4 addr show mlvpn0 | grep inet)
 			allip="$allip_tcp
-$allip_udp"
+$allip_udp
+$allip_mlvpn"
 			while IFS= read -r inet; do
 				ip=$(echo $inet | awk '{print $2}' | cut -d/ -f1 | tr -d "\n")
 				ipd=$(echo $ip | sed 's/.1/.2/' | tr -d "\n")
@@ -47,6 +49,10 @@ $allip_udp"
 				status=$?
 				if $(exit $status); then
 					ip tunnel change omr-6in4 mode sit remote $ipd local $ip
+					echo "OMR_ADDR=$ipd" > /etc/shorewall/params.vpn
+					iface=$(ip -4 addr | grep $ip | awk '{print $7}' | tr -d "\n")
+					echo "OMR_IFACE=$iface" >> /etc/shorewall/params.vpn
+					systemctl reload shorewall
 					break
 				fi
 			done < <(printf '%s\n' "$allip")

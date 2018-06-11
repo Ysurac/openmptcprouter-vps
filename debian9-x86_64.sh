@@ -4,6 +4,7 @@ GLORYTUN_PASS=${GLORYTUN_PASS:-$(od  -vN "32" -An -tx1 /dev/urandom | tr '[:lowe
 #NBCPU=${NBCPU:-$(nproc --all | tr -d "\n")}
 NBCPU=${NBCPU:-$(grep -c '^processor' /proc/cpuinfo | tr -d "\n")}
 OBFS=${OBFS:-no}
+MLVPN=${MLVPN:-no}
 INTERFACE=${INTERFACE:-$(ip -o -4 route show to default | awk '{print $5}' | tr -d "\n")}
 DEBIAN_VERSION=$(sed 's/\..*//' /etc/debian_version)
 
@@ -35,8 +36,8 @@ cd /boot
 apt-get -y install rename
 rename 's/^bzImage/vmlinuz/s' * >/dev/null 2>&1
 #apt-get -y install linux-mptcp
-dpkg -i /tmp/linux-image-4.14.24-mptcp-64056fa.amd64.deb
-dpkg -i /tmp/linux-headers-4.14.24-mptcp-64056fa.amd64.deb
+dpkg -E -i /tmp/linux-image-4.14.24-mptcp-64056fa.amd64.deb
+dpkg -E -i /tmp/linux-headers-4.14.24-mptcp-64056fa.amd64.deb
 
 # Check if mptcp kernel is grub default kernel
 echo "Set MPTCP kernel as grub default..."
@@ -46,19 +47,19 @@ bash update-grub.sh 4.14.24-mptcp
 
 #apt -t stretch-backports -y install shadowsocks-libev
 ## Compile Shadowsocks
-wget -O /tmp/shadowsocks-libev-3.1.3.tar.gz http://github.com/shadowsocks/shadowsocks-libev/releases/download/v3.1.3/shadowsocks-libev-3.1.3.tar.gz
+wget -O /tmp/shadowsocks-libev-3.2.0.tar.gz http://github.com/shadowsocks/shadowsocks-libev/releases/download/v3.2.0/shadowsocks-libev-3.2.0.tar.gz
 cd /tmp
-tar xzf shadowsocks-libev-3.1.3.tar.gz
-cd shadowsocks-libev-3.1.3
-wget https://github.com/Ysurac/openmptcprouter-feeds/raw/5b2caab3f98cc14e6b5fdb80a95fcd1ac61630ff/shadowsocks-libev/patches/020-NOCRYPTO.patch
+tar xzf shadowsocks-libev-3.2.0.tar.gz
+cd shadowsocks-libev-3.2.0
+wget https://raw.githubusercontent.com/Ysurac/openmptcprouter-feeds/master/shadowsocks-libev/patches/020-NOCRYPTO.patch
 patch -p1 < 020-NOCRYPTO.patch
 apt-get -y install --no-install-recommends devscripts equivs apg libcap2-bin libpam-cap
 apt -y -t stretch-backports install libsodium-dev
 mk-build-deps --install --tool "apt-get -o Debug::pkgProblemResolver=yes --no-install-recommends -y"
 dpkg-buildpackage -b -us -uc
 cd ..
-dpkg -i shadowsocks-libev_3.1.3-1_amd64.deb
-rm -r /tmp/shadowsocks-libev-3.1.3
+dpkg -i shadowsocks-libev_3.2.0-1_amd64.deb
+rm -r /tmp/shadowsocks-libev-3.2.0
 
 # Load OLIA Congestion module at boot time
 if ! grep -q olia /etc/modules ; then
@@ -100,6 +101,14 @@ if [ "$OBFS" = "yes" ]; then
 	cd /tmp
 	rm -rf /tmp/simple-obfs
 	sed -i 's%"mptcp": true%"mptcp": true,\n"plugin": "/usr/local/bin/obfs-server --obfs http --mptcp --fast-open"%' /etc/shadowsocks-libev/config.json
+fi
+
+if [ "$MLVPN" = "yes" ]; then
+	cd /tmp
+	wget http://www.openmptcprouter.com/server/debian9-x86_64-mlvpn.sh
+	chmod u+x debian9-x86_64-mlvpn.sh
+	sh debian9-x86_64-mlvpn.sh
+	rm debian9-x86_64-mlvpn.sh
 fi
 
 # Install Glorytun UDP
@@ -212,9 +221,9 @@ fi
 
 # Add OpenMPTCProuter VPS script version to /etc/motd
 if grep --quiet 'OpenMPTCProuter VPS' /etc/motd; then
-	sed -i 's:< OpenMPTCProuter VPS [0-9]*\.[0-9]* >:< OpenMPCTProuter VPS 0.20 >:' /etc/motd
+	sed -i 's:< OpenMPTCProuter VPS [0-9]*\.[0-9]* >:< OpenMPCTProuter VPS 0.21 >:' /etc/motd
 else
-	echo '< OpenMPTCProuter VPS 0.20 >' >> /etc/motd
+	echo '< OpenMPTCProuter VPS 0.21 >' >> /etc/motd
 fi
 
 if [ "$update" = "0" ]; then
@@ -251,6 +260,9 @@ if [ "$update" = "0" ]; then
 	Your glorytun key:
 	${GLORYTUN_PASS}
 	EOF
+	if [ -f "/root/openmptcprouter_mlvpn_config.txt" ]; then
+		cat /root/openmptcprouter_mlvpn_config.txt >> /root/openmptcprouter_config.txt
+	fi
 else
 	echo '===================================================================================='
 	echo 'OpenMPTCProuter VPS is now updated !'

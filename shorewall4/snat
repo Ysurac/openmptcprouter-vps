@@ -20,5 +20,4 @@ MASQUERADE		10.0.0.0/8,\
 			172.16.0.0/12,\
 			192.168.0.0/16		eth0
 # SNAT from VPN server for all VPN clients
-SNAT(10.0.0.1)		0.0.0.0/0		gt-tun0
-SNAT(10.0.1.1)		0.0.0.0/0		gt-udp-tun0
+SNAT($OMR_ADDR)		0.0.0.0/0		$OMR_IFACE

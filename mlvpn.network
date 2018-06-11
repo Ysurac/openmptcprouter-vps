@@ -1,18 +1,15 @@
 [Match]
-Name=gt-*
-
-[Link]
-MTUBytes=1400
+Name=mlvpn*
 
 [Network]
-Description=Glorytun server device
-Address=10.255.255.1/24
+Description=MLVPN tunnel
+Address=10.255.253.1/24
 DHCPServer=yes
 IPMasquerade=yes
 
 [DHCPServer]
-PoolOffset=1
-PoolSize=2
+PoolOffset=2
+PoolSize=1
 EmitDNS=no
 EmitNTP=no
 DNS=9.9.9.9

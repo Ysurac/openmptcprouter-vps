@@ -5,6 +5,7 @@ GLORYTUN_PASS=${GLORYTUN_PASS:-$(od  -vN "32" -An -tx1 /dev/urandom | tr '[:lowe
 NBCPU=${NBCPU:-$(grep -c '^processor' /proc/cpuinfo | tr -d "\n")}
 OBFS=${OBFS:-no}
 MLVPN=${MLVPN:-no}
+OPENVPN=${OPENVPN:-no}
 INTERFACE=${INTERFACE:-$(ip -o -4 route show to default | awk '{print $5}' | tr -d "\n")}
 DEBIAN_VERSION=$(sed 's/\..*//' /etc/debian_version)
 
@@ -105,10 +106,21 @@ fi
 
 if [ "$MLVPN" = "yes" ]; then
 	cd /tmp
-	wget http://www.openmptcprouter.com/server/debian9-x86_64-mlvpn.sh
-	chmod u+x debian9-x86_64-mlvpn.sh
+	wget -O /tmp/debian9-x86_64-mlvpn.sh http://www.openmptcprouter.com/server/debian-x86_64-mlvpn.sh
 	sh debian9-x86_64-mlvpn.sh
-	rm debian9-x86_64-mlvpn.sh
+fi
+
+if [ "$OPENVPN" = "yes" ]; then
+	if systemctl -q is-active openvpn-server@tun0.service; then
+		systemctl -q stop openvpn-server@tun0 > /dev/null 2>&1
+	fi
+	apt-get -y install openvpn
+	wget -O /lib/systemd/network/openvpn.network http://www.openmptcprouter.com/server/openvpn.network
+	if [ ! -f "/etc/openvpn/server/static.key" ]; then
+		wget -O /etc/openvpn/server/tun0.conf http://www.openmptcprouter.com/server/openvpn-tun0.conf
+		cd /etc/openvpn/server
+		openvpn --genkey --secret static.key
+	fi
 fi
 
 # Install Glorytun UDP
@@ -221,9 +233,9 @@ fi
 
 # Add OpenMPTCProuter VPS script version to /etc/motd
 if grep --quiet 'OpenMPTCProuter VPS' /etc/motd; then
-	sed -i 's:< OpenMPTCProuter VPS [0-9]*\.[0-9]* >:< OpenMPCTProuter VPS 0.21 >:' /etc/motd
+	sed -i 's:< OpenMPTCProuter VPS [0-9]*\.[0-9]* >:< OpenMPCTProuter VPS 0.22 >:' /etc/motd
 else
-	echo '< OpenMPTCProuter VPS 0.21 >' >> /etc/motd
+	echo '< OpenMPTCProuter VPS 0.22 >' >> /etc/motd
 fi
 
 if [ "$update" = "0" ]; then
@@ -277,6 +289,11 @@ else
 	systemctl -q restart shorewall
 	systemctl -q restart shorewall6
 	echo 'done'
+	if [ "$OPENVPN" = "yes" ]; then
+		echo 'Restarting OpenVPN'
+		systemctl -q restart openvpn-server@tun0
+		echo 'done'
+	fi
 	echo 'Restarting shadowsocks...'
 	systemctl -q restart shadowsocks-libev
 	echo 'done'

@@ -18,4 +18,5 @@ net	eth0		dhcp,tcpflags,routefilter,nosmurfs,logmartians,sourceroute=0
 vpn	gt-tun0		nosmurfs,routefilter,logmartians,tcpflags
 vpn	gt-udp-tun0	nosmurfs,routefilter,logmartians,tcpflags
 vpn	mlvpn0		nosmurfs,routefilter,logmartians,tcpflags
+vpn	tun0		nosmurfs,routefilter,logmartians,tcpflags
 

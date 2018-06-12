@@ -1,0 +1,17 @@
+[Match]
+Name=tun*
+
+[Network]
+Description=OpenVPN tunnel
+Address=10.255.252.1/24
+DHCPServer=yes
+IPMasquerade=yes
+
+[DHCPServer]
+PoolOffset=2
+PoolSize=1
+EmitDNS=no
+EmitNTP=no
+DNS=9.9.9.9
+DefaultLeaseTimeSec=12h
+MaxLeaseTimeSec=24h

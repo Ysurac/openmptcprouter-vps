@@ -228,6 +228,7 @@ else
 	wget -O /etc/shorewall/params http://www.openmptcprouter.com/server/shorewall4/params
 	wget -O /etc/shorewall/params.vpn http://www.openmptcprouter.com/server/shorewall4/params.vpn
 	sed -i "s:eth0:$INTERFACE:g" /etc/shorewall/*
+	sed -i 's:10.0.0.2:$OMR_ADDR:g' /etc/shorewall/rules
 	wget -O /etc/shorewall6/interfaces http://www.openmptcprouter.com/server/shorewall6/interfaces
 	wget -O /etc/shorewall6/stoppedrules http://www.openmptcprouter.com/server/shorewall6/stoppedrules
 	sed -i "s:eth0:$INTERFACE:g" /etc/shorewall6/*
@@ -235,9 +236,9 @@ fi
 
 # Add OpenMPTCProuter VPS script version to /etc/motd
 if grep --quiet 'OpenMPTCProuter VPS' /etc/motd; then
-	sed -i 's:< OpenMPTCProuter VPS [0-9]*\.[0-9]* >:< OpenMPCTProuter VPS 0.24 >:' /etc/motd
+	sed -i 's:< OpenMPTCProuter VPS [0-9]*\.[0-9]* >:< OpenMPCTProuter VPS 0.25 >:' /etc/motd
 else
-	echo '< OpenMPTCProuter VPS 0.24 >' >> /etc/motd
+	echo '< OpenMPTCProuter VPS 0.25 >' >> /etc/motd
 fi
 
 if [ "$update" = "0" ]; then

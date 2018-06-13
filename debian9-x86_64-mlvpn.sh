@@ -79,7 +79,10 @@ else
 	wget -O /etc/shorewall/interfaces http://www.openmptcprouter.com/server/shorewall4/interfaces
 	wget -O /etc/shorewall/snat http://www.openmptcprouter.com/server/shorewall4/snat
 	wget -O /etc/shorewall/stoppedrules http://www.openmptcprouter.com/server/shorewall4/stoppedrules
+	wget -O /etc/shorewall/params.vpn http://www.openmptcprouter.com/server/shorewall4/params.vpn
+	wget -O /etc/shorewall/params http://www.openmptcprouter.com/server/shorewall4/params
 	sed -i "s:eth0:$INTERFACE:g" /etc/shorewall/*
+	sed -i 's:10.0.0.2:$OMR_ADDR:g' /etc/shorewall/rules
 	wget -O /etc/shorewall6/interfaces http://www.openmptcprouter.com/server/shorewall6/interfaces
 	wget -O /etc/shorewall6/stoppedrules http://www.openmptcprouter.com/server/shorewall6/stoppedrules
 	sed -i "s:eth0:$INTERFACE:g" /etc/shorewall6/*

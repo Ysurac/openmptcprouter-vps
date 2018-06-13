@@ -225,6 +225,8 @@ else
 	wget -O /etc/shorewall/interfaces http://www.openmptcprouter.com/server/shorewall4/interfaces
 	wget -O /etc/shorewall/snat http://www.openmptcprouter.com/server/shorewall4/snat
 	wget -O /etc/shorewall/stoppedrules http://www.openmptcprouter.com/server/shorewall4/stoppedrules
+	wget -O /etc/shorewall/params http://www.openmptcprouter.com/server/shorewall4/params
+	wget -O /etc/shorewall/params.vpn http://www.openmptcprouter.com/server/shorewall4/params.vpn
 	sed -i "s:eth0:$INTERFACE:g" /etc/shorewall/*
 	wget -O /etc/shorewall6/interfaces http://www.openmptcprouter.com/server/shorewall6/interfaces
 	wget -O /etc/shorewall6/stoppedrules http://www.openmptcprouter.com/server/shorewall6/stoppedrules
@@ -233,9 +235,9 @@ fi
 
 # Add OpenMPTCProuter VPS script version to /etc/motd
 if grep --quiet 'OpenMPTCProuter VPS' /etc/motd; then
-	sed -i 's:< OpenMPTCProuter VPS [0-9]*\.[0-9]* >:< OpenMPCTProuter VPS 0.22 >:' /etc/motd
+	sed -i 's:< OpenMPTCProuter VPS [0-9]*\.[0-9]* >:< OpenMPCTProuter VPS 0.24 >:' /etc/motd
 else
-	echo '< OpenMPTCProuter VPS 0.22 >' >> /etc/motd
+	echo '< OpenMPTCProuter VPS 0.24 >' >> /etc/motd
 fi
 
 if [ "$update" = "0" ]; then
@@ -280,6 +282,9 @@ else
 	echo 'OpenMPTCProuter VPS is now updated !'
 	echo 'Keys are not changed, shorewall rules files preserved'
 	echo '===================================================================================='
+	echo 'Restarting systemd network...'
+	systemctl -q restart systemd-networkd
+	echo 'done'
 	echo 'Restarting glorytun and omr-6in4...'
 	systemctl -q start glorytun-tcp@tun0
 	systemctl -q start glorytun-udp@tun0

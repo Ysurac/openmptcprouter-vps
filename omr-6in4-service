@@ -30,28 +30,32 @@ _ping() {
 }
 
 while true; do
+	source /etc/shorewall/params.vpn
 	currentaddr=$(ip addr show omr-6in4 | grep link/sit | awk '{print $2}' | tr -d "\n")
 	currentpeer=$(ip addr show omr-6in4 | grep link/sit | awk '{print $4}' | tr -d "\n")
 	if [ -n "$currentpeer" ]; then
 		_ping $currentpeer
 		status=$?
-		if ! $(exit $status); then
+		if ! $(exit $status) || [ "$currentpeer" != "$OMR_ADDR" ]; then
 			allip_tcp=$(ip -4 addr show gt-tun0 | grep inet)
 			allip_udp=$(ip -4 addr show gt-udp-tun0 | grep inet)
 			allip_mlvpn=$(ip -4 addr show mlvpn0 | grep inet)
+			allip_openvpn=$(ip -4 addr show tun0 | grep inet)
 			allip="$allip_tcp
 $allip_udp
+$allip_openvpn
 $allip_mlvpn"
 			while IFS= read -r inet; do
 				ip=$(echo $inet | awk '{print $2}' | cut -d/ -f1 | tr -d "\n")
 				ipd=$(echo $ip | sed 's/.1/.2/' | tr -d "\n")
 				_ping $ipd
-				status=$?
-				if $(exit $status); then
+				statusp=$?
+				if $(exit $statusp); then
 					ip tunnel change omr-6in4 mode sit remote $ipd local $ip
-					echo "OMR_ADDR=$ipd" > /etc/shorewall/params.vpn
+					echo "VPS_ADDR=$ip" > /etc/shorewall/params.vpn
+					echo "OMR_ADDR=$ipd" >> /etc/shorewall/params.vpn
 					iface=$(ip -4 addr | grep $ip | awk '{print $7}' | tr -d "\n")
-					echo "OMR_IFACE=$iface" >> /etc/shorewall/params.vpn
+					echo "VPS_IFACE=$iface" >> /etc/shorewall/params.vpn
 					systemctl reload shorewall
 					break
 				fi

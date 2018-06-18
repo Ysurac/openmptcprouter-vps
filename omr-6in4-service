@@ -61,7 +61,10 @@ $allip_mlvpn"
 					break
 				fi
 			done < <(printf '%s\n' "$allip")
-			[ -z "$iface" ] && systemctl -q restart systemd-networkd
+			[ -z "$iface" ] && {
+				systemctl -q restart systemd-networkd
+				sleep 10
+			}
 		fi
 	fi
 	sleep 5

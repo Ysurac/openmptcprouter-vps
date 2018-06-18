@@ -31,6 +31,7 @@ _ping() {
 
 while true; do
 	source /etc/shorewall/params.vpn
+	local iface
 	currentaddr=$(ip addr show omr-6in4 | grep link/sit | awk '{print $2}' | tr -d "\n")
 	currentpeer=$(ip addr show omr-6in4 | grep link/sit | awk '{print $4}' | tr -d "\n")
 	if [ -n "$currentpeer" ]; then
@@ -60,6 +61,7 @@ $allip_mlvpn"
 					break
 				fi
 			done < <(printf '%s\n' "$allip")
+			[ -z "$iface" ] && systemctl -q restart systemd-networkd
 		fi
 	fi
 	sleep 5

@@ -106,7 +106,7 @@ fi
 
 if [ "$MLVPN" = "yes" ]; then
 	cd /tmp
-	wget -O /tmp/debian9-x86_64-mlvpn.sh http://www.openmptcprouter.com/server/debian-x86_64-mlvpn.sh
+	wget -O /tmp/debian9-x86_64-mlvpn.sh http://www.openmptcprouter.com/server/debian9-x86_64-mlvpn.sh
 	sh debian9-x86_64-mlvpn.sh
 fi
 
@@ -236,9 +236,9 @@ fi
 
 # Add OpenMPTCProuter VPS script version to /etc/motd
 if grep --quiet 'OpenMPTCProuter VPS' /etc/motd; then
-	sed -i 's:< OpenMPTCProuter VPS [0-9]*\.[0-9]* >:< OpenMPCTProuter VPS 0.25 >:' /etc/motd
+	sed -i 's:< OpenMPTCProuter VPS [0-9]*\.[0-9]* >:< OpenMPCTProuter VPS 0.26 >:' /etc/motd
 else
-	echo '< OpenMPTCProuter VPS 0.25 >' >> /etc/motd
+	echo '< OpenMPTCProuter VPS 0.26 >' >> /etc/motd
 fi
 
 if [ "$update" = "0" ]; then

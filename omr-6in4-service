@@ -31,17 +31,17 @@ _ping() {
 
 while true; do
 	source /etc/shorewall/params.vpn
-	local iface
+	iface=""
 	currentaddr=$(ip addr show omr-6in4 | grep link/sit | awk '{print $2}' | tr -d "\n")
 	currentpeer=$(ip addr show omr-6in4 | grep link/sit | awk '{print $4}' | tr -d "\n")
 	if [ -n "$currentpeer" ]; then
 		_ping $currentpeer
 		status=$?
 		if ! $(exit $status) || [ "$currentpeer" != "$OMR_ADDR" ]; then
-			allip_tcp=$(ip -4 addr show gt-tun0 | grep inet)
-			allip_udp=$(ip -4 addr show gt-udp-tun0 | grep inet)
-			allip_mlvpn=$(ip -4 addr show mlvpn0 | grep inet)
-			allip_openvpn=$(ip -4 addr show tun0 | grep inet)
+			allip_tcp=$(ip -4 addr show gt-tun0 2>/dev/null | grep inet)
+			allip_udp=$(ip -4 addr show gt-udp-tun0 2>/dev/null | grep inet)
+			allip_mlvpn=$(ip -4 addr show mlvpn0 2>/dev/null | grep inet)
+			allip_openvpn=$(ip -4 addr show tun0 2>/dev/null | grep inet)
 			allip="$allip_tcp
 $allip_udp
 $allip_openvpn

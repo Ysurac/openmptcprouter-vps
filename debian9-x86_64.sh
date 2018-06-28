@@ -101,7 +101,9 @@ if [ "$OBFS" = "yes" ]; then
 	make install
 	cd /tmp
 	rm -rf /tmp/simple-obfs
-	sed -i 's%"mptcp": true%"mptcp": true,\n"plugin": "/usr/local/bin/obfs-server --obfs http --mptcp --fast-open"%' /etc/shadowsocks-libev/config.json
+	sed -i 's%"mptcp": true%"mptcp": true,\n"plugin": "/usr/local/bin/obfs-server",\n"plugin_opts": "obfs=http;mptcp;fast-open"%' /etc/shadowsocks-libev/config.json
+else
+	sed -i -e '/plugin/d' -e 's/,,//' /etc/shadowsocks-libev/config.json
 fi
 
 if [ "$MLVPN" = "yes" ]; then
@@ -236,9 +238,9 @@ fi
 
 # Add OpenMPTCProuter VPS script version to /etc/motd
 if grep --quiet 'OpenMPTCProuter VPS' /etc/motd; then
-	sed -i 's:< OpenMPTCProuter VPS [0-9]*\.[0-9]* >:< OpenMPCTProuter VPS 0.27 >:' /etc/motd
+	sed -i 's:< OpenMPTCProuter VPS [0-9]*\.[0-9]* >:< OpenMPCTProuter VPS 0.29 >:' /etc/motd
 else
-	echo '< OpenMPTCProuter VPS 0.27 >' >> /etc/motd
+	echo '< OpenMPTCProuter VPS 0.29 >' >> /etc/motd
 fi
 
 if [ "$update" = "0" ]; then
@@ -295,12 +297,12 @@ else
 	systemctl -q restart shorewall
 	systemctl -q restart shorewall6
 	echo 'done'
+	echo 'Restarting shadowsocks...'
+	systemctl -q restart shadowsocks-libev
+	echo 'done'
 	if [ "$OPENVPN" = "yes" ]; then
 		echo 'Restarting OpenVPN'
 		systemctl -q restart openvpn-server@tun0
 		echo 'done'
 	fi
-	echo 'Restarting shadowsocks...'
-	systemctl -q restart shadowsocks-libev
-	echo 'done'
 fi

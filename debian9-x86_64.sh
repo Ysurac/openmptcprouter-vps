@@ -238,9 +238,9 @@ fi
 
 # Add OpenMPTCProuter VPS script version to /etc/motd
 if grep --quiet 'OpenMPTCProuter VPS' /etc/motd; then
-	sed -i 's:< OpenMPTCProuter VPS [0-9]*\.[0-9]* >:< OpenMPCTProuter VPS 0.30 >:' /etc/motd
+	sed -i 's:< OpenMPTCProuter VPS [0-9]*\.[0-9]* >:< OpenMPCTProuter VPS 0.31 >:' /etc/motd
 else
-	echo '< OpenMPTCProuter VPS 0.30 >' >> /etc/motd
+	echo '< OpenMPTCProuter VPS 0.31 >' >> /etc/motd
 fi
 
 if [ "$update" = "0" ]; then
@@ -298,7 +298,12 @@ else
 	systemctl -q restart shorewall6
 	echo 'done'
 	echo 'Restarting shadowsocks...'
-	systemctl -q restart shadowsocks-libev
+	systemctl -q restart shadowsocks-libev-server@config.service
+	if [ $NBCPU -gt 1 ]; then
+		for i in $NBCPU; do
+			systemctl restart shadowsocks-libev-server@config$i.service
+		done
+	fi
 	echo 'done'
 	if [ "$OPENVPN" = "yes" ]; then
 		echo 'Restarting OpenVPN'

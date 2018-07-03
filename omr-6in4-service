@@ -1,7 +1,7 @@
 #!/bin/bash
 # OpenMPTCProuter VPS 6in4 service script
 
-if [ "$1" = "stop" ] && [ "$(ip link show omr-6in4 up)" ]; then
+if [ "$1" = "stop" ] && [ "$(ip link show omr-6in4 up 2>/dev/null)" ]; then
 	ip route del fd00::/8 via fe80::a00:2 dev omr-6in4
 	ip link set omr-6in4 down
 	ip tunnel del omr-6in4
@@ -9,10 +9,11 @@ if [ "$1" = "stop" ] && [ "$(ip link show omr-6in4 up)" ]; then
 fi
 
 # Add IPv6 tunnel
-if [ "$(ip link show omr-6in4 up)" ]; then
+if [ "$(ip link show omr-6in4 up 2>/dev/null)" ]; then
 	ip tunnel change omr-6in4 mode sit remote 10.255.255.2 local 10.255.255.1
 else
 	ip tunnel add omr-6in4 mode sit remote 10.255.255.2 local 10.255.255.1
+	ip addr add fe80::a00:1/64 dev omr-6in4 >/dev/null 2>&1
 fi
 ip link set omr-6in4 up
 ip route replace fd00::/8 via fe80::a00:2 dev omr-6in4
@@ -49,16 +50,18 @@ $allip_mlvpn"
 			while IFS= read -r inet; do
 				ip=$(echo $inet | awk '{print $2}' | cut -d/ -f1 | tr -d "\n")
 				ipd=$(echo $ip | sed 's/.1/.2/' | tr -d "\n")
-				_ping $ipd
-				statusp=$?
-				if $(exit $statusp); then
-					ip tunnel change omr-6in4 mode sit remote $ipd local $ip
-					echo "VPS_ADDR=$ip" > /etc/shorewall/params.vpn
-					echo "OMR_ADDR=$ipd" >> /etc/shorewall/params.vpn
-					iface=$(ip -4 addr | grep $ip | awk '{print $7}' | tr -d "\n")
-					echo "VPS_IFACE=$iface" >> /etc/shorewall/params.vpn
-					systemctl reload shorewall
-					break
+				if [ "$ipd" != "" ]; then
+					_ping $ipd
+					statusp=$?
+					if $(exit $statusp); then
+						ip tunnel change omr-6in4 mode sit remote $ipd local $ip
+						echo "VPS_ADDR=$ip" > /etc/shorewall/params.vpn
+						echo "OMR_ADDR=$ipd" >> /etc/shorewall/params.vpn
+						iface=$(ip -4 addr | grep $ip | awk '{print $7}' | tr -d "\n")
+						echo "VPS_IFACE=$iface" >> /etc/shorewall/params.vpn
+						systemctl reload shorewall
+						break
+					fi
 				fi
 			done < <(printf '%s\n' "$allip")
 			[ -z "$iface" ] && {

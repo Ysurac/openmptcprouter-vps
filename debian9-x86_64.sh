@@ -48,6 +48,7 @@ bash update-grub.sh 4.14.24-mptcp
 
 #apt -t stretch-backports -y install shadowsocks-libev
 ## Compile Shadowsocks
+rm -rf /tmp/shadowsocks-libev-3.2.0
 wget -O /tmp/shadowsocks-libev-3.2.0.tar.gz http://github.com/shadowsocks/shadowsocks-libev/releases/download/v3.2.0/shadowsocks-libev-3.2.0.tar.gz
 cd /tmp
 tar xzf shadowsocks-libev-3.2.0.tar.gz
@@ -60,7 +61,7 @@ mk-build-deps --install --tool "apt-get -o Debug::pkgProblemResolver=yes --no-in
 dpkg-buildpackage -b -us -uc
 cd ..
 dpkg -i shadowsocks-libev_3.2.0-1_amd64.deb
-rm -r /tmp/shadowsocks-libev-3.2.0
+rm -rf /tmp/shadowsocks-libev-3.2.0
 
 # Load OLIA Congestion module at boot time
 if ! grep -q olia /etc/modules ; then
@@ -91,6 +92,7 @@ fi
 
 # Install simple-obfs
 if [ "$OBFS" = "yes" ]; then
+	rm -rf /tmp/simple-obfs
 	cd /tmp
 	sudo apt-get install -y --no-install-recommends build-essential autoconf libtool libssl-dev libpcre3-dev libev-dev asciidoc xmlto automake git ca-certificates
 	git clone https://github.com/shadowsocks/simple-obfs.git /tmp/simple-obfs
@@ -130,6 +132,7 @@ if systemctl -q is-active glorytun-udp@tun0.service; then
 	systemctl -q stop glorytun-udp@tun0 > /dev/null 2>&1
 fi
 apt-get -y install meson pkg-config ca-certificates
+rm -rf /tmp/glorytun-0.0.99-mud
 cd /tmp
 wget -O /tmp/glorytun-0.0.99-mud.tar.gz https://github.com/angt/glorytun/releases/download/v0.0.99-mud/glorytun-0.0.99-mud.tar.gz
 tar xzf glorytun-0.0.99-mud.tar.gz
@@ -161,9 +164,9 @@ if systemctl -q is-active glorytun-tcp@tun0.service; then
 fi
 apt -t stretch-backports -y install libsodium-dev
 apt-get -y install build-essential pkg-config autoconf automake
+rm -rf /tmp/glorytun-0.0.35
 cd /tmp
 wget -O /tmp/glorytun-0.0.35.tar.gz http://github.com/angt/glorytun/releases/download/v0.0.35/glorytun-0.0.35.tar.gz
-cd /tmp
 tar xzf glorytun-0.0.35.tar.gz
 cd glorytun-0.0.35
 ./autogen.sh
@@ -182,7 +185,7 @@ fi
 systemctl enable glorytun-tcp@tun0.service
 systemctl enable systemd-networkd.service
 cd /tmp
-rm -r /tmp/glorytun-0.0.35
+rm -rf /tmp/glorytun-0.0.35
 
 # Load tun module at boot time
 if ! grep -q tun /etc/modules ; then
@@ -233,14 +236,15 @@ else
 	sed -i 's:10.0.0.2:$OMR_ADDR:g' /etc/shorewall/rules
 	wget -O /etc/shorewall6/interfaces http://www.openmptcprouter.com/server/shorewall6/interfaces
 	wget -O /etc/shorewall6/stoppedrules http://www.openmptcprouter.com/server/shorewall6/stoppedrules
+	wget -O /etc/shorewall6/snat http://www.openmptcprouter.com/server/shorewall6/snat
 	sed -i "s:eth0:$INTERFACE:g" /etc/shorewall6/*
 fi
 
 # Add OpenMPTCProuter VPS script version to /etc/motd
 if grep --quiet 'OpenMPTCProuter VPS' /etc/motd; then
-	sed -i 's:< OpenMPTCProuter VPS [0-9]*\.[0-9]* >:< OpenMPCTProuter VPS 0.33 >:' /etc/motd
+	sed -i 's:< OpenMPTCProuter VPS [0-9]*\.[0-9]* >:< OpenMPCTProuter VPS 0.34 >:' /etc/motd
 else
-	echo '< OpenMPTCProuter VPS 0.33 >' >> /etc/motd
+	echo '< OpenMPTCProuter VPS 0.34 >' >> /etc/motd
 fi
 
 if [ "$update" = "0" ]; then

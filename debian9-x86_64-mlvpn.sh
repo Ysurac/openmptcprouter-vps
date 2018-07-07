@@ -23,6 +23,7 @@ if systemctl -q is-active mlvpn@mlvpn0.service; then
 	systemctl -q stop mlvpn@mlvpn0 > /dev/null 2>&1
 fi
 apt-get -y install build-essential pkg-config autoconf automake libpcap-dev unzip
+rm -rf /tmp/MLVPN-new-reorder
 cd /tmp
 #wget -O /tmp/mlvpn-2.3.2.tar.gz https://github.com/zehome/MLVPN/archive/2.3.2.tar.gz
 wget -O /tmp/new-reorder.zip https://github.com/markfoodyburton/MLVPN/archive/new-reorder.zip
@@ -46,8 +47,8 @@ adduser --quiet --system --home /var/run/mlvpn --shell /usr/sbin/nologin mlvpn
 systemctl enable mlvpn@mlvpn0.service
 systemctl enable systemd-networkd.service
 cd /tmp
-#rm -r /tmp/MLVPN-2.3.2
-rm -r /tmp/MLVPN-new-reorder
+#rm -rf /tmp/MLVPN-2.3.2
+rm -rf /tmp/MLVPN-new-reorder
 
 # Add 6in4 support
 wget -O /usr/local/bin/omr-6in4 http://www.openmptcprouter.com/server/omr-6in4

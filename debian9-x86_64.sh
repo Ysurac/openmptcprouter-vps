@@ -192,14 +192,19 @@ if ! grep -q tun /etc/modules ; then
 	echo tun >> /etc/modules
 fi
 
-# Add 6in4 support
-wget -O /usr/local/bin/omr-6in4 http://www.openmptcprouter.com/server/omr-6in4
-chmod 755 /usr/local/bin/omr-6in4
-wget -O /usr/local/bin/omr-6in4-service http://www.openmptcprouter.com/server/omr-6in4-service
-chmod 755 /usr/local/bin/omr-6in4-service
-wget -O /lib/systemd/system/omr-6in4.service http://www.openmptcprouter.com/server/omr-6in4.service.in
-systemctl enable omr-6in4.service
+# Add multipath utility
+wget -O /usr/local/bin/multipath http://www.openmptcprouter.com/server/multipath
+chmod 755 /usr/local/bin/multipath
 
+# Add OpenMPTCProuter service
+wget -O /usr/local/bin/omr-service http://www.openmptcprouter.com/server/omr-service
+chmod 755 /usr/local/bin/omr-service
+wget -O /lib/systemd/system/omr.service http://www.openmptcprouter.com/server/omr.service.in
+if systemctl -q is-active omr-6in4.service; then
+	systemctl -q stop omr-6in4 > /dev/null 2>&1
+fi
+systemctl -q disable omr-6in4 > /dev/null 2>&1
+systemctl enable omr.service
 
 
 # Change SSH port to 65222
@@ -242,9 +247,9 @@ fi
 
 # Add OpenMPTCProuter VPS script version to /etc/motd
 if grep --quiet 'OpenMPTCProuter VPS' /etc/motd; then
-	sed -i 's:< OpenMPTCProuter VPS [0-9]*\.[0-9]* >:< OpenMPCTProuter VPS 0.36 >:' /etc/motd
+	sed -i 's:< OpenMPTCProuter VPS [0-9]*\.[0-9]* >:< OpenMPCTProuter VPS 0.37 >:' /etc/motd
 else
-	echo '< OpenMPTCProuter VPS 0.36 >' >> /etc/motd
+	echo '< OpenMPTCProuter VPS 0.37 >' >> /etc/motd
 fi
 
 if [ "$update" = "0" ]; then
@@ -292,10 +297,10 @@ else
 	echo 'Restarting systemd network...'
 	systemctl -q restart systemd-networkd
 	echo 'done'
-	echo 'Restarting glorytun and omr-6in4...'
+	echo 'Restarting glorytun and omr...'
 	systemctl -q start glorytun-tcp@tun0
 	systemctl -q start glorytun-udp@tun0
-	systemctl -q restart omr-6in4
+	systemctl -q restart omr
 	echo 'done'
 	echo 'Restarting shadowsocks...'
 	systemctl -q restart shadowsocks-libev-server@config

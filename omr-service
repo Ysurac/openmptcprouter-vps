@@ -1,5 +1,6 @@
 #!/bin/bash
-# OpenMPTCProuter VPS 6in4 service script
+# OpenMPTCProuter VPS service script
+# This script configure 6in4, multipath and firewall for current VPN
 
 if [ "$1" = "stop" ] && [ "$(ip link show omr-6in4 up 2>/dev/null)" ]; then
 	ip route del fd00::/8 via fe80::a00:2 dev omr-6in4
@@ -7,6 +8,16 @@ if [ "$1" = "stop" ] && [ "$(ip link show omr-6in4 up 2>/dev/null)" ]; then
 	ip tunnel del omr-6in4
 	exit 0
 fi
+
+# Force multipath status
+source /etc/shorewall/params.net
+for intf in `ls -1 /sys/class/net`; do
+	if [ "$intf" = "$NET_IFACE" ]; then
+		multipath $intf on
+	else
+		multipath $intf off
+	fi
+done
 
 # Add IPv6 tunnel
 if [ "$(ip link show omr-6in4 up 2>/dev/null)" ]; then

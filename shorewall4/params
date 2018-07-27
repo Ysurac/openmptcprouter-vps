@@ -22,4 +22,5 @@
 #	net	eth0		130.252.100.255	routefilter,norfc1918
 #
 ###############################################################################
+INCLUDE params.net
 INCLUDE params.vpn

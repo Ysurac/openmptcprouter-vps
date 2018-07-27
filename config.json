@@ -4,10 +4,10 @@
     "local_port":1081,
     "mode":"tcp_and_udp",
     "key":"MySecretKey",
-    "timeout":120,
+    "timeout":400,
     "method":"aes-256-cfb",
-    "verbose":2,
-    "prefer_ipv6": true,
+    "verbose":0,
+    "prefer_ipv6": false,
     "fast_open": true,
     "reuse_port": true,
     "mptcp": true

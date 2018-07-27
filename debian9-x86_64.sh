@@ -30,21 +30,21 @@ apt-get -y install dirmngr patch
 #echo 'deb http://dl.bintray.com/cpaasch/deb jessie main' >> /etc/apt/sources.list
 echo 'deb http://deb.debian.org/debian stretch-backports main' > /etc/apt/sources.list.d/stretch-backports.list
 apt-get update
-wget -O /tmp/linux-image-4.14.24-mptcp-64056fa.amd64.deb http://www.openmptcprouter.com/kernel/linux-image-4.14.24-mptcp-64056fa.amd64.deb
-wget -O /tmp/linux-headers-4.14.24-mptcp-64056fa.amd64.deb http://www.openmptcprouter.com/kernel/linux-headers-4.14.24-mptcp-64056fa.amd64.deb
+wget -O /tmp/linux-image-4.14.41-mptcp-5723e3d.amd64.deb http://www.openmptcprouter.com/kernel/linux-image-4.14.41-mptcp-5723e3d.amd64.deb
+wget -O /tmp/linux-headers-4.14.41-mptcp-5723e3d.amd64.deb http://www.openmptcprouter.com/kernel/linux-headers-4.14.41-mptcp-5723e3d.amd64.deb
 # Rename bzImage to vmlinuz, needed when custom kernel was used
 cd /boot
 apt-get -y install rename
 rename 's/^bzImage/vmlinuz/s' * >/dev/null 2>&1
 #apt-get -y install linux-mptcp
-dpkg -E -i /tmp/linux-image-4.14.24-mptcp-64056fa.amd64.deb
-dpkg -E -i /tmp/linux-headers-4.14.24-mptcp-64056fa.amd64.deb
+dpkg -E -i /tmp/linux-image-4.14.41-mptcp-5723e3d.amd64.deb
+dpkg -E -i /tmp/linux-headers-4.14.41-mptcp-5723e3d.amd64.deb
 
 # Check if mptcp kernel is grub default kernel
 echo "Set MPTCP kernel as grub default..."
 wget -O /tmp/update-grub.sh http://www.openmptcprouter.com/server/update-grub.sh
 cd /tmp
-bash update-grub.sh 4.14.24-mptcp
+bash update-grub.sh 4.14.41-mptcp
 
 #apt -t stretch-backports -y install shadowsocks-libev
 ## Compile Shadowsocks
@@ -103,7 +103,7 @@ if [ "$OBFS" = "yes" ]; then
 	make install
 	cd /tmp
 	rm -rf /tmp/simple-obfs
-	sed -i 's%"mptcp": true%"mptcp": true,\n"plugin": "/usr/local/bin/obfs-server",\n"plugin_opts": "obfs=http;mptcp;fast-open"%' /etc/shadowsocks-libev/config.json
+	sed -i 's%"mptcp": true%"mptcp": true,\n"plugin": "/usr/local/bin/obfs-server",\n"plugin_opts": "obfs=http;mptcp;fast-open;t=400"%' /etc/shadowsocks-libev/config.json
 else
 	sed -i -e '/plugin/d' -e 's/,,//' /etc/shadowsocks-libev/config.json
 fi
@@ -242,9 +242,9 @@ fi
 
 # Add OpenMPTCProuter VPS script version to /etc/motd
 if grep --quiet 'OpenMPTCProuter VPS' /etc/motd; then
-	sed -i 's:< OpenMPTCProuter VPS [0-9]*\.[0-9]* >:< OpenMPCTProuter VPS 0.34 >:' /etc/motd
+	sed -i 's:< OpenMPTCProuter VPS [0-9]*\.[0-9]* >:< OpenMPCTProuter VPS 0.36 >:' /etc/motd
 else
-	echo '< OpenMPTCProuter VPS 0.34 >' >> /etc/motd
+	echo '< OpenMPTCProuter VPS 0.36 >' >> /etc/motd
 fi
 
 if [ "$update" = "0" ]; then
@@ -298,10 +298,10 @@ else
 	systemctl -q restart omr-6in4
 	echo 'done'
 	echo 'Restarting shadowsocks...'
-	systemctl -q restart shadowsocks-libev-server@config.service
+	systemctl -q restart shadowsocks-libev-server@config
 	if [ $NBCPU -gt 1 ]; then
 		for i in $NBCPU; do
-			systemctl restart shadowsocks-libev-server@config$i.service
+			systemctl restart shadowsocks-libev-server@config$i
 		done
 	fi
 	echo 'done'

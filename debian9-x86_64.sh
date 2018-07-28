@@ -202,8 +202,8 @@ chmod 755 /usr/local/bin/omr-service
 wget -O /lib/systemd/system/omr.service http://www.openmptcprouter.com/server/omr.service.in
 if systemctl -q is-active omr-6in4.service; then
 	systemctl -q stop omr-6in4 > /dev/null 2>&1
+	systemctl -q disable omr-6in4 > /dev/null 2>&1
 fi
-systemctl -q disable omr-6in4 > /dev/null 2>&1
 systemctl enable omr.service
 
 

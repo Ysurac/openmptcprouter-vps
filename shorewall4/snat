@@ -18,6 +18,6 @@
 MASQUERADE		10.0.0.0/8,\
 			169.254.0.0/16,\
 			172.16.0.0/12,\
-			192.168.0.0/16		eth0
+			192.168.0.0/16		$NET_IFACE
 # SNAT from VPN server for all VPN clients
 #SNAT($VPS_ADDR)		0.0.0.0/0		$VPS_IFACE

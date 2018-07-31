@@ -50,13 +50,15 @@ cd /tmp
 #rm -rf /tmp/MLVPN-2.3.2
 rm -rf /tmp/MLVPN-new-reorder
 
-# Add 6in4 support
-wget -O /usr/local/bin/omr-6in4 http://www.openmptcprouter.com/server/omr-6in4
-chmod 755 /usr/local/bin/omr-6in4
-wget -O /usr/local/bin/omr-6in4-service http://www.openmptcprouter.com/server/omr-6in4-service
-chmod 755 /usr/local/bin/omr-6in4-service
-wget -O /lib/systemd/system/omr-6in4.service http://www.openmptcprouter.com/server/omr-6in4.service.in
-systemctl enable omr-6in4.service
+# Add OMR support
+wget -O /usr/local/bin/omr-service http://www.openmptcprouter.com/server/omr-service
+chmod 755 /usr/local/bin/omr-service
+wget -O /lib/systemd/system/omr.service http://www.openmptcprouter.com/server/omr.service.in
+if systemctl -q is-active omr-6in4.service; then
+        systemctl -q stop omr-6in4 > /dev/null 2>&1
+        systemctl -q disable omr-6in4 > /dev/null 2>&1
+fi
+systemctl enable omr.service
 
 # Change SSH port to 65222
 sed -i 's:#Port 22:Port 65222:g' /etc/ssh/sshd_config
@@ -87,9 +89,12 @@ else
 	wget -O /etc/shorewall/snat http://www.openmptcprouter.com/server/shorewall4/snat
 	wget -O /etc/shorewall/stoppedrules http://www.openmptcprouter.com/server/shorewall4/stoppedrules
 	wget -O /etc/shorewall/params.vpn http://www.openmptcprouter.com/server/shorewall4/params.vpn
+	wget -O /etc/shorewall/params.net http://www.openmptcprouter.com/server/shorewall4/params.net
 	wget -O /etc/shorewall/params http://www.openmptcprouter.com/server/shorewall4/params
 	sed -i "s:eth0:$INTERFACE:g" /etc/shorewall/*
 	sed -i 's:10.0.0.2:$OMR_ADDR:g' /etc/shorewall/rules
+	wget -O /etc/shorewall6/params.net http://www.openmptcprouter.com/server/shorewall6/params.net
+	wget -O /etc/shorewall6/params http://www.openmptcprouter.com/server/shorewall6/params
 	wget -O /etc/shorewall6/interfaces http://www.openmptcprouter.com/server/shorewall6/interfaces
 	wget -O /etc/shorewall6/stoppedrules http://www.openmptcprouter.com/server/shorewall6/stoppedrules
 	sed -i "s:eth0:$INTERFACE:g" /etc/shorewall6/*
@@ -126,9 +131,9 @@ else
 	echo 'OpenMPTCProuter VPS MLVPN is now updated !'
 	echo 'Keys are not changed, shorewall rules files preserved'
 	echo '===================================================================================='
-	echo 'Restarting mlvpn and omr-6in4...'
+	echo 'Restarting mlvpn and omr...'
 	systemctl -q start mlvpn@mlvpn0
-	systemctl -q restart omr-6in4
+	systemctl -q restart omr
 	echo 'done'
 	echo 'Restarting shorewall...'
 	systemctl -q restart shorewall

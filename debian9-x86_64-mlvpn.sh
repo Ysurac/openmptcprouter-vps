@@ -36,14 +36,17 @@ cd MLVPN-new-reorder
 ./configure --sysconfdir=/etc
 make
 make install
-wget -O /lib/systemd/network/mlvpn.network http://www.openmptcprouter.com/server/mlvpn.network
+wget -O /lib/systemd/network/mlvpn.network https://www.openmptcprouter.com/server/mlvpn.network
 mkdir -p /etc/mlvpn
 if [ "$update" = "0" ]; then
-	wget -O /etc/mlvpn/mlvpn0.conf http://www.openmptcprouter.com/server/mlvpn0.conf
+	wget -O /etc/mlvpn/mlvpn0.conf https://www.openmptcprouter.com/server/mlvpn0.conf
 	sed -i "s:MLVPN_PASS:$MLVPN_PASS:" /etc/mlvpn/mlvpn0.conf
 fi
 chmod 0600 /etc/mlvpn/mlvpn0.conf
-adduser --quiet --system --home /var/run/mlvpn --shell /usr/sbin/nologin mlvpn
+adduser --quiet --system --home /var/opt/mlvpn --shell /usr/sbin/nologin mlvpn
+mkdir -p /var/opt/mlvpn
+usermod -d /var/opt/mlvpn mlvpn
+chown mlvpn /var/opt/mlvpn
 systemctl enable mlvpn@mlvpn0.service
 systemctl enable systemd-networkd.service
 cd /tmp
@@ -51,9 +54,9 @@ cd /tmp
 rm -rf /tmp/MLVPN-new-reorder
 
 # Add OMR support
-wget -O /usr/local/bin/omr-service http://www.openmptcprouter.com/server/omr-service
+wget -O /usr/local/bin/omr-service https://www.openmptcprouter.com/server/omr-service
 chmod 755 /usr/local/bin/omr-service
-wget -O /lib/systemd/system/omr.service http://www.openmptcprouter.com/server/omr.service.in
+wget -O /lib/systemd/system/omr.service https://www.openmptcprouter.com/server/omr.service.in
 if systemctl -q is-active omr-6in4.service; then
         systemctl -q stop omr-6in4 > /dev/null 2>&1
         systemctl -q disable omr-6in4 > /dev/null 2>&1
@@ -73,30 +76,30 @@ sed -i 's:Port 22:Port 65222:g' /etc/ssh/sshd_config
 if [ "$update" = "0" ]; then
 	# Install and configure the firewall using shorewall
 	apt-get -y install shorewall shorewall6
-	wget -O /etc/shorewall/openmptcprouter-shorewall.tar.gz http://www.openmptcprouter.com/server/openmptcprouter-shorewall.tar.gz
+	wget -O /etc/shorewall/openmptcprouter-shorewall.tar.gz https://www.openmptcprouter.com/server/openmptcprouter-shorewall.tar.gz
 	tar xzf /etc/shorewall/openmptcprouter-shorewall.tar.gz -C /etc/shorewall
 	rm /etc/shorewall/openmptcprouter-shorewall.tar.gz
 	sed -i "s:eth0:$INTERFACE:g" /etc/shorewall/*
 	systemctl enable shorewall
-	wget -O /etc/shorewall6/openmptcprouter-shorewall6.tar.gz http://www.openmptcprouter.com/server/openmptcprouter-shorewall6.tar.gz
+	wget -O /etc/shorewall6/openmptcprouter-shorewall6.tar.gz https://www.openmptcprouter.com/server/openmptcprouter-shorewall6.tar.gz
 	tar xzf /etc/shorewall6/openmptcprouter-shorewall6.tar.gz -C /etc/shorewall6
 	rm /etc/shorewall6/openmptcprouter-shorewall6.tar.gz
 	sed -i "s:eth0:$INTERFACE:g" /etc/shorewall6/*
 	systemctl enable shorewall6
 else
 	# Update only needed firewall files
-	wget -O /etc/shorewall/interfaces http://www.openmptcprouter.com/server/shorewall4/interfaces
-	wget -O /etc/shorewall/snat http://www.openmptcprouter.com/server/shorewall4/snat
-	wget -O /etc/shorewall/stoppedrules http://www.openmptcprouter.com/server/shorewall4/stoppedrules
-	wget -O /etc/shorewall/params.vpn http://www.openmptcprouter.com/server/shorewall4/params.vpn
-	wget -O /etc/shorewall/params.net http://www.openmptcprouter.com/server/shorewall4/params.net
-	wget -O /etc/shorewall/params http://www.openmptcprouter.com/server/shorewall4/params
+	wget -O /etc/shorewall/interfaces https://www.openmptcprouter.com/server/shorewall4/interfaces
+	wget -O /etc/shorewall/snat https://www.openmptcprouter.com/server/shorewall4/snat
+	wget -O /etc/shorewall/stoppedrules https://www.openmptcprouter.com/server/shorewall4/stoppedrules
+	wget -O /etc/shorewall/params.vpn https://www.openmptcprouter.com/server/shorewall4/params.vpn
+	wget -O /etc/shorewall/params.net https://www.openmptcprouter.com/server/shorewall4/params.net
+	wget -O /etc/shorewall/params https://www.openmptcprouter.com/server/shorewall4/params
 	sed -i "s:eth0:$INTERFACE:g" /etc/shorewall/*
 	sed -i 's:10.0.0.2:$OMR_ADDR:g' /etc/shorewall/rules
-	wget -O /etc/shorewall6/params.net http://www.openmptcprouter.com/server/shorewall6/params.net
-	wget -O /etc/shorewall6/params http://www.openmptcprouter.com/server/shorewall6/params
-	wget -O /etc/shorewall6/interfaces http://www.openmptcprouter.com/server/shorewall6/interfaces
-	wget -O /etc/shorewall6/stoppedrules http://www.openmptcprouter.com/server/shorewall6/stoppedrules
+	wget -O /etc/shorewall6/params.net https://www.openmptcprouter.com/server/shorewall6/params.net
+	wget -O /etc/shorewall6/params https://www.openmptcprouter.com/server/shorewall6/params
+	wget -O /etc/shorewall6/interfaces https://www.openmptcprouter.com/server/shorewall6/interfaces
+	wget -O /etc/shorewall6/stoppedrules https://www.openmptcprouter.com/server/shorewall6/stoppedrules
 	sed -i "s:eth0:$INTERFACE:g" /etc/shorewall6/*
 fi
 

@@ -30,8 +30,8 @@ apt-get -y install dirmngr patch
 #echo 'deb http://dl.bintray.com/cpaasch/deb jessie main' >> /etc/apt/sources.list
 echo 'deb http://deb.debian.org/debian stretch-backports main' > /etc/apt/sources.list.d/stretch-backports.list
 apt-get update
-wget -O /tmp/linux-image-4.14.41-mptcp-5723e3d.amd64.deb http://www.openmptcprouter.com/kernel/linux-image-4.14.41-mptcp-5723e3d.amd64.deb
-wget -O /tmp/linux-headers-4.14.41-mptcp-5723e3d.amd64.deb http://www.openmptcprouter.com/kernel/linux-headers-4.14.41-mptcp-5723e3d.amd64.deb
+wget -O /tmp/linux-image-4.14.41-mptcp-5723e3d.amd64.deb https://www.openmptcprouter.com/kernel/linux-image-4.14.41-mptcp-5723e3d.amd64.deb
+wget -O /tmp/linux-headers-4.14.41-mptcp-5723e3d.amd64.deb https://www.openmptcprouter.com/kernel/linux-headers-4.14.41-mptcp-5723e3d.amd64.deb
 # Rename bzImage to vmlinuz, needed when custom kernel was used
 cd /boot
 apt-get -y install rename
@@ -42,7 +42,7 @@ dpkg -E -i /tmp/linux-headers-4.14.41-mptcp-5723e3d.amd64.deb
 
 # Check if mptcp kernel is grub default kernel
 echo "Set MPTCP kernel as grub default..."
-wget -O /tmp/update-grub.sh http://www.openmptcprouter.com/server/update-grub.sh
+wget -O /tmp/update-grub.sh https://www.openmptcprouter.com/server/update-grub.sh
 cd /tmp
 bash update-grub.sh 4.14.41-mptcp
 
@@ -69,11 +69,11 @@ if ! grep -q olia /etc/modules ; then
 fi
 
 # Get shadowsocks optimization
-wget -O /etc/sysctl.d/90-shadowsocks.conf http://www.openmptcprouter.com/server/shadowsocks.conf
+wget -O /etc/sysctl.d/90-shadowsocks.conf https://www.openmptcprouter.com/server/shadowsocks.conf
 
 # Install shadowsocks config and add a shadowsocks by CPU
 if [ "$update" = "0" ]; then
-	wget -O /etc/shadowsocks-libev/config.json http://www.openmptcprouter.com/server/config.json
+	wget -O /etc/shadowsocks-libev/config.json https://www.openmptcprouter.com/server/config.json
 	SHADOWSOCKS_PASS_JSON=$(echo $SHADOWSOCKS_PASS | sed 's/+/-/g; s/\//_/g;')
 	sed -i "s:MySecretKey:$SHADOWSOCKS_PASS_JSON:g" /etc/shadowsocks-libev/config.json
 fi
@@ -110,21 +110,23 @@ fi
 
 if [ "$MLVPN" = "yes" ]; then
 	cd /tmp
-	wget -O /tmp/debian9-x86_64-mlvpn.sh http://www.openmptcprouter.com/server/debian9-x86_64-mlvpn.sh
+	wget -O /tmp/debian9-x86_64-mlvpn.sh https://www.openmptcprouter.com/server/debian9-x86_64-mlvpn.sh
 	sh debian9-x86_64-mlvpn.sh
 fi
 
+if systemctl -q is-active openvpn-server@tun0.service; then
+	systemctl -q stop openvpn-server@tun0 > /dev/null 2>&1
+	systemctl -q disable openvpn-server@tun0 > /dev/null 2>&1
+fi
 if [ "$OPENVPN" = "yes" ]; then
-	if systemctl -q is-active openvpn-server@tun0.service; then
-		systemctl -q stop openvpn-server@tun0 > /dev/null 2>&1
-	fi
 	apt-get -y install openvpn
-	wget -O /lib/systemd/network/openvpn.network http://www.openmptcprouter.com/server/openvpn.network
+	wget -O /lib/systemd/network/openvpn.network https://www.openmptcprouter.com/server/openvpn.network
 	if [ ! -f "/etc/openvpn/server/static.key" ]; then
-		wget -O /etc/openvpn/server/tun0.conf http://www.openmptcprouter.com/server/openvpn-tun0.conf
+		wget -O /etc/openvpn/tun0.conf https://www.openmptcprouter.com/server/openvpn-tun0.conf
 		cd /etc/openvpn/server
 		openvpn --genkey --secret static.key
 	fi
+	systemctl enable openvpn@tun0.service
 fi
 
 # Install Glorytun UDP
@@ -142,12 +144,12 @@ ninja -C build install
 sed -i 's:EmitDNS=yes:EmitDNS=no:g' /lib/systemd/network/glorytun.network
 rm /lib/systemd/system/glorytun*
 rm /lib/systemd/network/glorytun*
-wget -O /usr/local/bin/glorytun-udp-run http://www.openmptcprouter.com/server/glorytun-udp-run
+wget -O /usr/local/bin/glorytun-udp-run https://www.openmptcprouter.com/server/glorytun-udp-run
 chmod 755 /usr/local/bin/glorytun-udp-run
-wget -O /lib/systemd/system/glorytun-udp@.service http://www.openmptcprouter.com/server/glorytun-udp%40.service.in
-wget -O /lib/systemd/network/glorytun-udp.network http://www.openmptcprouter.com/server/glorytun-udp.network
+wget -O /lib/systemd/system/glorytun-udp@.service https://www.openmptcprouter.com/server/glorytun-udp%40.service.in
+wget -O /lib/systemd/network/glorytun-udp.network https://www.openmptcprouter.com/server/glorytun-udp.network
 mkdir -p /etc/glorytun-udp
-wget -O /etc/glorytun-udp/tun0 http://www.openmptcprouter.com/server/tun0.glorytun-udp
+wget -O /etc/glorytun-udp/tun0 https://www.openmptcprouter.com/server/tun0.glorytun-udp
 if [ "$update" = "0" ]; then
 	echo "$GLORYTUN_PASS" > /etc/glorytun-udp/tun0.key
 elif [ ! -f /etc/glorytun-udp/tun0.key ] && [ -f /etc/glorytun-tcp/tun0.key ]; then
@@ -173,12 +175,12 @@ cd glorytun-0.0.35
 ./configure
 make
 cp glorytun /usr/local/bin/glorytun-tcp
-wget -O /usr/local/bin/glorytun-tcp-run http://www.openmptcprouter.com/server/glorytun-tcp-run
+wget -O /usr/local/bin/glorytun-tcp-run https://www.openmptcprouter.com/server/glorytun-tcp-run
 chmod 755 /usr/local/bin/glorytun-tcp-run
-wget -O /lib/systemd/system/glorytun-tcp@.service http://www.openmptcprouter.com/server/glorytun-tcp%40.service.in
-wget -O /lib/systemd/network/glorytun-tcp.network http://www.openmptcprouter.com/server/glorytun.network
+wget -O /lib/systemd/system/glorytun-tcp@.service https://www.openmptcprouter.com/server/glorytun-tcp%40.service.in
+wget -O /lib/systemd/network/glorytun-tcp.network https://www.openmptcprouter.com/server/glorytun.network
 mkdir -p /etc/glorytun-tcp
-wget -O /etc/glorytun-tcp/tun0 http://www.openmptcprouter.com/server/tun0.glorytun
+wget -O /etc/glorytun-tcp/tun0 https://www.openmptcprouter.com/server/tun0.glorytun
 if [ "$update" = "0" ]; then
 	echo "$GLORYTUN_PASS" > /etc/glorytun-tcp/tun0.key
 fi
@@ -193,13 +195,13 @@ if ! grep -q tun /etc/modules ; then
 fi
 
 # Add multipath utility
-wget -O /usr/local/bin/multipath http://www.openmptcprouter.com/server/multipath
+wget -O /usr/local/bin/multipath https://www.openmptcprouter.com/server/multipath
 chmod 755 /usr/local/bin/multipath
 
 # Add OpenMPTCProuter service
-wget -O /usr/local/bin/omr-service http://www.openmptcprouter.com/server/omr-service
+wget -O /usr/local/bin/omr-service https://www.openmptcprouter.com/server/omr-service
 chmod 755 /usr/local/bin/omr-service
-wget -O /lib/systemd/system/omr.service http://www.openmptcprouter.com/server/omr.service.in
+wget -O /lib/systemd/system/omr.service https://www.openmptcprouter.com/server/omr.service.in
 if systemctl -q is-active omr-6in4.service; then
 	systemctl -q stop omr-6in4 > /dev/null 2>&1
 	systemctl -q disable omr-6in4 > /dev/null 2>&1
@@ -220,39 +222,39 @@ sed -i 's:Port 22:Port 65222:g' /etc/ssh/sshd_config
 if [ "$update" = "0" ]; then
 	# Install and configure the firewall using shorewall
 	apt-get -y install shorewall shorewall6
-	wget -O /etc/shorewall/openmptcprouter-shorewall.tar.gz http://www.openmptcprouter.com/server/openmptcprouter-shorewall.tar.gz
+	wget -O /etc/shorewall/openmptcprouter-shorewall.tar.gz https://www.openmptcprouter.com/server/openmptcprouter-shorewall.tar.gz
 	tar xzf /etc/shorewall/openmptcprouter-shorewall.tar.gz -C /etc/shorewall
 	rm /etc/shorewall/openmptcprouter-shorewall.tar.gz
 	sed -i "s:eth0:$INTERFACE:g" /etc/shorewall/*
 	systemctl enable shorewall
-	wget -O /etc/shorewall6/openmptcprouter-shorewall6.tar.gz http://www.openmptcprouter.com/server/openmptcprouter-shorewall6.tar.gz
+	wget -O /etc/shorewall6/openmptcprouter-shorewall6.tar.gz https://www.openmptcprouter.com/server/openmptcprouter-shorewall6.tar.gz
 	tar xzf /etc/shorewall6/openmptcprouter-shorewall6.tar.gz -C /etc/shorewall6
 	rm /etc/shorewall6/openmptcprouter-shorewall6.tar.gz
 	sed -i "s:eth0:$INTERFACE:g" /etc/shorewall6/*
 	systemctl enable shorewall6
 else
 	# Update only needed firewall files
-	wget -O /etc/shorewall/interfaces http://www.openmptcprouter.com/server/shorewall4/interfaces
-	wget -O /etc/shorewall/snat http://www.openmptcprouter.com/server/shorewall4/snat
-	wget -O /etc/shorewall/stoppedrules http://www.openmptcprouter.com/server/shorewall4/stoppedrules
-	wget -O /etc/shorewall/params http://www.openmptcprouter.com/server/shorewall4/params
-	wget -O /etc/shorewall/params.vpn http://www.openmptcprouter.com/server/shorewall4/params.vpn
-	wget -O /etc/shorewall/params.net http://www.openmptcprouter.com/server/shorewall4/params.net
+	wget -O /etc/shorewall/interfaces https://www.openmptcprouter.com/server/shorewall4/interfaces
+	wget -O /etc/shorewall/snat https://www.openmptcprouter.com/server/shorewall4/snat
+	wget -O /etc/shorewall/stoppedrules https://www.openmptcprouter.com/server/shorewall4/stoppedrules
+	wget -O /etc/shorewall/params https://www.openmptcprouter.com/server/shorewall4/params
+	wget -O /etc/shorewall/params.vpn https://www.openmptcprouter.com/server/shorewall4/params.vpn
+	wget -O /etc/shorewall/params.net https://www.openmptcprouter.com/server/shorewall4/params.net
 	sed -i "s:eth0:$INTERFACE:g" /etc/shorewall/*
 	sed -i 's:10.0.0.2:$OMR_ADDR:g' /etc/shorewall/rules
-	wget -O /etc/shorewall6/params http://www.openmptcprouter.com/server/shorewall6/params
-	wget -O /etc/shorewall6/params.net http://www.openmptcprouter.com/server/shorewall6/params.net
-	wget -O /etc/shorewall6/interfaces http://www.openmptcprouter.com/server/shorewall6/interfaces
-	wget -O /etc/shorewall6/stoppedrules http://www.openmptcprouter.com/server/shorewall6/stoppedrules
-	wget -O /etc/shorewall6/snat http://www.openmptcprouter.com/server/shorewall6/snat
+	wget -O /etc/shorewall6/params https://www.openmptcprouter.com/server/shorewall6/params
+	wget -O /etc/shorewall6/params.net https://www.openmptcprouter.com/server/shorewall6/params.net
+	wget -O /etc/shorewall6/interfaces https://www.openmptcprouter.com/server/shorewall6/interfaces
+	wget -O /etc/shorewall6/stoppedrules https://www.openmptcprouter.com/server/shorewall6/stoppedrules
+	wget -O /etc/shorewall6/snat https://www.openmptcprouter.com/server/shorewall6/snat
 	sed -i "s:eth0:$INTERFACE:g" /etc/shorewall6/*
 fi
 
 # Add OpenMPTCProuter VPS script version to /etc/motd
 if grep --quiet 'OpenMPTCProuter VPS' /etc/motd; then
-	sed -i 's:< OpenMPTCProuter VPS [0-9]*\.[0-9]* >:< OpenMPCTProuter VPS 0.40 >:' /etc/motd
+	sed -i 's:< OpenMPTCProuter VPS [0-9]*\.[0-9]* >:< OpenMPCTProuter VPS 0.41 >:' /etc/motd
 else
-	echo '< OpenMPTCProuter VPS 0.40 >' >> /etc/motd
+	echo '< OpenMPTCProuter VPS 0.41 >' >> /etc/motd
 fi
 
 if [ "$update" = "0" ]; then
@@ -315,7 +317,7 @@ else
 	echo 'done'
 	if [ "$OPENVPN" = "yes" ]; then
 		echo 'Restarting OpenVPN'
-		systemctl -q restart openvpn-server@tun0
+		systemctl -q restart openvpn@tun0
 		echo 'done'
 	fi
 	echo 'Restarting shorewall...'

@@ -30,21 +30,21 @@ apt-get -y install dirmngr patch
 #echo 'deb http://dl.bintray.com/cpaasch/deb jessie main' >> /etc/apt/sources.list
 echo 'deb http://deb.debian.org/debian stretch-backports main' > /etc/apt/sources.list.d/stretch-backports.list
 apt-get update
-wget -O /tmp/linux-image-4.14.41-mptcp-5723e3d.amd64.deb https://www.openmptcprouter.com/kernel/linux-image-4.14.41-mptcp-5723e3d.amd64.deb
-wget -O /tmp/linux-headers-4.14.41-mptcp-5723e3d.amd64.deb https://www.openmptcprouter.com/kernel/linux-headers-4.14.41-mptcp-5723e3d.amd64.deb
+wget -O /tmp/linux-image-4.14.41-mptcp-80b661f.amd64.deb https://www.openmptcprouter.com/kernel/linux-image-4.14.41-mptcp-80b661f.amd64.deb
+wget -O /tmp/linux-headers-4.14.41-mptcp-80b661f.amd64.deb https://www.openmptcprouter.com/kernel/linux-headers-4.14.41-mptcp-80b661f.amd64.deb
 # Rename bzImage to vmlinuz, needed when custom kernel was used
 cd /boot
 apt-get -y install rename
 rename 's/^bzImage/vmlinuz/s' * >/dev/null 2>&1
 #apt-get -y install linux-mptcp
-dpkg -E -i /tmp/linux-image-4.14.41-mptcp-5723e3d.amd64.deb
-dpkg -E -i /tmp/linux-headers-4.14.41-mptcp-5723e3d.amd64.deb
+dpkg -E -i /tmp/linux-image-4.14.41-mptcp-80b661f.amd64.deb
+dpkg -E -i /tmp/linux-headers-4.14.41-mptcp-80b661f.amd64.deb
 
 # Check if mptcp kernel is grub default kernel
 echo "Set MPTCP kernel as grub default..."
 wget -O /tmp/update-grub.sh https://www.openmptcprouter.com/server/update-grub.sh
 cd /tmp
-bash update-grub.sh 4.14.41-mptcp
+bash update-grub.sh 4.14.41-mptcp-80b661f
 
 #apt -t stretch-backports -y install shadowsocks-libev
 ## Compile Shadowsocks
@@ -67,6 +67,10 @@ rm -rf /tmp/shadowsocks-libev-3.2.0
 if ! grep -q olia /etc/modules ; then
 	echo mptcp_olia >> /etc/modules
 fi
+# Load BBR Congestion module at boot time
+if ! grep -q bbr /etc/modules ; then
+	echo tcp_bbr >> /etc/modules
+fi
 
 # Get shadowsocks optimization
 wget -O /etc/sysctl.d/90-shadowsocks.conf https://www.openmptcprouter.com/server/shadowsocks.conf
@@ -77,6 +81,7 @@ if [ "$update" = "0" ]; then
 	SHADOWSOCKS_PASS_JSON=$(echo $SHADOWSOCKS_PASS | sed 's/+/-/g; s/\//_/g;')
 	sed -i "s:MySecretKey:$SHADOWSOCKS_PASS_JSON:g" /etc/shadowsocks-libev/config.json
 fi
+sed -i 's:aes-256-cfb:chacha20:g' /etc/shadowsocks-libev/config.json
 #sed -i 's:json:json --mptcp:g' /lib/systemd/system/shadowsocks-libev-server@.service
 systemctl disable shadowsocks-libev
 systemctl enable shadowsocks-libev-server@config.service
@@ -252,9 +257,9 @@ fi
 
 # Add OpenMPTCProuter VPS script version to /etc/motd
 if grep --quiet 'OpenMPTCProuter VPS' /etc/motd; then
-	sed -i 's:< OpenMPTCProuter VPS [0-9]*\.[0-9]* >:< OpenMPCTProuter VPS 0.41 >:' /etc/motd
+	sed -i 's:< OpenMPTCProuter VPS [0-9]*\.[0-9]* >:< OpenMPCTProuter VPS 0.42 >:' /etc/motd
 else
-	echo '< OpenMPTCProuter VPS 0.41 >' >> /etc/motd
+	echo '< OpenMPTCProuter VPS 0.42 >' >> /etc/motd
 fi
 
 if [ "$update" = "0" ]; then
@@ -263,7 +268,7 @@ if [ "$update" = "0" ]; then
 	echo 'OpenMPTCProuter VPS is now configured !'
 	echo 'SSH port: 65222 (instead of port 22)'
 	echo 'Shadowsocks port: 65101'
-	echo 'Shadowsocks encryption: aes-256-cfb'
+	echo 'Shadowsocks encryption: chacha20'
 	echo 'Your shadowsocks key: '
 	echo $SHADOWSOCKS_PASS
 	echo 'Glorytun port: 65001'
@@ -283,7 +288,7 @@ if [ "$update" = "0" ]; then
 	cat > /root/openmptcprouter_config.txt <<-EOF
 	SSH port: 65222 (instead of port 22)
 	Shadowsocks port: 65101
-	Shadowsocks encryption: aes-256-cfb
+	Shadowsocks encryption: chacha20
 	Your shadowsocks key:
 	${SHADOWSOCKS_PASS}
 	Glorytun port: 65001
@@ -298,6 +303,7 @@ else
 	echo '===================================================================================='
 	echo 'OpenMPTCProuter VPS is now updated !'
 	echo 'Keys are not changed, shorewall rules files preserved'
+	echo 'You need OpenMPTCProuter >= 0.30'
 	echo '===================================================================================='
 	echo 'Restarting systemd network...'
 	systemctl -q restart systemd-networkd
@@ -323,5 +329,8 @@ else
 	echo 'Restarting shorewall...'
 	systemctl -q restart shorewall
 	systemctl -q restart shorewall6
+	echo 'done'
+	echo 'Apply latest sysctl...'
+	sysctl -p /etc/sysctl.d/90-shadowsocks.conf > /dev/null 2>&1
 	echo 'done'
 fi

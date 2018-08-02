@@ -257,9 +257,9 @@ fi
 
 # Add OpenMPTCProuter VPS script version to /etc/motd
 if grep --quiet 'OpenMPTCProuter VPS' /etc/motd; then
-	sed -i 's:< OpenMPTCProuter VPS [0-9]*\.[0-9]* >:< OpenMPCTProuter VPS 0.42 >:' /etc/motd
+	sed -i 's:< OpenMPTCProuter VPS [0-9]*\.[0-9]* >:< OpenMPCTProuter VPS 0.43 >:' /etc/motd
 else
-	echo '< OpenMPTCProuter VPS 0.42 >' >> /etc/motd
+	echo '< OpenMPTCProuter VPS 0.43 >' >> /etc/motd
 fi
 
 if [ "$update" = "0" ]; then

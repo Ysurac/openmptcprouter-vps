@@ -8,6 +8,7 @@ MLVPN=${MLVPN:-no}
 OPENVPN=${OPENVPN:-no}
 INTERFACE=${INTERFACE:-$(ip -o -4 route show to default | awk '{print $5}' | tr -d "\n")}
 DEBIAN_VERSION=$(sed 's/\..*//' /etc/debian_version)
+KERNEL_VERSION="4.14.61-mptcp-ab19444"
 
 set -e
 umask 0022
@@ -30,21 +31,21 @@ apt-get -y install dirmngr patch
 #echo 'deb http://dl.bintray.com/cpaasch/deb jessie main' >> /etc/apt/sources.list
 echo 'deb http://deb.debian.org/debian stretch-backports main' > /etc/apt/sources.list.d/stretch-backports.list
 apt-get update
-wget -O /tmp/linux-image-4.14.61-mptcp-80b661f.amd64.deb https://www.openmptcprouter.com/kernel/linux-image-4.14.61-mptcp-80b661f.amd64.deb
-wget -O /tmp/linux-headers-4.14.61-mptcp-80b661f.amd64.deb https://www.openmptcprouter.com/kernel/linux-headers-4.14.61-mptcp-80b661f.amd64.deb
+wget -O /tmp/linux-image-${KERNEL_VERSION}.amd64.deb https://www.openmptcprouter.com/kernel/linux-image-${KERNEL_VERSION}.amd64.deb
+wget -O /tmp/linux-headers-${KERNEL_VERSION}.amd64.deb https://www.openmptcprouter.com/kernel/linux-headers-${KERNEL_VERSION}.amd64.deb
 # Rename bzImage to vmlinuz, needed when custom kernel was used
 cd /boot
 apt-get -y install rename
 rename 's/^bzImage/vmlinuz/s' * >/dev/null 2>&1
 #apt-get -y install linux-mptcp
-dpkg -E -i /tmp/linux-image-4.14.61-mptcp-80b661f.amd64.deb
-dpkg -E -i /tmp/linux-headers-4.14.61-mptcp-80b661f.amd64.deb
+dpkg -E -i /tmp/linux-image-${KERNEL_VERSION}.amd64.deb
+dpkg -E -i /tmp/linux-headers-${KERNEL_VERSION}.amd64.deb
 
 # Check if mptcp kernel is grub default kernel
 echo "Set MPTCP kernel as grub default..."
 wget -O /tmp/update-grub.sh https://www.openmptcprouter.com/server/update-grub.sh
 cd /tmp
-bash update-grub.sh 4.14.61-mptcp-80b661f
+bash update-grub.sh ${KERNEL_VERSION}
 
 #apt -t stretch-backports -y install shadowsocks-libev
 ## Compile Shadowsocks
@@ -257,9 +258,9 @@ fi
 
 # Add OpenMPTCProuter VPS script version to /etc/motd
 if grep --quiet 'OpenMPTCProuter VPS' /etc/motd; then
-	sed -i 's:< OpenMPTCProuter VPS [0-9]*\.[0-9]* >:< OpenMPCTProuter VPS 0.45 >:' /etc/motd
+	sed -i 's:< OpenMPTCProuter VPS [0-9]*\.[0-9]* >:< OpenMPCTProuter VPS 0.46 >:' /etc/motd
 else
-	echo '< OpenMPTCProuter VPS 0.45 >' >> /etc/motd
+	echo '< OpenMPTCProuter VPS 0.46 >' >> /etc/motd
 fi
 
 if [ "$update" = "0" ]; then

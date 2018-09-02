@@ -8,7 +8,7 @@ MLVPN=${MLVPN:-no}
 OPENVPN=${OPENVPN:-no}
 INTERFACE=${INTERFACE:-$(ip -o -4 route show to default | awk '{print $5}' | tr -d "\n")}
 DEBIAN_VERSION=$(sed 's/\..*//' /etc/debian_version)
-KERNEL_VERSION="4.14.61-mptcp-ab19444"
+KERNEL_VERSION="4.14.64-mptcp-16e8846"
 
 set -e
 umask 0022
@@ -258,9 +258,9 @@ fi
 
 # Add OpenMPTCProuter VPS script version to /etc/motd
 if grep --quiet 'OpenMPTCProuter VPS' /etc/motd; then
-	sed -i 's:< OpenMPTCProuter VPS [0-9]*\.[0-9]* >:< OpenMPCTProuter VPS 0.46 >:' /etc/motd
+	sed -i 's:< OpenMPTCProuter VPS [0-9]*\.[0-9]* >:< OpenMPCTProuter VPS 0.48 >:' /etc/motd
 else
-	echo '< OpenMPTCProuter VPS 0.46 >' >> /etc/motd
+	echo '< OpenMPTCProuter VPS 0.48 >' >> /etc/motd
 fi
 
 if [ "$update" = "0" ]; then

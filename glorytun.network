@@ -1,8 +1,8 @@
 [Match]
-Name=gt-*
+Name=gt-tun*
 
 [Link]
-MTUBytes=1400
+MTUBytes=1500
 
 [Network]
 Description=Glorytun server device

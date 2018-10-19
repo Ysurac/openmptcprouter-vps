@@ -1,5 +1,5 @@
 [Match]
-Name=gt-udp-*
+Name=gt-udp-tun*
 
 [Network]
 Description=Glorytun server device

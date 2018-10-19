@@ -8,7 +8,8 @@ MLVPN=${MLVPN:-no}
 OPENVPN=${OPENVPN:-no}
 INTERFACE=${INTERFACE:-$(ip -o -4 route show to default | awk '{print $5}' | tr -d "\n")}
 DEBIAN_VERSION=$(sed 's/\..*//' /etc/debian_version)
-KERNEL_VERSION="4.14.64-mptcp-16e8846"
+KERNEL_VERSION="4.14.73-mptcp-312723f"
+OMR_VERSION="0.56"
 
 set -e
 umask 0022
@@ -57,6 +58,7 @@ cd shadowsocks-libev-3.2.0
 wget https://raw.githubusercontent.com/Ysurac/openmptcprouter-feeds/master/shadowsocks-libev/patches/020-NOCRYPTO.patch
 patch -p1 < 020-NOCRYPTO.patch
 apt-get -y install --no-install-recommends devscripts equivs apg libcap2-bin libpam-cap
+apt-get -y install libc-ares2 libc-ares-dev libev4
 apt -y -t stretch-backports install libsodium-dev
 mk-build-deps --install --tool "apt-get -o Debug::pkgProblemResolver=yes --no-install-recommends -y"
 dpkg-buildpackage -b -us -uc
@@ -257,10 +259,18 @@ else
 fi
 
 # Add OpenMPTCProuter VPS script version to /etc/motd
-if grep --quiet 'OpenMPTCProuter VPS' /etc/motd; then
-	sed -i 's:< OpenMPTCProuter VPS [0-9]*\.[0-9]* >:< OpenMPCTProuter VPS 0.48 >:' /etc/motd
-else
-	echo '< OpenMPTCProuter VPS 0.48 >' >> /etc/motd
+if [ -f /etc/motd ]; then
+	if grep --quiet 'OpenMPTCProuter VPS' /etc/motd; then
+		sed -i 's:< OpenMPTCProuter VPS [0-9]*\.[0-9]* >:< OpenMPCTProuter VPS $OMR_VERSION >:' /etc/motd
+	else
+		echo '< OpenMPTCProuter VPS $OMR_VERSION >' >> /etc/motd
+	fi
+elif [ -f /etc/motd.head ]; then
+	if grep --quiet 'OpenMPTCProuter VPS' /etc/motd.head; then
+		sed -i 's:< OpenMPTCProuter VPS [0-9]*\.[0-9]* >:< OpenMPCTProuter VPS $OMR_VERSION >:' /etc/motd.head
+	else
+		echo '< OpenMPTCProuter VPS $OMR_VERSION >' >> /etc/motd.head
+	fi
 fi
 
 if [ "$update" = "0" ]; then

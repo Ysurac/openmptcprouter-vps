@@ -8,8 +8,8 @@ MLVPN=${MLVPN:-no}
 OPENVPN=${OPENVPN:-no}
 INTERFACE=${INTERFACE:-$(ip -o -4 route show to default | awk '{print $5}' | tr -d "\n")}
 DEBIAN_VERSION=$(sed 's/\..*//' /etc/debian_version)
-KERNEL_VERSION="4.14.73-mptcp-312723f"
-OMR_VERSION="0.56"
+KERNEL_VERSION="4.14.77-mptcp-b3b861b"
+OMR_VERSION="0.58"
 
 set -e
 umask 0022
@@ -23,6 +23,9 @@ if grep --quiet 'OpenMPCTProuter VPS' /etc/motd ; then
 	sed -i 's/OpenMPCTProuter/OpenMPTCProuter/g' /etc/motd
 fi
 if grep --quiet 'OpenMPTCProuter VPS' /etc/motd ; then
+	update="1"
+fi
+if grep --quiet 'OpenMPTCProuter VPS' /etc/motd.head ; then
 	update="1"
 fi
 # Install mptcp kernel and shadowsocks
@@ -259,17 +262,17 @@ else
 fi
 
 # Add OpenMPTCProuter VPS script version to /etc/motd
-if [ -f /etc/motd ]; then
-	if grep --quiet 'OpenMPTCProuter VPS' /etc/motd; then
-		sed -i 's:< OpenMPTCProuter VPS [0-9]*\.[0-9]* >:< OpenMPCTProuter VPS $OMR_VERSION >:' /etc/motd
-	else
-		echo '< OpenMPTCProuter VPS $OMR_VERSION >' >> /etc/motd
-	fi
-elif [ -f /etc/motd.head ]; then
+if [ -f /etc/motd.head ]; then
 	if grep --quiet 'OpenMPTCProuter VPS' /etc/motd.head; then
 		sed -i 's:< OpenMPTCProuter VPS [0-9]*\.[0-9]* >:< OpenMPCTProuter VPS $OMR_VERSION >:' /etc/motd.head
 	else
 		echo '< OpenMPTCProuter VPS $OMR_VERSION >' >> /etc/motd.head
+	fi
+elif [ -f /etc/motd ]; then
+	if grep --quiet 'OpenMPTCProuter VPS' /etc/motd; then
+		sed -i 's:< OpenMPTCProuter VPS [0-9]*\.[0-9]* >:< OpenMPCTProuter VPS $OMR_VERSION >:' /etc/motd
+	else
+		echo '< OpenMPTCProuter VPS $OMR_VERSION >' >> /etc/motd
 	fi
 fi
 

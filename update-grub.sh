@@ -14,7 +14,9 @@ if [ -z "$(grep -m 1 vmlinuz $config_file | grep $kernel)" ]; then
 		while IFS= read ln
 		do
 			if [ -n "$(echo $ln | grep $kernel)" ]; then
-				sed -i "s@^\(GRUB_DEFAULT=\).*@\1\"$x\"@" $deflt_file
+				x=$(expr $x - 1)
+				sed -i "s@^\(GRUB_DEFAULT=\).*@\1\"1>$x\"@" $deflt_file
+				[ -f /boot/grub/grub.cfg ] && grub-mkconfig -o /boot/grub/grub.cfg >/dev/null 2>&1
 				exit 0
 			fi
 			x=$(expr $x + 1)

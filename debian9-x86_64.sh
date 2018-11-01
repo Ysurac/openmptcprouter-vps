@@ -9,7 +9,7 @@ OPENVPN=${OPENVPN:-no}
 INTERFACE=${INTERFACE:-$(ip -o -4 route show to default | awk '{print $5}' | tr -d "\n")}
 DEBIAN_VERSION=$(sed 's/\..*//' /etc/debian_version)
 KERNEL_VERSION="4.14.77-mptcp-b3b861b"
-OMR_VERSION="0.58"
+OMR_VERSION="0.61"
 
 set -e
 umask 0022
@@ -22,10 +22,12 @@ fi
 if grep --quiet 'OpenMPCTProuter VPS' /etc/motd ; then
 	sed -i 's/OpenMPCTProuter/OpenMPTCProuter/g' /etc/motd
 fi
+# Check if OpenMPTCProuter VPS is already installed
 if grep --quiet 'OpenMPTCProuter VPS' /etc/motd ; then
 	update="1"
-fi
-if grep --quiet 'OpenMPTCProuter VPS' /etc/motd.head ; then
+elif grep --quiet 'OpenMPTCProuter VPS' /etc/motd.head ; then
+	update="1"
+elif grep --quiet 'OpenMPTCProuter VPS' /root/openmptcprouter_config.txt ; then
 	update="1"
 fi
 # Install mptcp kernel and shadowsocks
@@ -88,7 +90,7 @@ if [ "$update" = "0" ]; then
 	sed -i "s:MySecretKey:$SHADOWSOCKS_PASS_JSON:g" /etc/shadowsocks-libev/config.json
 fi
 sed -i 's:aes-256-cfb:chacha20:g' /etc/shadowsocks-libev/config.json
-#sed -i 's:json:json --mptcp:g' /lib/systemd/system/shadowsocks-libev-server@.service
+sed -i 's:json:json --no-delay:g' /lib/systemd/system/shadowsocks-libev-server@.service
 systemctl disable shadowsocks-libev
 systemctl enable shadowsocks-libev-server@config.service
 if [ $NBCPU -gt 1 ]; then
@@ -264,16 +266,20 @@ fi
 # Add OpenMPTCProuter VPS script version to /etc/motd
 if [ -f /etc/motd.head ]; then
 	if grep --quiet 'OpenMPTCProuter VPS' /etc/motd.head; then
-		sed -i 's:< OpenMPTCProuter VPS [0-9]*\.[0-9]* >:< OpenMPCTProuter VPS $OMR_VERSION >:' /etc/motd.head
+		sed -i "s:< OpenMPTCProuter VPS [0-9]*\.[0-9]* >:< OpenMPCTProuter VPS $OMR_VERSION >:" /etc/motd.head
+		sed -i "s:< OpenMPTCProuter VPS \$OMR_VERSION >:< OpenMPCTProuter VPS $OMR_VERSION >:" /etc/motd.head
 	else
-		echo '< OpenMPTCProuter VPS $OMR_VERSION >' >> /etc/motd.head
+		echo "< OpenMPTCProuter VPS $OMR_VERSION >" >> /etc/motd.head
 	fi
 elif [ -f /etc/motd ]; then
 	if grep --quiet 'OpenMPTCProuter VPS' /etc/motd; then
-		sed -i 's:< OpenMPTCProuter VPS [0-9]*\.[0-9]* >:< OpenMPCTProuter VPS $OMR_VERSION >:' /etc/motd
+		sed -i "s:< OpenMPTCProuter VPS [0-9]*\.[0-9]* >:< OpenMPCTProuter VPS $OMR_VERSION >:" /etc/motd
+		sed -i "s:< OpenMPTCProuter VPS \$OMR_VERSION >:< OpenMPCTProuter VPS $OMR_VERSION >:" /etc/motd
 	else
-		echo '< OpenMPTCProuter VPS $OMR_VERSION >' >> /etc/motd
+		echo "< OpenMPTCProuter VPS $OMR_VERSION >" >> /etc/motd
 	fi
+else
+	echo "< OpenMPTCProuter VPS $OMR_VERSION >" > /etc/motd
 fi
 
 if [ "$update" = "0" ]; then

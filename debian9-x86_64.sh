@@ -6,10 +6,10 @@ NBCPU=${NBCPU:-$(grep -c '^processor' /proc/cpuinfo | tr -d "\n")}
 OBFS=${OBFS:-no}
 MLVPN=${MLVPN:-no}
 OPENVPN=${OPENVPN:-no}
-INTERFACE=${INTERFACE:-$(ip -o -4 route show to default | awk '{print $5}' | tr -d "\n")}
+INTERFACE=${INTERFACE:-$(ip -o -4 route show to default | grep -Po '(?<=dev )(\S+)' | tr -d "\n")}
 DEBIAN_VERSION=$(sed 's/\..*//' /etc/debian_version)
 KERNEL_VERSION="4.14.77-mptcp-b3b861b"
-OMR_VERSION="0.61"
+OMR_VERSION="0.62"
 
 set -e
 umask 0022

@@ -32,12 +32,25 @@ ip route replace fd00::/8 via fe80::a00:2 dev omr-6in4
 _ping() {
 	local host=$1
 	ret=$(ping -4 "${host}" \
-		-W 5 \
+		-W 3 \
 		-c 1 \
 		-q
 	) && echo "$ret" | grep -sq "0% packet loss" && {
 		return
 	}
+	false
+}
+
+_ping_range() {
+	local network=$1
+	for i in {2..10} ;do 
+		_ping $network$i
+		pingr=$?
+		if $(exit $pingr); then
+			ipd=$network$i
+			return
+		fi
+	done
 	false
 }
 
@@ -60,8 +73,9 @@ $allip_openvpn
 $allip_mlvpn"
 			while IFS= read -r inet; do
 				ip=$(echo $inet | awk '{print $2}' | cut -d/ -f1 | tr -d "\n")
-				ipd=$(echo $ip | sed 's/.1/.2/' | tr -d "\n")
-				if [ "$ipd" != "" ]; then
+				_ping_range $(echo $ip | sed 's/.1/./' | tr -d "\n")
+				statusr=$?
+				if $(exit $statusr); then
 					_ping $ipd
 					statusp=$?
 					if $(exit $statusp); then
@@ -75,10 +89,10 @@ $allip_mlvpn"
 					fi
 				fi
 			done < <(printf '%s\n' "$allip")
-			[ -z "$iface" ] && {
-				systemctl -q restart systemd-networkd
-				sleep 10
-			}
+			#[ -z "$iface" ] && {
+			#	systemctl -q restart systemd-networkd
+			#	sleep 10
+			#}
 		fi
 	fi
 	sleep 5

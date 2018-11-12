@@ -7,35 +7,55 @@ OBFS=${OBFS:-no}
 MLVPN=${MLVPN:-no}
 OPENVPN=${OPENVPN:-no}
 INTERFACE=${INTERFACE:-$(ip -o -4 route show to default | grep -Po '(?<=dev )(\S+)' | tr -d "\n")}
-DEBIAN_VERSION=$(sed 's/\..*//' /etc/debian_version)
-KERNEL_VERSION="4.14.77-mptcp-b3b861b"
-OMR_VERSION="0.62"
+KERNEL_VERSION="4.14.79-mptcp-0abf4ea"
+OMR_VERSION="0.64"
 
 set -e
 umask 0022
-update="0"
-if [ $DEBIAN_VERSION -ne 9 ]; then
+
+# Check Linux version
+if test -f /etc/os-release ; then
+	. /etc/os-release
+else
+	. /usr/lib/os-release
+fi
+if [ "$ID" = "debian" ] && [ "$VERSION_ID" != "9" ]; then
 	echo "This script only work with Debian Stretch (9.x)"
 	exit 1
+elif [ "$ID" = "ubuntu" ] && [ "$VERSION_ID" != "18.04" ]; then
+	echo "This script only work with Ubuntu 18.04"
+	exit 1
+elif [ "$ID" != "debian" ] && [ "$ID" != "ubuntu" ]; then
+	echo "This script only work with Ubuntu 18.04 or Debian Stretch (9.x)"
+	exit 1
 fi
+
 # Fix old string...
-if grep --quiet 'OpenMPCTProuter VPS' /etc/motd ; then
+if [ -f /etc/motd ] && grep --quiet 'OpenMPCTProuter VPS' /etc/motd ; then
 	sed -i 's/OpenMPCTProuter/OpenMPTCProuter/g' /etc/motd
 fi
+
 # Check if OpenMPTCProuter VPS is already installed
-if grep --quiet 'OpenMPTCProuter VPS' /etc/motd ; then
+update="0"
+if [ -f /etc/motd ] && grep --quiet 'OpenMPTCProuter VPS' /etc/motd ; then
 	update="1"
-elif grep --quiet 'OpenMPTCProuter VPS' /etc/motd.head ; then
+elif [ -f /etc/motd.head ] && grep --quiet 'OpenMPTCProuter VPS' /etc/motd.head ; then
 	update="1"
-elif grep --quiet 'OpenMPTCProuter VPS' /root/openmptcprouter_config.txt ; then
+elif [ -f /root/openmptcprouter_config.txt ]; then
 	update="1"
 fi
+
 # Install mptcp kernel and shadowsocks
 apt-get update
 apt-get -y install dirmngr patch
 #apt-key adv --keyserver hkp://keys.gnupg.net --recv-keys 379CE192D401AB61
-#echo 'deb http://dl.bintray.com/cpaasch/deb jessie main' >> /etc/apt/sources.list
-echo 'deb http://deb.debian.org/debian stretch-backports main' > /etc/apt/sources.list.d/stretch-backports.list
+if [ "$ID" = "debian" ]; then
+	#echo 'deb http://dl.bintray.com/cpaasch/deb jessie main' >> /etc/apt/sources.list
+	echo 'deb http://deb.debian.org/debian stretch-backports main' > /etc/apt/sources.list.d/stretch-backports.list
+elif [ "$ID" = "ubuntu" ]; then
+	echo 'deb http://archive.ubuntu.com/ubuntu bionic-backports main' > /etc/apt/sources.list.d/bionic-backports.list
+	echo 'deb http://archive.ubuntu.com/ubuntu bionic universe' > /etc/apt/sources.list.d/bionic-universe.list
+fi
 apt-get update
 wget -O /tmp/linux-image-${KERNEL_VERSION}.amd64.deb https://www.openmptcprouter.com/kernel/linux-image-${KERNEL_VERSION}.amd64.deb
 wget -O /tmp/linux-headers-${KERNEL_VERSION}.amd64.deb https://www.openmptcprouter.com/kernel/linux-headers-${KERNEL_VERSION}.amd64.deb
@@ -44,8 +64,8 @@ cd /boot
 apt-get -y install rename
 rename 's/^bzImage/vmlinuz/s' * >/dev/null 2>&1
 #apt-get -y install linux-mptcp
-dpkg -E -i /tmp/linux-image-${KERNEL_VERSION}.amd64.deb
-dpkg -E -i /tmp/linux-headers-${KERNEL_VERSION}.amd64.deb
+DEBIAN_FRONTEND=noninteractive dpkg --force-confnew -E -i /tmp/linux-image-${KERNEL_VERSION}.amd64.deb
+DEBIAN_FRONTEND=noninteractive dpkg --force-confnew -E -i /tmp/linux-headers-${KERNEL_VERSION}.amd64.deb
 
 # Check if mptcp kernel is grub default kernel
 echo "Set MPTCP kernel as grub default..."
@@ -55,21 +75,29 @@ bash update-grub.sh ${KERNEL_VERSION}
 
 #apt -t stretch-backports -y install shadowsocks-libev
 ## Compile Shadowsocks
-rm -rf /tmp/shadowsocks-libev-3.2.0
-wget -O /tmp/shadowsocks-libev-3.2.0.tar.gz http://github.com/shadowsocks/shadowsocks-libev/releases/download/v3.2.0/shadowsocks-libev-3.2.0.tar.gz
+rm -rf /tmp/shadowsocks-libev-3.2.1
+wget -O /tmp/shadowsocks-libev-3.2.1.tar.gz http://github.com/shadowsocks/shadowsocks-libev/releases/download/v3.2.1/shadowsocks-libev-3.2.1.tar.gz
 cd /tmp
-tar xzf shadowsocks-libev-3.2.0.tar.gz
-cd shadowsocks-libev-3.2.0
+tar xzf shadowsocks-libev-3.2.1.tar.gz
+cd shadowsocks-libev-3.2.1
 wget https://raw.githubusercontent.com/Ysurac/openmptcprouter-feeds/master/shadowsocks-libev/patches/020-NOCRYPTO.patch
 patch -p1 < 020-NOCRYPTO.patch
 apt-get -y install --no-install-recommends devscripts equivs apg libcap2-bin libpam-cap
 apt-get -y install libc-ares2 libc-ares-dev libev4
-apt -y -t stretch-backports install libsodium-dev
+apt-get -y install haveged
+systemctl enable haveged
+
+if [ "$ID" = "debian" ]; then
+	apt -y -t stretch-backports install libsodium-dev
+elif [ "$ID" = "ubuntu" ]; then
+	apt-get -y install libsodium-dev
+	systemctl enable haveged
+fi
 mk-build-deps --install --tool "apt-get -o Debug::pkgProblemResolver=yes --no-install-recommends -y"
 dpkg-buildpackage -b -us -uc
 cd ..
-dpkg -i shadowsocks-libev_3.2.0-1_amd64.deb
-rm -rf /tmp/shadowsocks-libev-3.2.0
+dpkg -i shadowsocks-libev_3.2.1-1_amd64.deb
+rm -rf /tmp/shadowsocks-libev-3.2.1
 
 # Load OLIA Congestion module at boot time
 if ! grep -q olia /etc/modules ; then
@@ -177,7 +205,11 @@ rm -rf /tmp/glorytun-0.0.99-mud
 if systemctl -q is-active glorytun-tcp@tun0.service; then
 	systemctl -q stop glorytun-tcp@tun0 > /dev/null 2>&1
 fi
-apt -t stretch-backports -y install libsodium-dev
+if [ "$ID" = "debian" ]; then
+	apt -t stretch-backports -y install libsodium-dev
+elif [ "$ID" = "ubuntu" ]; then
+	apt-get -y install libsodium-dev
+fi
 apt-get -y install build-essential pkg-config autoconf automake
 rm -rf /tmp/glorytun-0.0.35
 cd /tmp
@@ -309,12 +341,10 @@ if [ "$update" = "0" ]; then
 	SSH port: 65222 (instead of port 22)
 	Shadowsocks port: 65101
 	Shadowsocks encryption: chacha20
-	Your shadowsocks key:
-	${SHADOWSOCKS_PASS}
+	Your shadowsocks key: ${SHADOWSOCKS_PASS}
 	Glorytun port: 65001
 	Glorytun encryption: chacha20
-	Your glorytun key:
-	${GLORYTUN_PASS}
+	Your glorytun key: ${GLORYTUN_PASS}
 	EOF
 	if [ -f "/root/openmptcprouter_mlvpn_config.txt" ]; then
 		cat /root/openmptcprouter_mlvpn_config.txt >> /root/openmptcprouter_config.txt

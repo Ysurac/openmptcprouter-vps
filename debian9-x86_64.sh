@@ -4,11 +4,14 @@ GLORYTUN_PASS=${GLORYTUN_PASS:-$(od  -vN "32" -An -tx1 /dev/urandom | tr '[:lowe
 #NBCPU=${NBCPU:-$(nproc --all | tr -d "\n")}
 NBCPU=${NBCPU:-$(grep -c '^processor' /proc/cpuinfo | tr -d "\n")}
 OBFS=${OBFS:-no}
+OMR_ADMIN=${OMR_ADMIN:-yes}
+OMR_ADMIN_PASS=${OMR_ADMIN_PASS:-$(od  -vN "32" -An -tx1 /dev/urandom | tr '[:lower:]' '[:upper:]' | tr -d " \n")}
 MLVPN=${MLVPN:-no}
+MLVPN_PASS=${MLVPN_PASS:-$(head -c 32 /dev/urandom | base64 -w0)}
 OPENVPN=${OPENVPN:-no}
 INTERFACE=${INTERFACE:-$(ip -o -4 route show to default | grep -Po '(?<=dev )(\S+)' | tr -d "\n")}
-KERNEL_VERSION="4.14.79-mptcp-0abf4ea"
-OMR_VERSION="0.64"
+KERNEL_VERSION="4.14.79-mptcp-6ece8f4"
+OMR_VERSION="0.65"
 
 set -e
 umask 0022
@@ -103,9 +106,44 @@ rm -rf /tmp/shadowsocks-libev-3.2.1
 if ! grep -q olia /etc/modules ; then
 	echo mptcp_olia >> /etc/modules
 fi
+# Load WVEGAS Congestion module at boot time
+if ! grep -q wvegas /etc/modules ; then
+	echo mptcp_wvegas >> /etc/modules
+fi
+# Load BALIA Congestion module at boot time
+if ! grep -q balia /etc/modules ; then
+	echo mptcp_balia >> /etc/modules
+fi
 # Load BBR Congestion module at boot time
 if ! grep -q bbr /etc/modules ; then
 	echo tcp_bbr >> /etc/modules
+fi
+
+if systemctl -q is-active omr-admin.service; then
+	systemctl -q stop omr-admin > /dev/null 2>&1
+fi
+
+if [ "$OMR_ADMIN" = "yes" ]; then
+	echo 'Install OpenMPTCProuter VPS Admin'
+	apt-get -y install unzip gunicorn python3-flask-restful python3-openssl python3-pip
+	pip3 -q install flask-jwt-simple
+	mkdir -p /etc/openmptcprouter-vps-admin
+	wget -O /lib/systemd/system/omr-admin.service https://www.openmptcprouter.com/server/omr-admin.service.in
+	wget -O /tmp/openmptcprouter-vps-admin.zip https://github.com/Ysurac/openmptcprouter-vps-admin/archive/master.zip
+	cd /tmp
+	unzip -q -o openmptcprouter-vps-admin.zip
+	if [ -f /usr/local/bin/omr-admin.py ]; then
+		cp /tmp/openmptcprouter-vps-admin-master/omr-admin.py /usr/local/bin/
+	else
+		sed -i "s:MySecretKey:$OMR_ADMIN_PASS:g" /tmp/openmptcprouter-vps-admin-master/omr-admin-config.json
+		cp /tmp/openmptcprouter-vps-admin-master/omr-admin-config.json /etc/openmptcprouter-vps-admin/
+		cp /tmp/openmptcprouter-vps-admin-master/omr-admin.py /usr/local/bin/
+		cd /etc/openmptcprouter-vps-admin
+		openssl req -new -newkey rsa:2048 -days 365 -nodes -x509 -keyout key.pem -out cert.pem -subj "/C=US/ST=Oregon/L=Portland/O=OpenMPTCProuterVPS/OU=Org/CN=www.openmptcprouter.vps"
+	fi
+	chmod u+x /usr/local/bin/omr-admin.py
+	systemctl enable omr-admin.service
+	rm -rf /tmp/tmp/openmptcprouter-vps-admin-master
 fi
 
 # Get shadowsocks optimization
@@ -130,9 +168,9 @@ fi
 if ! grep -q 'DefaultLimitNOFILE=65536' /etc/systemd/system.conf ; then
 	echo 'DefaultLimitNOFILE=65536' >> /etc/systemd/system.conf
 fi
-
 # Install simple-obfs
 if [ "$OBFS" = "yes" ]; then
+	echo "Install OBFS"
 	rm -rf /tmp/simple-obfs
 	cd /tmp
 	sudo apt-get install -y --no-install-recommends build-essential autoconf libtool libssl-dev libpcre3-dev libev-dev asciidoc xmlto automake git ca-certificates
@@ -149,17 +187,56 @@ else
 	sed -i -e '/plugin/d' -e 's/,,//' /etc/shadowsocks-libev/config.json
 fi
 
-if [ "$MLVPN" = "yes" ]; then
-	cd /tmp
-	wget -O /tmp/debian9-x86_64-mlvpn.sh https://www.openmptcprouter.com/server/debian9-x86_64-mlvpn.sh
-	sh debian9-x86_64-mlvpn.sh
+if systemctl -q is-active mlvpn@mlvpn0.service; then
+	systemctl -q stop mlvpn@mlvpn0 > /dev/null 2>&1
+	systemctl -q disable mlvpn@mlvpn0 > /dev/null 2>&1
 fi
-
+echo "install mlvpn"
+# Install MLVPN
+if [ "$MLVPN" = "yes" ]; then
+	echo 'Install MLVPN'
+	mlvpnupdate="0"
+	if [ -f /etc/mlvpn/mlvpn0.conf ]; then
+		mlvpnupdate="1"
+	fi
+	apt-get -y install build-essential pkg-config autoconf automake libpcap-dev unzip
+	rm -rf /tmp/MLVPN-new-reorder
+	cd /tmp
+	#wget -O /tmp/mlvpn-2.3.2.tar.gz https://github.com/zehome/MLVPN/archive/2.3.2.tar.gz
+	wget -O /tmp/new-reorder.zip https://github.com/markfoodyburton/MLVPN/archive/new-reorder.zip
+	cd /tmp
+	#tar xzf mlvpn-2.3.2.tar.gz
+	#cd MLVPN-2.3.2
+	unzip new-reorder.zip
+	cd MLVPN-new-reorder
+	./autogen.sh
+	./configure --sysconfdir=/etc
+	make
+	make install
+	wget -O /lib/systemd/network/mlvpn.network https://www.openmptcprouter.com/server/mlvpn.network
+	mkdir -p /etc/mlvpn
+	if [ "$mlvpnupdate" = "0" ]; then
+		wget -O /etc/mlvpn/mlvpn0.conf https://www.openmptcprouter.com/server/mlvpn0.conf
+		sed -i "s:MLVPN_PASS:$MLVPN_PASS:" /etc/mlvpn/mlvpn0.conf
+	fi
+	chmod 0600 /etc/mlvpn/mlvpn0.conf
+	adduser --quiet --system --home /var/opt/mlvpn --shell /usr/sbin/nologin mlvpn
+	mkdir -p /var/opt/mlvpn
+	usermod -d /var/opt/mlvpn mlvpn
+	chown mlvpn /var/opt/mlvpn
+	systemctl enable mlvpn@mlvpn0.service
+	systemctl enable systemd-networkd.service
+	cd /tmp
+	#rm -rf /tmp/MLVPN-2.3.2
+	rm -rf /tmp/MLVPN-new-reorder
+fi
+echo "install mlvpn done"
 if systemctl -q is-active openvpn-server@tun0.service; then
 	systemctl -q stop openvpn-server@tun0 > /dev/null 2>&1
 	systemctl -q disable openvpn-server@tun0 > /dev/null 2>&1
 fi
 if [ "$OPENVPN" = "yes" ]; then
+	echo "Install OpenVPN"
 	apt-get -y install openvpn
 	wget -O /lib/systemd/network/openvpn.network https://www.openmptcprouter.com/server/openvpn.network
 	if [ ! -f "/etc/openvpn/server/static.key" ]; then
@@ -170,6 +247,7 @@ if [ "$OPENVPN" = "yes" ]; then
 	systemctl enable openvpn@tun0.service
 fi
 
+echo 'Glorytun UDP'
 # Install Glorytun UDP
 if systemctl -q is-active glorytun-udp@tun0.service; then
 	systemctl -q stop glorytun-udp@tun0 > /dev/null 2>&1
@@ -319,6 +397,14 @@ if [ "$update" = "0" ]; then
 	echo '===================================================================================='
 	echo 'OpenMPTCProuter VPS is now configured !'
 	echo 'SSH port: 65222 (instead of port 22)'
+	if [ "$OMR_ADMIN" = "yes" ]; then
+		echo '===================================================================================='
+		echo '!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!'
+		echo 'OpenMPTCProuter VPS admin key (you need OpenMPTCProuter >= 0.42):'
+		echo $OMR_ADMIN_PASS
+		echo '!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!'
+		echo '===================================================================================='
+	fi
 	echo 'Shadowsocks port: 65101'
 	echo 'Shadowsocks encryption: chacha20'
 	echo 'Your shadowsocks key: '
@@ -327,6 +413,11 @@ if [ "$update" = "0" ]; then
 	echo 'Glorytun encryption: chacha20'
 	echo 'Your glorytun key: '
 	echo $GLORYTUN_PASS
+	if [ "$MLVPN" = "yes" ]; then
+		echo 'MLVPN first port: 65201'
+		echo 'Your MLVPN password: '
+		echo $MLVPN_PASS
+	fi
 	echo '===================================================================================='
 	echo 'Keys are also saved in /root/openmptcprouter_config.txt, you are free to remove them'
 	echo '===================================================================================='
@@ -346,8 +437,16 @@ if [ "$update" = "0" ]; then
 	Glorytun encryption: chacha20
 	Your glorytun key: ${GLORYTUN_PASS}
 	EOF
-	if [ -f "/root/openmptcprouter_mlvpn_config.txt" ]; then
-		cat /root/openmptcprouter_mlvpn_config.txt >> /root/openmptcprouter_config.txt
+	if [ "$MLVPN" = "yes" ]; then
+		cat >> /root/openmptcprouter_config.txt <<-EOF
+		MLVPN first port: 65201'
+		Your MLVPN password: $MLVPN_PASS
+		EOF
+	fi
+	if [ "$OMR_ADMIN" = "yes" ]; then
+		cat >> /root/openmptcprouter_config.txt <<-EOF
+		Your OpenMPTCProuter VPS Admin key: $OMR_ADMIN_PASS
+		EOF
 	fi
 else
 	echo '===================================================================================='
@@ -358,6 +457,11 @@ else
 	echo 'Restarting systemd network...'
 	systemctl -q restart systemd-networkd
 	echo 'done'
+	if [ "$MLVPN" = "yes" ]; then
+		echo 'Restarting mlvpn...'
+		systemctl -q start mlvpn@mlvpn0
+		echo 'done'
+	fi
 	echo 'Restarting glorytun and omr...'
 	systemctl -q start glorytun-tcp@tun0
 	systemctl -q start glorytun-udp@tun0
@@ -374,6 +478,11 @@ else
 	if [ "$OPENVPN" = "yes" ]; then
 		echo 'Restarting OpenVPN'
 		systemctl -q restart openvpn@tun0
+		echo 'done'
+	fi
+	if [ "$OMR_ADMIN" = "yes" ]; then
+		echo 'Restarting OpenMPTCProuter VPS admin'
+		systemctl -q restart omr-admin
 		echo 'done'
 	fi
 	echo 'Restarting shorewall...'

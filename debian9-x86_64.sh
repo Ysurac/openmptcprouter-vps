@@ -11,7 +11,7 @@ MLVPN_PASS=${MLVPN_PASS:-$(head -c 32 /dev/urandom | base64 -w0)}
 OPENVPN=${OPENVPN:-no}
 INTERFACE=${INTERFACE:-$(ip -o -4 route show to default | grep -Po '(?<=dev )(\S+)' | tr -d "\n")}
 KERNEL_VERSION="4.14.79-mptcp-6ece8f4"
-OMR_VERSION="0.65"
+OMR_VERSION="0.66"
 
 set -e
 umask 0022
@@ -134,6 +134,7 @@ if [ "$OMR_ADMIN" = "yes" ]; then
 	unzip -q -o openmptcprouter-vps-admin.zip
 	if [ -f /usr/local/bin/omr-admin.py ]; then
 		cp /tmp/openmptcprouter-vps-admin-master/omr-admin.py /usr/local/bin/
+		OMR_ADMIN_PASS=$(grep -Po '"pass":.*?[^\\]"' /etc/openmptcprouter-vps-admin/omr-admin-config.json | awk -F':' '{print $2}' | sed 's/"//g')
 	else
 		sed -i "s:MySecretKey:$OMR_ADMIN_PASS:g" /tmp/openmptcprouter-vps-admin-master/omr-admin-config.json
 		cp /tmp/openmptcprouter-vps-admin-master/omr-admin-config.json /etc/openmptcprouter-vps-admin/
@@ -467,14 +468,6 @@ else
 	systemctl -q start glorytun-udp@tun0
 	systemctl -q restart omr
 	echo 'done'
-	echo 'Restarting shadowsocks...'
-	systemctl -q restart shadowsocks-libev-server@config
-	if [ $NBCPU -gt 1 ]; then
-		for i in $NBCPU; do
-			systemctl restart shadowsocks-libev-server@config$i
-		done
-	fi
-	echo 'done'
 	if [ "$OPENVPN" = "yes" ]; then
 		echo 'Restarting OpenVPN'
 		systemctl -q restart openvpn@tun0
@@ -484,6 +477,17 @@ else
 		echo 'Restarting OpenMPTCProuter VPS admin'
 		systemctl -q restart omr-admin
 		echo 'done'
+		if ! grep -q 'VPS Admin key' /root/openmptcprouter_config.txt ; then
+			cat >> /root/openmptcprouter_config.txt <<-EOF
+			Your OpenMPTCProuter VPS Admin key: $OMR_ADMIN_PASS
+			EOF
+			echo '===================================================================================='
+			echo '!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!'
+			echo 'OpenMPTCProuter VPS admin key (you need OpenMPTCProuter >= 0.42):'
+			echo $OMR_ADMIN_PASS
+			echo '!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!'
+			echo '===================================================================================='
+		fi
 	fi
 	echo 'Restarting shorewall...'
 	systemctl -q restart shorewall
@@ -491,5 +495,13 @@ else
 	echo 'done'
 	echo 'Apply latest sysctl...'
 	sysctl -p /etc/sysctl.d/90-shadowsocks.conf > /dev/null 2>&1
+	echo 'done'
+	echo 'Restarting shadowsocks...'
+	systemctl -q restart shadowsocks-libev-server@config
+	if [ $NBCPU -gt 1 ]; then
+		for i in $NBCPU; do
+			systemctl restart shadowsocks-libev-server@config$i
+		done
+	fi
 	echo 'done'
 fi

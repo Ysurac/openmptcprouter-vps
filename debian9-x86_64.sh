@@ -11,7 +11,7 @@ MLVPN_PASS=${MLVPN_PASS:-$(head -c 32 /dev/urandom | base64 -w0)}
 OPENVPN=${OPENVPN:-no}
 INTERFACE=${INTERFACE:-$(ip -o -4 route show to default | grep -Po '(?<=dev )(\S+)' | tr -d "\n")}
 KERNEL_VERSION="4.14.79-mptcp-6ece8f4"
-OMR_VERSION="0.66"
+OMR_VERSION="0.67"
 
 set -e
 umask 0022
@@ -78,15 +78,16 @@ bash update-grub.sh ${KERNEL_VERSION}
 
 #apt -t stretch-backports -y install shadowsocks-libev
 ## Compile Shadowsocks
-rm -rf /tmp/shadowsocks-libev-3.2.1
-wget -O /tmp/shadowsocks-libev-3.2.1.tar.gz http://github.com/shadowsocks/shadowsocks-libev/releases/download/v3.2.1/shadowsocks-libev-3.2.1.tar.gz
+rm -rf /tmp/shadowsocks-libev-3.2.3
+wget -O /tmp/shadowsocks-libev-3.2.3.tar.gz http://github.com/shadowsocks/shadowsocks-libev/releases/download/v3.2.3/shadowsocks-libev-3.2.3.tar.gz
 cd /tmp
-tar xzf shadowsocks-libev-3.2.1.tar.gz
-cd shadowsocks-libev-3.2.1
+tar xzf shadowsocks-libev-3.2.3.tar.gz
+cd shadowsocks-libev-3.2.3
 wget https://raw.githubusercontent.com/Ysurac/openmptcprouter-feeds/master/shadowsocks-libev/patches/020-NOCRYPTO.patch
 patch -p1 < 020-NOCRYPTO.patch
 apt-get -y install --no-install-recommends devscripts equivs apg libcap2-bin libpam-cap
 apt-get -y install libc-ares2 libc-ares-dev libev4
+# Install haveged entropy daemon
 apt-get -y install haveged
 systemctl enable haveged
 
@@ -99,8 +100,8 @@ fi
 mk-build-deps --install --tool "apt-get -o Debug::pkgProblemResolver=yes --no-install-recommends -y"
 dpkg-buildpackage -b -us -uc
 cd ..
-dpkg -i shadowsocks-libev_3.2.1-1_amd64.deb
-rm -rf /tmp/shadowsocks-libev-3.2.1
+dpkg -i shadowsocks-libev_3.2.3-1_amd64.deb
+rm -rf /tmp/shadowsocks-libev-3.2.3
 
 # Load OLIA Congestion module at boot time
 if ! grep -q olia /etc/modules ; then

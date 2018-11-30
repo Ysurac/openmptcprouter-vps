@@ -11,10 +11,16 @@ MLVPN_PASS=${MLVPN_PASS:-$(head -c 32 /dev/urandom | base64 -w0)}
 OPENVPN=${OPENVPN:-no}
 INTERFACE=${INTERFACE:-$(ip -o -4 route show to default | grep -Po '(?<=dev )(\S+)' | tr -d "\n")}
 KERNEL_VERSION="4.14.79-mptcp-6ece8f4"
-OMR_VERSION="0.67"
+GLORYTUN_UDP_VERSION="8ff9d3d7a1481bd82578d98798360cf219f3b73a"
+MLVPN_VERSION="8f9720978b28c1954f9f229525333547283316d2"
+OBFS_VERSION="7659eeccf473aa41eb294e92c32f8f60a8747325"
+SHADOWSOCKS_VERSION="3.2.3"
+OMR_VERSION="0.70"
 
 set -e
 umask 0022
+
+rm -rf /var/lib/dpkg/lock
 
 # Check Linux version
 if test -f /etc/os-release ; then
@@ -78,11 +84,11 @@ bash update-grub.sh ${KERNEL_VERSION}
 
 #apt -t stretch-backports -y install shadowsocks-libev
 ## Compile Shadowsocks
-rm -rf /tmp/shadowsocks-libev-3.2.3
-wget -O /tmp/shadowsocks-libev-3.2.3.tar.gz http://github.com/shadowsocks/shadowsocks-libev/releases/download/v3.2.3/shadowsocks-libev-3.2.3.tar.gz
+rm -rf /tmp/shadowsocks-libev-${SHADOWSOCKS_VERSION}
+wget -O /tmp/shadowsocks-libev-${SHADOWSOCKS_VERSION}.tar.gz http://github.com/shadowsocks/shadowsocks-libev/releases/download/v${SHADOWSOCKS_VERSION}/shadowsocks-libev-${SHADOWSOCKS_VERSION}.tar.gz
 cd /tmp
-tar xzf shadowsocks-libev-3.2.3.tar.gz
-cd shadowsocks-libev-3.2.3
+tar xzf shadowsocks-libev-${SHADOWSOCKS_VERSION}.tar.gz
+cd shadowsocks-libev-${SHADOWSOCKS_VERSION}
 wget https://raw.githubusercontent.com/Ysurac/openmptcprouter-feeds/master/shadowsocks-libev/patches/020-NOCRYPTO.patch
 patch -p1 < 020-NOCRYPTO.patch
 apt-get -y install --no-install-recommends devscripts equivs apg libcap2-bin libpam-cap
@@ -100,8 +106,8 @@ fi
 mk-build-deps --install --tool "apt-get -o Debug::pkgProblemResolver=yes --no-install-recommends -y"
 dpkg-buildpackage -b -us -uc
 cd ..
-dpkg -i shadowsocks-libev_3.2.3-1_amd64.deb
-rm -rf /tmp/shadowsocks-libev-3.2.3
+dpkg -i shadowsocks-libev_${SHADOWSOCKS_VERSION}-1_amd64.deb
+rm -rf /tmp/shadowsocks-libev-${SHADOWSOCKS_VERSION}
 
 # Load OLIA Congestion module at boot time
 if ! grep -q olia /etc/modules ; then
@@ -178,6 +184,7 @@ if [ "$OBFS" = "yes" ]; then
 	sudo apt-get install -y --no-install-recommends build-essential autoconf libtool libssl-dev libpcre3-dev libev-dev asciidoc xmlto automake git ca-certificates
 	git clone https://github.com/shadowsocks/simple-obfs.git /tmp/simple-obfs
 	cd /tmp/simple-obfs
+	git checkout ${OBFS_VERSION}
 	git submodule update --init --recursive
 	./autogen.sh
 	./configure && make
@@ -201,16 +208,12 @@ if [ "$MLVPN" = "yes" ]; then
 	if [ -f /etc/mlvpn/mlvpn0.conf ]; then
 		mlvpnupdate="1"
 	fi
-	apt-get -y install build-essential pkg-config autoconf automake libpcap-dev unzip
-	rm -rf /tmp/MLVPN-new-reorder
+	apt-get -y install build-essential pkg-config autoconf automake libpcap-dev unzip git
+	rm -rf /tmp/mlvpn
 	cd /tmp
-	#wget -O /tmp/mlvpn-2.3.2.tar.gz https://github.com/zehome/MLVPN/archive/2.3.2.tar.gz
-	wget -O /tmp/new-reorder.zip https://github.com/markfoodyburton/MLVPN/archive/new-reorder.zip
-	cd /tmp
-	#tar xzf mlvpn-2.3.2.tar.gz
-	#cd MLVPN-2.3.2
-	unzip new-reorder.zip
-	cd MLVPN-new-reorder
+	git clone https://github.com/markfoodyburton/MLVPN.git /tmp/mlvpn
+	cd /tmp/mlvpn
+	git checkout ${MLVPN_VERSION}
 	./autogen.sh
 	./configure --sysconfdir=/etc
 	make
@@ -229,8 +232,7 @@ if [ "$MLVPN" = "yes" ]; then
 	systemctl enable mlvpn@mlvpn0.service
 	systemctl enable systemd-networkd.service
 	cd /tmp
-	#rm -rf /tmp/MLVPN-2.3.2
-	rm -rf /tmp/MLVPN-new-reorder
+	rm -rf /tmp/mlvpn
 fi
 echo "install mlvpn done"
 if systemctl -q is-active openvpn-server@tun0.service; then
@@ -254,12 +256,13 @@ echo 'Glorytun UDP'
 if systemctl -q is-active glorytun-udp@tun0.service; then
 	systemctl -q stop glorytun-udp@tun0 > /dev/null 2>&1
 fi
-apt-get -y install meson pkg-config ca-certificates
-rm -rf /tmp/glorytun-0.0.99-mud
+apt-get install -y --no-install-recommends build-essential git ca-certificates meson pkg-config
+rm -rf /tmp/glorytun-udp
 cd /tmp
-wget -O /tmp/glorytun-0.0.99-mud.tar.gz https://github.com/angt/glorytun/releases/download/v0.0.99-mud/glorytun-0.0.99-mud.tar.gz
-tar xzf glorytun-0.0.99-mud.tar.gz
-cd glorytun-0.0.99-mud
+git clone https://github.com/angt/glorytun.git /tmp/glorytun-udp
+cd /tmp/glorytun-udp
+git checkout ${GLORYTUN_UDP_VERSION}
+git submodule update --init --recursive
 meson build
 ninja -C build install
 sed -i 's:EmitDNS=yes:EmitDNS=no:g' /lib/systemd/network/glorytun.network
@@ -279,7 +282,7 @@ fi
 systemctl enable glorytun-udp@tun0.service
 systemctl enable systemd-networkd.service
 cd /tmp
-rm -rf /tmp/glorytun-0.0.99-mud
+rm -rf /tmp/glorytun-udp
 
 # Install Glorytun TCP
 if systemctl -q is-active glorytun-tcp@tun0.service; then

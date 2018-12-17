@@ -456,6 +456,7 @@ if [ "$update" = "0" ]; then
 else
 	echo '===================================================================================='
 	echo 'OpenMPTCProuter VPS is now updated !'
+	cat /etc/motd
 	echo 'Keys are not changed, shorewall rules files preserved'
 	echo 'You need OpenMPTCProuter >= 0.30'
 	echo '===================================================================================='

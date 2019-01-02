@@ -9,15 +9,17 @@ if [ "$1" = "stop" ] && [ "$(ip link show omr-6in4 up 2>/dev/null)" ]; then
 	exit 0
 fi
 
-# Force multipath status
-source /etc/shorewall/params.net
-for intf in `ls -1 /sys/class/net`; do
-	if [ "$intf" = "$NET_IFACE" ]; then
-		multipath $intf on
-	else
-		multipath $intf off
-	fi
-done
+_multipath() {
+	# Force multipath status
+	source /etc/shorewall/params.net
+	for intf in `ls -1 /sys/class/net`; do
+		if [ "$intf" = "$NET_IFACE" ]; then
+			multipath $intf on
+		else
+			multipath $intf off
+		fi
+	done
+}
 
 # Add IPv6 tunnel
 if [ "$(ip link show omr-6in4 up 2>/dev/null)" ]; then
@@ -43,7 +45,7 @@ _ping() {
 
 _ping_range() {
 	local network=$1
-	for i in {2..10} ;do 
+	for i in {2..50} ;do 
 		_ping $network$i
 		pingr=$?
 		if $(exit $pingr); then
@@ -65,35 +67,46 @@ while true; do
 		if ! $(exit $status) || [ "$currentpeer" != "$OMR_ADDR" ]; then
 			allip_tcp=$(ip -4 addr show gt-tun0 2>/dev/null | grep inet)
 			allip_udp=$(ip -4 addr show gt-udp-tun0 2>/dev/null | grep inet)
-			allip_mlvpn=$(ip -4 addr show mlvpn0 2>/dev/null | grep inet)
-			allip_openvpn=$(ip -4 addr show tun0 2>/dev/null | grep inet)
+			[ -d "/sys/class/net/mlvpn0" ] && allip_mlvpn=$(ip -4 addr show mlvpn0 2>/dev/null | grep inet)
+			[ -d "/sys/class/net/tun0" ] && allip_openvpn=$(ip -4 addr show tun0 2>/dev/null | grep inet)
 			allip="$allip_tcp
 $allip_udp
 $allip_openvpn
 $allip_mlvpn"
 			while IFS= read -r inet; do
 				ip=$(echo $inet | awk '{print $2}' | cut -d/ -f1 | tr -d "\n")
-				_ping_range $(echo $ip | sed 's/.1/./' | tr -d "\n")
-				statusr=$?
-				if $(exit $statusr); then
-					_ping $ipd
-					statusp=$?
-					if $(exit $statusp); then
-						ip tunnel change omr-6in4 mode sit remote $ipd local $ip
-						echo "VPS_ADDR=$ip" > /etc/shorewall/params.vpn
-						echo "OMR_ADDR=$ipd" >> /etc/shorewall/params.vpn
-						iface=$(ip -4 addr | grep $ip | awk '{print $7}' | tr -d "\n")
-						echo "VPS_IFACE=$iface" >> /etc/shorewall/params.vpn
-						systemctl reload shorewall
-						break
+				if [ "$ip" != "" ]; then
+					_ping_range $(echo $ip | sed 's/.1/./' | tr -d "\n")
+					statusr=$?
+					if $(exit $statusr); then
+						_ping $ipd
+						statusp=$?
+						if $(exit $statusp); then
+							ip tunnel change omr-6in4 mode sit remote $ipd local $ip
+							echo "VPS_ADDR=$ip" > /etc/shorewall/params.vpn
+							echo "OMR_ADDR=$ipd" >> /etc/shorewall/params.vpn
+							iface=$(ip -4 addr | grep $ip | awk '{print $7}' | tr -d "\n")
+							echo "VPS_IFACE=$iface" >> /etc/shorewall/params.vpn
+							systemctl reload shorewall
+							_multipath
+							break
+						fi
 					fi
 				fi
 			done < <(printf '%s\n' "$allip")
-			#[ -z "$iface" ] && {
-			#	systemctl -q restart systemd-networkd
-			#	sleep 10
-			#}
+			[ -z "$iface" ] && {
+				systemctl -q restart glorytun-tcp@tun0
+				systemctl -q restart glorytun-udp@tun0
+				systemctl -q restart systemd-networkd
+				_multipath
+				sleep 10
+			}
 		fi
+	fi
+	result="$(curl -Isk https://127.0.0.1:65500/status | head -n 1 | grep 401)"
+	if [ "$result" = "" ]; then
+		systemctl -q restart omr-admin
+		sleep 10
 	fi
 	sleep 5
 done

@@ -10,17 +10,17 @@ MLVPN=${MLVPN:-no}
 MLVPN_PASS=${MLVPN_PASS:-$(head -c 32 /dev/urandom | base64 -w0)}
 OPENVPN=${OPENVPN:-no}
 INTERFACE=${INTERFACE:-$(ip -o -4 route show to default | grep -Po '(?<=dev )(\S+)' | tr -d "\n")}
-KERNEL_VERSION="4.14.79-mptcp-6ece8f4"
-GLORYTUN_UDP_VERSION="8ff9d3d7a1481bd82578d98798360cf219f3b73a"
+KERNEL_VERSION="4.14.89-mptcp-a9f6d31"
+GLORYTUN_UDP_VERSION="067ddd4aa04dbb628463666a90b7dcf3cd6963c9"
 MLVPN_VERSION="8f9720978b28c1954f9f229525333547283316d2"
 OBFS_VERSION="7659eeccf473aa41eb294e92c32f8f60a8747325"
 SHADOWSOCKS_VERSION="3.2.3"
-OMR_VERSION="0.70"
+OMR_VERSION="0.83"
 
 set -e
 umask 0022
 
-rm -rf /var/lib/dpkg/lock
+rm -f /var/lib/dpkg/lock
 
 # Check Linux version
 if test -f /etc/os-release ; then
@@ -42,6 +42,9 @@ fi
 # Fix old string...
 if [ -f /etc/motd ] && grep --quiet 'OpenMPCTProuter VPS' /etc/motd ; then
 	sed -i 's/OpenMPCTProuter/OpenMPTCProuter/g' /etc/motd
+fi
+if [ -f /etc/motd.head ] && grep --quiet 'OpenMPCTProuter VPS' /etc/motd.head ; then
+	sed -i 's/OpenMPCTProuter/OpenMPTCProuter/g' /etc/motd.head
 fi
 
 # Check if OpenMPTCProuter VPS is already installed
@@ -70,7 +73,7 @@ wget -O /tmp/linux-image-${KERNEL_VERSION}.amd64.deb https://www.openmptcprouter
 wget -O /tmp/linux-headers-${KERNEL_VERSION}.amd64.deb https://www.openmptcprouter.com/kernel/linux-headers-${KERNEL_VERSION}.amd64.deb
 # Rename bzImage to vmlinuz, needed when custom kernel was used
 cd /boot
-apt-get -y install rename
+apt-get -y install rename curl
 rename 's/^bzImage/vmlinuz/s' * >/dev/null 2>&1
 #apt-get -y install linux-mptcp
 DEBIAN_FRONTEND=noninteractive dpkg --force-confnew -E -i /tmp/linux-image-${KERNEL_VERSION}.amd64.deb
@@ -91,21 +94,25 @@ tar xzf shadowsocks-libev-${SHADOWSOCKS_VERSION}.tar.gz
 cd shadowsocks-libev-${SHADOWSOCKS_VERSION}
 wget https://raw.githubusercontent.com/Ysurac/openmptcprouter-feeds/master/shadowsocks-libev/patches/020-NOCRYPTO.patch
 patch -p1 < 020-NOCRYPTO.patch
-apt-get -y install --no-install-recommends devscripts equivs apg libcap2-bin libpam-cap
-apt-get -y install libc-ares2 libc-ares-dev libev4
-# Install haveged entropy daemon
-apt-get -y install haveged
+rm -f /var/lib/dpkg/lock
+apt-get -y install --no-install-recommends devscripts equivs apg libcap2-bin libpam-cap libc-ares2 libc-ares-dev libev4 haveged
+rm -f /var/lib/dpkg/lock
 systemctl enable haveged
 
 if [ "$ID" = "debian" ]; then
+	rm -f /var/lib/dpkg/lock
 	apt -y -t stretch-backports install libsodium-dev
 elif [ "$ID" = "ubuntu" ]; then
+	rm -f /var/lib/dpkg/lock
 	apt-get -y install libsodium-dev
 	systemctl enable haveged
 fi
+rm -f /var/lib/dpkg/lock
 mk-build-deps --install --tool "apt-get -o Debug::pkgProblemResolver=yes --no-install-recommends -y"
+rm -f /var/lib/dpkg/lock
 dpkg-buildpackage -b -us -uc
 cd ..
+rm -f /var/lib/dpkg/lock
 dpkg -i shadowsocks-libev_${SHADOWSOCKS_VERSION}-1_amd64.deb
 rm -rf /tmp/shadowsocks-libev-${SHADOWSOCKS_VERSION}
 
@@ -181,7 +188,8 @@ if [ "$OBFS" = "yes" ]; then
 	echo "Install OBFS"
 	rm -rf /tmp/simple-obfs
 	cd /tmp
-	sudo apt-get install -y --no-install-recommends build-essential autoconf libtool libssl-dev libpcre3-dev libev-dev asciidoc xmlto automake git ca-certificates
+	rm -f /var/lib/dpkg/lock
+	apt-get install -y --no-install-recommends build-essential autoconf libtool libssl-dev libpcre3-dev libev-dev asciidoc xmlto automake git ca-certificates
 	git clone https://github.com/shadowsocks/simple-obfs.git /tmp/simple-obfs
 	cd /tmp/simple-obfs
 	git checkout ${OBFS_VERSION}
@@ -208,6 +216,7 @@ if [ "$MLVPN" = "yes" ]; then
 	if [ -f /etc/mlvpn/mlvpn0.conf ]; then
 		mlvpnupdate="1"
 	fi
+	rm -f /var/lib/dpkg/lock
 	apt-get -y install build-essential pkg-config autoconf automake libpcap-dev unzip git
 	rm -rf /tmp/mlvpn
 	cd /tmp
@@ -241,6 +250,7 @@ if systemctl -q is-active openvpn-server@tun0.service; then
 fi
 if [ "$OPENVPN" = "yes" ]; then
 	echo "Install OpenVPN"
+	rm -f /var/lib/dpkg/lock
 	apt-get -y install openvpn
 	wget -O /lib/systemd/network/openvpn.network https://www.openmptcprouter.com/server/openvpn.network
 	if [ ! -f "/etc/openvpn/server/static.key" ]; then
@@ -256,6 +266,7 @@ echo 'Glorytun UDP'
 if systemctl -q is-active glorytun-udp@tun0.service; then
 	systemctl -q stop glorytun-udp@tun0 > /dev/null 2>&1
 fi
+rm -f /var/lib/dpkg/lock
 apt-get install -y --no-install-recommends build-essential git ca-certificates meson pkg-config
 rm -rf /tmp/glorytun-udp
 cd /tmp
@@ -293,6 +304,7 @@ if [ "$ID" = "debian" ]; then
 elif [ "$ID" = "ubuntu" ]; then
 	apt-get -y install libsodium-dev
 fi
+rm -f /var/lib/dpkg/lock
 apt-get -y install build-essential pkg-config autoconf automake
 rm -rf /tmp/glorytun-0.0.35
 cd /tmp
@@ -369,6 +381,7 @@ else
 	wget -O /etc/shorewall/params.vpn https://www.openmptcprouter.com/server/shorewall4/params.vpn
 	wget -O /etc/shorewall/params.net https://www.openmptcprouter.com/server/shorewall4/params.net
 	sed -i "s:eth0:$INTERFACE:g" /etc/shorewall/*
+	sed -i 's/^.*#DNAT/#DNAT/g' /etc/shorewall/rules
 	sed -i 's:10.0.0.2:$OMR_ADDR:g' /etc/shorewall/rules
 	wget -O /etc/shorewall6/params https://www.openmptcprouter.com/server/shorewall6/params
 	wget -O /etc/shorewall6/params.net https://www.openmptcprouter.com/server/shorewall6/params.net
@@ -381,15 +394,15 @@ fi
 # Add OpenMPTCProuter VPS script version to /etc/motd
 if [ -f /etc/motd.head ]; then
 	if grep --quiet 'OpenMPTCProuter VPS' /etc/motd.head; then
-		sed -i "s:< OpenMPTCProuter VPS [0-9]*\.[0-9]* >:< OpenMPCTProuter VPS $OMR_VERSION >:" /etc/motd.head
-		sed -i "s:< OpenMPTCProuter VPS \$OMR_VERSION >:< OpenMPCTProuter VPS $OMR_VERSION >:" /etc/motd.head
+		sed -i "s:< OpenMPTCProuter VPS [0-9]*\.[0-9]* >:< OpenMPTCProuter VPS $OMR_VERSION >:g" /etc/motd.head
+		sed -i "s:< OpenMPTCProuter VPS \$OMR_VERSION >:< OpenMPTCProuter VPS $OMR_VERSION >:g" /etc/motd.head
 	else
 		echo "< OpenMPTCProuter VPS $OMR_VERSION >" >> /etc/motd.head
 	fi
 elif [ -f /etc/motd ]; then
 	if grep --quiet 'OpenMPTCProuter VPS' /etc/motd; then
-		sed -i "s:< OpenMPTCProuter VPS [0-9]*\.[0-9]* >:< OpenMPCTProuter VPS $OMR_VERSION >:" /etc/motd
-		sed -i "s:< OpenMPTCProuter VPS \$OMR_VERSION >:< OpenMPCTProuter VPS $OMR_VERSION >:" /etc/motd
+		sed -i "s:< OpenMPTCProuter VPS [0-9]*\.[0-9]* >:< OpenMPTCProuter VPS $OMR_VERSION >:g" /etc/motd
+		sed -i "s:< OpenMPTCProuter VPS \$OMR_VERSION >:< OpenMPTCProuter VPS $OMR_VERSION >:g" /etc/motd
 	else
 		echo "< OpenMPTCProuter VPS $OMR_VERSION >" >> /etc/motd
 	fi

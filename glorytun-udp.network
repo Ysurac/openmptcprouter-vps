@@ -9,7 +9,7 @@ IPMasquerade=yes
 
 [DHCPServer]
 PoolOffset=2
-PoolSize=10
+PoolSize=2
 EmitDNS=no
 EmitNTP=no
 DNS=9.9.9.9

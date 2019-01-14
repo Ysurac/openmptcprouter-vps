@@ -34,7 +34,7 @@ ip route replace fd00::/8 via fe80::a00:2 dev omr-6in4
 _ping() {
 	local host=$1
 	ret=$(ping -4 "${host}" \
-		-W 3 \
+		-W 5 \
 		-c 1 \
 		-q
 	) && echo "$ret" | grep -sq "0% packet loss" && {
@@ -95,6 +95,7 @@ $allip_mlvpn"
 				fi
 			done < <(printf '%s\n' "$allip")
 			[ -z "$iface" ] && {
+				logger -t "OMR-Service" "Restart Glorytun and networkd"
 				systemctl -q restart glorytun-tcp@tun0
 				systemctl -q restart glorytun-udp@tun0
 				systemctl -q restart systemd-networkd
@@ -105,6 +106,7 @@ $allip_mlvpn"
 	fi
 	result="$(curl -Isk https://127.0.0.1:65500/status | head -n 1 | grep 401)"
 	if [ "$result" = "" ]; then
+		logger -t "OMR-Service" "Restart OMR Admin"
 		systemctl -q restart omr-admin
 		sleep 10
 	fi

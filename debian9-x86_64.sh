@@ -3,19 +3,21 @@ SHADOWSOCKS_PASS=${SHADOWSOCKS_PASS:-$(head -c 32 /dev/urandom | base64 -w0)}
 GLORYTUN_PASS=${GLORYTUN_PASS:-$(od  -vN "32" -An -tx1 /dev/urandom | tr '[:lower:]' '[:upper:]' | tr -d " \n")}
 #NBCPU=${NBCPU:-$(nproc --all | tr -d "\n")}
 NBCPU=${NBCPU:-$(grep -c '^processor' /proc/cpuinfo | tr -d "\n")}
-OBFS=${OBFS:-no}
+OBFS=${OBFS:-yes}
 OMR_ADMIN=${OMR_ADMIN:-yes}
 OMR_ADMIN_PASS=${OMR_ADMIN_PASS:-$(od  -vN "32" -An -tx1 /dev/urandom | tr '[:lower:]' '[:upper:]' | tr -d " \n")}
-MLVPN=${MLVPN:-no}
+MLVPN=${MLVPN:-yes}
 MLVPN_PASS=${MLVPN_PASS:-$(head -c 32 /dev/urandom | base64 -w0)}
-OPENVPN=${OPENVPN:-no}
+OPENVPN=${OPENVPN:-yes}
 INTERFACE=${INTERFACE:-$(ip -o -4 route show to default | grep -Po '(?<=dev )(\S+)' | tr -d "\n")}
-KERNEL_VERSION="4.14.89-mptcp-a9f6d31"
+KERNEL_VERSION="4.14.91"
+KERNEL_RELEASE="${KERNEL_VERSION}-mptcp-c828f09"
 GLORYTUN_UDP_VERSION="067ddd4aa04dbb628463666a90b7dcf3cd6963c9"
 MLVPN_VERSION="8f9720978b28c1954f9f229525333547283316d2"
-OBFS_VERSION="7659eeccf473aa41eb294e92c32f8f60a8747325"
+OBFS_VERSION="5cbfdcc28cdc912852cc3c99e3c7f5603d337805"
+OMR_ADMIN_VERSION="175ed4455959527c251d97c4cb5da62b1f83ea76"
 SHADOWSOCKS_VERSION="3.2.3"
-OMR_VERSION="0.83"
+OMR_VERSION="0.89"
 
 set -e
 umask 0022
@@ -69,21 +71,21 @@ elif [ "$ID" = "ubuntu" ]; then
 	echo 'deb http://archive.ubuntu.com/ubuntu bionic universe' > /etc/apt/sources.list.d/bionic-universe.list
 fi
 apt-get update
-wget -O /tmp/linux-image-${KERNEL_VERSION}.amd64.deb https://www.openmptcprouter.com/kernel/linux-image-${KERNEL_VERSION}.amd64.deb
-wget -O /tmp/linux-headers-${KERNEL_VERSION}.amd64.deb https://www.openmptcprouter.com/kernel/linux-headers-${KERNEL_VERSION}.amd64.deb
+wget -O /tmp/linux-image-${KERNEL_RELEASE}.amd64.deb https://www.openmptcprouter.com/kernel/linux-image-${KERNEL_RELEASE}.amd64.deb
+wget -O /tmp/linux-headers-${KERNEL_RELEASE}.amd64.deb https://www.openmptcprouter.com/kernel/linux-headers-${KERNEL_RELEASE}.amd64.deb
 # Rename bzImage to vmlinuz, needed when custom kernel was used
 cd /boot
 apt-get -y install rename curl
 rename 's/^bzImage/vmlinuz/s' * >/dev/null 2>&1
 #apt-get -y install linux-mptcp
-DEBIAN_FRONTEND=noninteractive dpkg --force-confnew -E -i /tmp/linux-image-${KERNEL_VERSION}.amd64.deb
-DEBIAN_FRONTEND=noninteractive dpkg --force-confnew -E -i /tmp/linux-headers-${KERNEL_VERSION}.amd64.deb
+DEBIAN_FRONTEND=noninteractive dpkg --force-confnew -E -i /tmp/linux-image-${KERNEL_RELEASE}.amd64.deb
+DEBIAN_FRONTEND=noninteractive dpkg --force-confnew -E -i /tmp/linux-headers-${KERNEL_RELEASE}.amd64.deb
 
 # Check if mptcp kernel is grub default kernel
 echo "Set MPTCP kernel as grub default..."
 wget -O /tmp/update-grub.sh https://www.openmptcprouter.com/server/update-grub.sh
 cd /tmp
-bash update-grub.sh ${KERNEL_VERSION}
+bash update-grub.sh ${KERNEL_RELEASE}
 
 #apt -t stretch-backports -y install shadowsocks-libev
 ## Compile Shadowsocks
@@ -94,6 +96,27 @@ tar xzf shadowsocks-libev-${SHADOWSOCKS_VERSION}.tar.gz
 cd shadowsocks-libev-${SHADOWSOCKS_VERSION}
 wget https://raw.githubusercontent.com/Ysurac/openmptcprouter-feeds/master/shadowsocks-libev/patches/020-NOCRYPTO.patch
 patch -p1 < 020-NOCRYPTO.patch
+# Shadowsocks eBPF support
+#wget https://raw.githubusercontent.com/Ysurac/openmptcprouter-feeds/master/shadowsocks-libev/patches/030-eBPF.patch
+#patch -p1 < 030-eBPF.patch
+#rm -f /var/lib/dpkg/lock
+#apt-get install -y --no-install-recommends build-essential git ca-certificates libcap-dev libelf-dev libpcap-dev
+#cd /tmp
+#rm -rf libbpf
+#git clone https://github.com/libbpf/libbpf.git
+#cd libbpf
+#if [ "$ID" = "debian" ]; then
+#	rm -f /var/lib/dpkg/lock
+#	apt -y -t stretch-backports install linux-libc-dev
+#elif [ "$ID" = "ubuntu" ]; then
+#	rm -f /var/lib/dpkg/lock
+#	apt-get -y install linux-libc-dev
+#fi
+#BUILD_SHARED=y make -C src CFLAGS="$CFLAGS -DCOMPAT_NEED_REALLOCARRAY"
+#cp /tmp/libbpf/src/libbpf.so /usr/lib
+#cp /tmp/libbpf/src/*.h /usr/include/bpf
+#cd /tmp
+#rm -rf /tmp/libbpf
 rm -f /var/lib/dpkg/lock
 apt-get -y install --no-install-recommends devscripts equivs apg libcap2-bin libpam-cap libc-ares2 libc-ares-dev libev4 haveged
 rm -f /var/lib/dpkg/lock
@@ -107,13 +130,16 @@ elif [ "$ID" = "ubuntu" ]; then
 	apt-get -y install libsodium-dev
 	systemctl enable haveged
 fi
+cd /tmp/shadowsocks-libev-${SHADOWSOCKS_VERSION}
 rm -f /var/lib/dpkg/lock
 mk-build-deps --install --tool "apt-get -o Debug::pkgProblemResolver=yes --no-install-recommends -y"
 rm -f /var/lib/dpkg/lock
 dpkg-buildpackage -b -us -uc
-cd ..
 rm -f /var/lib/dpkg/lock
+cd /tmp
 dpkg -i shadowsocks-libev_${SHADOWSOCKS_VERSION}-1_amd64.deb
+#mkdir -p /usr/lib/shadowsocks-libev
+#cp -f /tmp/shadowsocks-libev-${SHADOWSOCKS_VERSION}/src/*.ebpf /usr/lib/shadowsocks-libev
 rm -rf /tmp/shadowsocks-libev-${SHADOWSOCKS_VERSION}
 
 # Load OLIA Congestion module at boot time
@@ -143,22 +169,22 @@ if [ "$OMR_ADMIN" = "yes" ]; then
 	pip3 -q install flask-jwt-simple
 	mkdir -p /etc/openmptcprouter-vps-admin
 	wget -O /lib/systemd/system/omr-admin.service https://www.openmptcprouter.com/server/omr-admin.service.in
-	wget -O /tmp/openmptcprouter-vps-admin.zip https://github.com/Ysurac/openmptcprouter-vps-admin/archive/master.zip
+	wget -O /tmp/openmptcprouter-vps-admin.zip https://github.com/Ysurac/openmptcprouter-vps-admin/archive/${OMR_ADMIN_VERSION}.zip
 	cd /tmp
 	unzip -q -o openmptcprouter-vps-admin.zip
 	if [ -f /usr/local/bin/omr-admin.py ]; then
-		cp /tmp/openmptcprouter-vps-admin-master/omr-admin.py /usr/local/bin/
+		cp /tmp/openmptcprouter-vps-admin-${OMR_ADMIN_VERSION}/omr-admin.py /usr/local/bin/
 		OMR_ADMIN_PASS=$(grep -Po '"pass":.*?[^\\]"' /etc/openmptcprouter-vps-admin/omr-admin-config.json | awk -F':' '{print $2}' | sed 's/"//g')
 	else
-		sed -i "s:MySecretKey:$OMR_ADMIN_PASS:g" /tmp/openmptcprouter-vps-admin-master/omr-admin-config.json
-		cp /tmp/openmptcprouter-vps-admin-master/omr-admin-config.json /etc/openmptcprouter-vps-admin/
-		cp /tmp/openmptcprouter-vps-admin-master/omr-admin.py /usr/local/bin/
+		sed -i "s:MySecretKey:$OMR_ADMIN_PASS:g" /tmp/openmptcprouter-vps-admin-${OMR_ADMIN_VERSION}/omr-admin-config.json
+		cp /tmp/openmptcprouter-vps-admin-${OMR_ADMIN_VERSION}/omr-admin-config.json /etc/openmptcprouter-vps-admin/
+		cp /tmp/openmptcprouter-vps-admin-${OMR_ADMIN_VERSION}/omr-admin.py /usr/local/bin/
 		cd /etc/openmptcprouter-vps-admin
 		openssl req -new -newkey rsa:2048 -days 365 -nodes -x509 -keyout key.pem -out cert.pem -subj "/C=US/ST=Oregon/L=Portland/O=OpenMPTCProuterVPS/OU=Org/CN=www.openmptcprouter.vps"
 	fi
 	chmod u+x /usr/local/bin/omr-admin.py
 	systemctl enable omr-admin.service
-	rm -rf /tmp/tmp/openmptcprouter-vps-admin-master
+	rm -rf /tmp/tmp/openmptcprouter-vps-admin-${OMR_ADMIN_VERSION}
 fi
 
 # Get shadowsocks optimization
@@ -199,7 +225,7 @@ if [ "$OBFS" = "yes" ]; then
 	make install
 	cd /tmp
 	rm -rf /tmp/simple-obfs
-	sed -i 's%"mptcp": true%"mptcp": true,\n"plugin": "/usr/local/bin/obfs-server",\n"plugin_opts": "obfs=http;mptcp;fast-open;t=400"%' /etc/shadowsocks-libev/config.json
+	#sed -i 's%"mptcp": true%"mptcp": true,\n"plugin": "/usr/local/bin/obfs-server",\n"plugin_opts": "obfs=http;mptcp;fast-open;t=400"%' /etc/shadowsocks-libev/config.json
 else
 	sed -i -e '/plugin/d' -e 's/,,//' /etc/shadowsocks-libev/config.json
 fi
@@ -413,7 +439,7 @@ fi
 if [ "$update" = "0" ]; then
 	# Display important info
 	echo '===================================================================================='
-	echo 'OpenMPTCProuter VPS is now configured !'
+	echo "OpenMPTCProuter VPS $OMR_VERSION is now installed !"
 	echo 'SSH port: 65222 (instead of port 22)'
 	if [ "$OMR_ADMIN" = "yes" ]; then
 		echo '===================================================================================='
@@ -468,7 +494,7 @@ if [ "$update" = "0" ]; then
 	fi
 else
 	echo '===================================================================================='
-	echo 'OpenMPTCProuter VPS is now updated !'
+	echo "OpenMPTCProuter VPS is now updated to version $OMR_VERSION !"
 	echo 'Keys are not changed, shorewall rules files preserved'
 	echo 'You need OpenMPTCProuter >= 0.30'
 	echo '===================================================================================='

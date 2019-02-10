@@ -11,5 +11,6 @@
     "fast_open": true,
     "no_delay": true,
     "reuse_port": true,
+    "ipv6_first": true,
     "mptcp": true
 }

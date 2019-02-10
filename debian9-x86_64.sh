@@ -4,20 +4,22 @@ GLORYTUN_PASS=${GLORYTUN_PASS:-$(od  -vN "32" -An -tx1 /dev/urandom | tr '[:lowe
 #NBCPU=${NBCPU:-$(nproc --all | tr -d "\n")}
 NBCPU=${NBCPU:-$(grep -c '^processor' /proc/cpuinfo | tr -d "\n")}
 OBFS=${OBFS:-yes}
+V2RAY=${V2RAY:-yes}
 OMR_ADMIN=${OMR_ADMIN:-yes}
 OMR_ADMIN_PASS=${OMR_ADMIN_PASS:-$(od  -vN "32" -An -tx1 /dev/urandom | tr '[:lower:]' '[:upper:]' | tr -d " \n")}
 MLVPN=${MLVPN:-yes}
 MLVPN_PASS=${MLVPN_PASS:-$(head -c 32 /dev/urandom | base64 -w0)}
 OPENVPN=${OPENVPN:-yes}
 INTERFACE=${INTERFACE:-$(ip -o -4 route show to default | grep -Po '(?<=dev )(\S+)' | tr -d "\n")}
-KERNEL_VERSION="4.14.91"
-KERNEL_RELEASE="${KERNEL_VERSION}-mptcp-c828f09"
+KERNEL_VERSION="4.14.94"
+KERNEL_RELEASE="${KERNEL_VERSION}-mptcp-a284ba1"
 GLORYTUN_UDP_VERSION="067ddd4aa04dbb628463666a90b7dcf3cd6963c9"
 MLVPN_VERSION="8f9720978b28c1954f9f229525333547283316d2"
 OBFS_VERSION="5cbfdcc28cdc912852cc3c99e3c7f5603d337805"
-OMR_ADMIN_VERSION="175ed4455959527c251d97c4cb5da62b1f83ea76"
+OMR_ADMIN_VERSION="7add708f0c60a6a6d9a0b19f7174b35e5fdc88e5"
+V2RAY_VERSION="8cea1a3"
 SHADOWSOCKS_VERSION="3.2.3"
-OMR_VERSION="0.89"
+OMR_VERSION="0.93"
 
 set -e
 umask 0022
@@ -226,7 +228,35 @@ if [ "$OBFS" = "yes" ]; then
 	cd /tmp
 	rm -rf /tmp/simple-obfs
 	#sed -i 's%"mptcp": true%"mptcp": true,\n"plugin": "/usr/local/bin/obfs-server",\n"plugin_opts": "obfs=http;mptcp;fast-open;t=400"%' /etc/shadowsocks-libev/config.json
-else
+fi
+
+# Install v2ray-plugin
+if [ "$V2RAY" = "yes" ]; then
+	echo "Install v2ray plugin"
+	rm -rf /tmp/v2ray-plugin-linux-amd64-${V2RAY_VERSION}.tar.gz
+	wget -O /tmp/v2ray-plugin-linux-amd64-${V2RAY_VERSION}.tar.gz https://github.com/shadowsocks/v2ray-plugin/releases/download/v1.0/v2ray-plugin-linux-amd64-${V2RAY_VERSION}.tar.gz
+	cd /tmp
+	tar xzvf v2ray-plugin-linux-amd64-${V2RAY_VERSION}.tar.gz
+	cp v2ray-plugin_linux_amd64 /usr/local/bin/v2ray-plugin
+	cd /tmp
+	rm -rf /tmp/v2ray-plugin_linux_amd64
+	rm -rf /tmp/v2ray-plugin-linux-amd64-${V2RAY_VERSION}.tar.gz
+	
+	#rm -rf /tmp/v2ray-plugin
+	#cd /tmp
+	#rm -f /var/lib/dpkg/lock
+	#apt-get install -y --no-install-recommends git ca-certificates golang-go
+	#git clone https://github.com/shadowsocks/v2ray-plugin.git /tmp/v2ray-plugin
+	#cd /tmp/v2ray-plugin
+	#git checkout ${V2RAY_VERSION}
+	#git submodule update --init --recursive
+	#CGO_ENABLED=0 go build -o v2ray-plugin
+	#cp v2ray-plugin /usr/local/bin/v2ray-plugin
+	#cd /tmp
+	#rm -rf /tmp/simple-obfs
+fi
+
+if [ "$OBFS" = "no" ] && [ "$V2RAYPLUGIN" = "no" ]; then
 	sed -i -e '/plugin/d' -e 's/,,//' /etc/shadowsocks-libev/config.json
 fi
 

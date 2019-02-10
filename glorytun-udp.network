@@ -9,9 +9,9 @@ IPMasquerade=yes
 
 [DHCPServer]
 PoolOffset=2
-PoolSize=2
+PoolSize=50
 EmitDNS=no
 EmitNTP=no
 DNS=9.9.9.9
-DefaultLeaseTimeSec=12h
-MaxLeaseTimeSec=24h
+DefaultLeaseTimeSec=2h
+MaxLeaseTimeSec=4h

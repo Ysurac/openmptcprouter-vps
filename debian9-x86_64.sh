@@ -11,18 +11,19 @@ MLVPN=${MLVPN:-yes}
 MLVPN_PASS=${MLVPN_PASS:-$(head -c 32 /dev/urandom | base64 -w0)}
 OPENVPN=${OPENVPN:-yes}
 INTERFACE=${INTERFACE:-$(ip -o -4 route show to default | grep -Po '(?<=dev )(\S+)' | tr -d "\n")}
-KERNEL_VERSION="4.14.94"
-KERNEL_RELEASE="${KERNEL_VERSION}-mptcp-a284ba1"
-GLORYTUN_UDP_VERSION="067ddd4aa04dbb628463666a90b7dcf3cd6963c9"
+KERNEL_VERSION="4.14.105"
+KERNEL_RELEASE="${KERNEL_VERSION}-mptcp-3f01458"
+GLORYTUN_UDP_VERSION="0dddca3b61130ae2195e7f4f0fb7ebe1292759e1"
 MLVPN_VERSION="8f9720978b28c1954f9f229525333547283316d2"
 OBFS_VERSION="5cbfdcc28cdc912852cc3c99e3c7f5603d337805"
-OMR_ADMIN_VERSION="7add708f0c60a6a6d9a0b19f7174b35e5fdc88e5"
-V2RAY_VERSION="8cea1a3"
-SHADOWSOCKS_VERSION="3.2.3"
-OMR_VERSION="0.93"
+OMR_ADMIN_VERSION="9ebf8177817faa5c0680fd86830150c63ff1a0de"
+V2RAY_VERSION="v1.1.0"
+SHADOWSOCKS_VERSION="3.2.5"
+OMR_VERSION="0.96"
 
 set -e
 umask 0022
+export LC_ALL=C
 
 rm -f /var/lib/dpkg/lock
 
@@ -234,7 +235,7 @@ fi
 if [ "$V2RAY" = "yes" ]; then
 	echo "Install v2ray plugin"
 	rm -rf /tmp/v2ray-plugin-linux-amd64-${V2RAY_VERSION}.tar.gz
-	wget -O /tmp/v2ray-plugin-linux-amd64-${V2RAY_VERSION}.tar.gz https://github.com/shadowsocks/v2ray-plugin/releases/download/v1.0/v2ray-plugin-linux-amd64-${V2RAY_VERSION}.tar.gz
+	wget -O /tmp/v2ray-plugin-linux-amd64-${V2RAY_VERSION}.tar.gz https://github.com/shadowsocks/v2ray-plugin/releases/download/${V2RAY_VERSION}/v2ray-plugin-linux-amd64-${V2RAY_VERSION}.tar.gz
 	cd /tmp
 	tar xzvf v2ray-plugin-linux-amd64-${V2RAY_VERSION}.tar.gz
 	cp v2ray-plugin_linux_amd64 /usr/local/bin/v2ray-plugin

@@ -6,20 +6,20 @@ NBCPU=${NBCPU:-$(grep -c '^processor' /proc/cpuinfo | tr -d "\n")}
 OBFS=${OBFS:-yes}
 V2RAY=${V2RAY:-yes}
 OMR_ADMIN=${OMR_ADMIN:-yes}
-OMR_ADMIN_PASS=${OMR_ADMIN_PASS:-$(od  -vN "32" -An -tx1 /dev/urandom | tr '[:lower:]' '[:upper:]' | tr -d " \n")}
+OMR_ADMIN_PASS=${OMR_ADMIN_PASS:-$(od -vN "32" -An -tx1 /dev/urandom | tr '[:lower:]' '[:upper:]' | tr -d " \n")}
 MLVPN=${MLVPN:-yes}
 MLVPN_PASS=${MLVPN_PASS:-$(head -c 32 /dev/urandom | base64 -w0)}
 OPENVPN=${OPENVPN:-yes}
-INTERFACE=${INTERFACE:-$(ip -o -4 route show to default | grep -Po '(?<=dev )(\S+)' | tr -d "\n")}
+INTERFACE=${INTERFACE:-$(ip -o -4 route show to default | grep -m 1 -Po '(?<=dev )(\S+)' | tr -d "\n")}
 KERNEL_VERSION="4.14.105"
 KERNEL_RELEASE="${KERNEL_VERSION}-mptcp-310b683"
-GLORYTUN_UDP_VERSION="0dddca3b61130ae2195e7f4f0fb7ebe1292759e1"
+GLORYTUN_UDP_VERSION="871f48809705bda0d889992150c3c89080d5bfd5"
 MLVPN_VERSION="8f9720978b28c1954f9f229525333547283316d2"
 OBFS_VERSION="5cbfdcc28cdc912852cc3c99e3c7f5603d337805"
 OMR_ADMIN_VERSION="9ebf8177817faa5c0680fd86830150c63ff1a0de"
 V2RAY_VERSION="v1.1.0"
 SHADOWSOCKS_VERSION="3.2.5"
-OMR_VERSION="0.97"
+OMR_VERSION="0.98"
 
 set -e
 umask 0022

@@ -37,7 +37,8 @@ _ping() {
 		-W 5 \
 		-c 1 \
 		-q
-	) && echo "$ret" | grep -sq "0% packet loss" && {
+	)
+	[ -n "$ret" ] && echo "$ret" | grep -sq "0% packet loss" && {
 		return
 	}
 	false
@@ -104,7 +105,7 @@ $allip_mlvpn"
 			}
 		fi
 	fi
-	result="$(curl -Isk https://127.0.0.1:65500/status | head -n 1 | grep 401)"
+	result="$(curl -Isk -m 30 https://127.0.0.1:65500/status | head -n 1 | grep 401)"
 	if [ "$result" = "" ]; then
 		logger -t "OMR-Service" "Restart OMR Admin"
 		systemctl -q restart omr-admin

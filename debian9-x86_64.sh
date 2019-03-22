@@ -19,7 +19,7 @@ OBFS_VERSION="5cbfdcc28cdc912852cc3c99e3c7f5603d337805"
 OMR_ADMIN_VERSION="9ebf8177817faa5c0680fd86830150c63ff1a0de"
 V2RAY_VERSION="v1.1.0"
 SHADOWSOCKS_VERSION="3.2.5"
-OMR_VERSION="0.98"
+OMR_VERSION="0.991"
 
 set -e
 umask 0022
@@ -81,8 +81,8 @@ cd /boot
 apt-get -y install rename curl
 rename 's/^bzImage/vmlinuz/s' * >/dev/null 2>&1
 #apt-get -y install linux-mptcp
-DEBIAN_FRONTEND=noninteractive dpkg --force-confnew -E -i /tmp/linux-image-${KERNEL_RELEASE}.amd64.deb
-DEBIAN_FRONTEND=noninteractive dpkg --force-confnew -E -i /tmp/linux-headers-${KERNEL_RELEASE}.amd64.deb
+DEBIAN_FRONTEND=noninteractive dpkg --force-all -E -i /tmp/linux-image-${KERNEL_RELEASE}.amd64.deb
+DEBIAN_FRONTEND=noninteractive dpkg --force-all -E -i /tmp/linux-headers-${KERNEL_RELEASE}.amd64.deb
 
 # Check if mptcp kernel is grub default kernel
 echo "Set MPTCP kernel as grub default..."
@@ -168,7 +168,7 @@ fi
 
 if [ "$OMR_ADMIN" = "yes" ]; then
 	echo 'Install OpenMPTCProuter VPS Admin'
-	apt-get -y install unzip gunicorn python3-flask-restful python3-openssl python3-pip
+	apt-get -y install unzip gunicorn python3-flask-restful python3-openssl python3-pip python3-setuptools python3-wheel
 	pip3 -q install flask-jwt-simple
 	mkdir -p /etc/openmptcprouter-vps-admin
 	wget -O /lib/systemd/system/omr-admin.service https://www.openmptcprouter.com/server/omr-admin.service.in

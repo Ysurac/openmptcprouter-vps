@@ -11,15 +11,15 @@ MLVPN=${MLVPN:-yes}
 MLVPN_PASS=${MLVPN_PASS:-$(head -c 32 /dev/urandom | base64 -w0)}
 OPENVPN=${OPENVPN:-yes}
 INTERFACE=${INTERFACE:-$(ip -o -4 route show to default | grep -m 1 -Po '(?<=dev )(\S+)' | tr -d "\n")}
-KERNEL_VERSION="4.14.105"
-KERNEL_RELEASE="${KERNEL_VERSION}-mptcp-310b683"
-GLORYTUN_UDP_VERSION="871f48809705bda0d889992150c3c89080d5bfd5"
+KERNEL_VERSION="4.14.110"
+KERNEL_RELEASE="${KERNEL_VERSION}-mptcp_1.0+4c83d3a"
+GLORYTUN_UDP_VERSION="db718d59426957eef89357d5b58ae59cae2f8c5d"
 MLVPN_VERSION="8f9720978b28c1954f9f229525333547283316d2"
 OBFS_VERSION="5cbfdcc28cdc912852cc3c99e3c7f5603d337805"
 OMR_ADMIN_VERSION="9ebf8177817faa5c0680fd86830150c63ff1a0de"
 V2RAY_VERSION="v1.1.0"
 SHADOWSOCKS_VERSION="3.2.5"
-OMR_VERSION="0.991"
+OMR_VERSION="0.992"
 
 set -e
 umask 0022
@@ -62,6 +62,18 @@ elif [ -f /root/openmptcprouter_config.txt ]; then
 	update="1"
 fi
 
+apt-get update
+apt-get -y install apt-transport-https
+# Add OpenMPTCProuter repo
+echo 'deb https://repo.openmptcprouter.com stretch main' > /etc/apt/sources.list.d/openmptcprouter.list
+cat <<EOF | tee /etc/apt/preferences.d/openmptcprouter.pref
+Explanation: Prefer OpenMPTCProuter provided packages over the Debian native ones
+Package: *
+Pin: origin repo.openmptcprouter.com
+Pin-Priority: 1001
+EOF
+wget -O - http://repo.openmptcprouter.com/openmptcprouter.gpg.key | apt-key add -
+
 # Install mptcp kernel and shadowsocks
 apt-get update
 apt-get -y install dirmngr patch
@@ -74,21 +86,24 @@ elif [ "$ID" = "ubuntu" ]; then
 	echo 'deb http://archive.ubuntu.com/ubuntu bionic universe' > /etc/apt/sources.list.d/bionic-universe.list
 fi
 apt-get update
-wget -O /tmp/linux-image-${KERNEL_RELEASE}.amd64.deb https://www.openmptcprouter.com/kernel/linux-image-${KERNEL_RELEASE}.amd64.deb
-wget -O /tmp/linux-headers-${KERNEL_RELEASE}.amd64.deb https://www.openmptcprouter.com/kernel/linux-headers-${KERNEL_RELEASE}.amd64.deb
+wget -O /tmp/linux-image-${KERNEL_RELEASE}_amd64.deb https://www.openmptcprouter.com/kernel/linux-image-${KERNEL_RELEASE}_amd64.deb
+wget -O /tmp/linux-headers-${KERNEL_RELEASE}_amd64.deb https://www.openmptcprouter.com/kernel/linux-headers-${KERNEL_RELEASE}_amd64.deb
 # Rename bzImage to vmlinuz, needed when custom kernel was used
 cd /boot
 apt-get -y install rename curl
 rename 's/^bzImage/vmlinuz/s' * >/dev/null 2>&1
 #apt-get -y install linux-mptcp
-DEBIAN_FRONTEND=noninteractive dpkg --force-all -E -i /tmp/linux-image-${KERNEL_RELEASE}.amd64.deb
-DEBIAN_FRONTEND=noninteractive dpkg --force-all -E -i /tmp/linux-headers-${KERNEL_RELEASE}.amd64.deb
+DEBIAN_FRONTEND=noninteractive dpkg --force-all -E -i /tmp/linux-image-${KERNEL_RELEASE}_amd64.deb
+DEBIAN_FRONTEND=noninteractive dpkg --force-all -E -i /tmp/linux-headers-${KERNEL_RELEASE}_amd64.deb
 
 # Check if mptcp kernel is grub default kernel
 echo "Set MPTCP kernel as grub default..."
 wget -O /tmp/update-grub.sh https://www.openmptcprouter.com/server/update-grub.sh
 cd /tmp
 bash update-grub.sh ${KERNEL_RELEASE}
+
+echo "Install tracebox and iperf3 OpenMPTCProuter edition"
+apt-get -y -o Dpkg::Options::="--force-overwrite" install tracebox omr-iperf3
 
 #apt -t stretch-backports -y install shadowsocks-libev
 ## Compile Shadowsocks
@@ -121,7 +136,7 @@ patch -p1 < 020-NOCRYPTO.patch
 #cd /tmp
 #rm -rf /tmp/libbpf
 rm -f /var/lib/dpkg/lock
-apt-get -y install --no-install-recommends devscripts equivs apg libcap2-bin libpam-cap libc-ares2 libc-ares-dev libev4 haveged
+apt-get -y install --no-install-recommends devscripts equivs apg libcap2-bin libpam-cap libc-ares2 libc-ares-dev libev4 haveged libmbedcrypto0
 rm -f /var/lib/dpkg/lock
 systemctl enable haveged
 

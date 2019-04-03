@@ -16,7 +16,7 @@ KERNEL_RELEASE="${KERNEL_VERSION}-mptcp_1.0+4c83d3a"
 GLORYTUN_UDP_VERSION="db718d59426957eef89357d5b58ae59cae2f8c5d"
 MLVPN_VERSION="8f9720978b28c1954f9f229525333547283316d2"
 OBFS_VERSION="5cbfdcc28cdc912852cc3c99e3c7f5603d337805"
-OMR_ADMIN_VERSION="9ebf8177817faa5c0680fd86830150c63ff1a0de"
+OMR_ADMIN_VERSION="d6aa36cace845b6cf3b2fb1c0689eb9d22fd6a51"
 V2RAY_VERSION="v1.1.0"
 SHADOWSOCKS_VERSION="3.2.5"
 OMR_VERSION="0.992"
@@ -136,7 +136,7 @@ patch -p1 < 020-NOCRYPTO.patch
 #cd /tmp
 #rm -rf /tmp/libbpf
 rm -f /var/lib/dpkg/lock
-apt-get -y install --no-install-recommends devscripts equivs apg libcap2-bin libpam-cap libc-ares2 libc-ares-dev libev4 haveged libmbedcrypto0
+apt-get -y install --no-install-recommends devscripts equivs apg libcap2-bin libpam-cap libc-ares2 libc-ares-dev libev4 haveged
 rm -f /var/lib/dpkg/lock
 systemctl enable haveged
 

@@ -83,6 +83,7 @@ $allip_mlvpn"
 						_ping $ipd
 						statusp=$?
 						if $(exit $statusp); then
+							logger -t "OMR-Service" "Set new 6in4 tunnel IPs"
 							ip tunnel change omr-6in4 mode sit remote $ipd local $ip
 							echo "VPS_ADDR=$ip" > /etc/shorewall/params.vpn
 							echo "OMR_ADDR=$ipd" >> /etc/shorewall/params.vpn

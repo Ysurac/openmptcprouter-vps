@@ -1,0 +1,10 @@
+[Unit]
+Description=iperf3
+Requires=network.target
+
+[Service]
+ExecStart=/usr/bin/iperf3 -s -p 65400 --authorized-users-path /etc/iperf3/users.csv --rsa-private-key-path /etc/iperf3/public.pem
+Restart=on-failure
+
+[Install]
+WantedBy=multi-user.target

@@ -100,6 +100,7 @@ DEBIAN_FRONTEND=noninteractive dpkg --force-all -E -i /tmp/linux-headers-${KERNE
 echo "Set MPTCP kernel as grub default..."
 wget -O /tmp/update-grub.sh https://www.openmptcprouter.com/server/update-grub.sh
 cd /tmp
+bash update-grub.sh ${KERNEL_VERSION}-mptcp
 bash update-grub.sh ${KERNEL_RELEASE}
 
 echo "Install tracebox and iperf3 OpenMPTCProuter edition"

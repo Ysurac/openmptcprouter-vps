@@ -8,7 +8,7 @@ config_file="$(find /boot/grub* -maxdepth 1 -name grub.cfg 2>/dev/null)"
 deflt_file="$(find /etc/default \( -name grub -o -name grub2 \) 2>/dev/null)"
 [ $deflt_file ] || exit 0
 
-if [ -z "$(grep -m 1 vmlinuz $config_file | grep $kernel)" ]; then
+#if [ -z "$(grep -m 1 vmlinuz $config_file | grep $kernel)" ]; then
 	x=0
 	sed -n -e 's@\([^'\"\'']*\)['\"\'']\([^'\"\'']*\).*@\1\2@' -e '/\(menuentry\) /p' <$config_file | \
 		while IFS= read ln
@@ -21,4 +21,4 @@ if [ -z "$(grep -m 1 vmlinuz $config_file | grep $kernel)" ]; then
 			fi
 			x=$(expr $x + 1)
 		done | sed 's@\(menuentry\) @@'
-fi
+#fi

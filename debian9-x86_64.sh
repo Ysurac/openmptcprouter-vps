@@ -5,21 +5,26 @@ GLORYTUN_PASS=${GLORYTUN_PASS:-$(od  -vN "32" -An -tx1 /dev/urandom | tr '[:lowe
 NBCPU=${NBCPU:-$(grep -c '^processor' /proc/cpuinfo | tr -d "\n")}
 OBFS=${OBFS:-yes}
 V2RAY=${V2RAY:-yes}
+TLS=${TLS:-yes}
 OMR_ADMIN=${OMR_ADMIN:-yes}
 OMR_ADMIN_PASS=${OMR_ADMIN_PASS:-$(od -vN "32" -An -tx1 /dev/urandom | tr '[:lower:]' '[:upper:]' | tr -d " \n")}
 MLVPN=${MLVPN:-yes}
 MLVPN_PASS=${MLVPN_PASS:-$(head -c 32 /dev/urandom | base64 -w0)}
 OPENVPN=${OPENVPN:-yes}
 INTERFACE=${INTERFACE:-$(ip -o -4 route show to default | grep -m 1 -Po '(?<=dev )(\S+)' | tr -d "\n")}
+#KERNEL_VERSION="4.19.36"
 KERNEL_VERSION="4.14.110"
+#KERNEL_RELEASE="${KERNEL_VERSION}-mptcp_1.1+f446ba3"
 KERNEL_RELEASE="${KERNEL_VERSION}-mptcp_1.0+4c83d3a"
 GLORYTUN_UDP_VERSION="db718d59426957eef89357d5b58ae59cae2f8c5d"
 MLVPN_VERSION="8f9720978b28c1954f9f229525333547283316d2"
 OBFS_VERSION="5cbfdcc28cdc912852cc3c99e3c7f5603d337805"
-OMR_ADMIN_VERSION="d6aa36cace845b6cf3b2fb1c0689eb9d22fd6a51"
+OMR_ADMIN_VERSION="23177d99d00a9a7e94cd3e1eb63f60e587f92e07"
 V2RAY_VERSION="v1.1.0"
 SHADOWSOCKS_VERSION="3.2.5"
-OMR_VERSION="0.992"
+VPS_DOMAIN=${VPS_DOMAIN:-$(wget -4 -qO- -T 2 hostname.openmptcprouter.com)}
+
+OMR_VERSION="0.993"
 
 set -e
 umask 0022
@@ -421,7 +426,6 @@ if systemctl -q is-active omr-6in4.service; then
 fi
 systemctl enable omr.service
 
-
 # Change SSH port to 65222
 sed -i 's:#Port 22:Port 65222:g' /etc/ssh/sshd_config
 sed -i 's:Port 22:Port 65222:g' /etc/ssh/sshd_config
@@ -463,6 +467,30 @@ else
 	wget -O /etc/shorewall6/snat https://www.openmptcprouter.com/server/shorewall6/snat
 	sed -i "s:eth0:$INTERFACE:g" /etc/shorewall6/*
 fi
+if [ "$TLS" = "yes" ]; then
+	VPS_CERT=0
+	apt-get -y install dnsutils socat
+	if [ "$VPS_DOMAIN" != "" ] && [ "$(dig +noall +answer $VPS_DOMAIN)" != "" ] && [ "$(ping -c 1 -w 1 $VPS_DOMAIN)" ]; then
+		if [ ! -f "/root/.acme.sh/$VPS_DOMAIN/$VPS_DOMAIN.cer" ]; then
+			echo "Generate certificate for V2Ray"
+			set +e
+			#[ "$(shorewall  status | grep stopped)" = "" ] && shorewall open all all tcp 443
+			curl https://get.acme.sh | sh
+			systemctl -q restart shorewall
+			~/.acme.sh/acme.sh --force --alpn --issue -d $VPS_DOMAIN --pre-hook 'shorewall open all all tcp 443 2>&1 >/dev/null' --post-hook 'shorewall close all all tcp 443 2>&1 >/dev/null' 2>&1 >/dev/null
+			set -e
+#			mkdir -p /etc/ssl/v2ray
+#			ln -f -s /root/.acme.sh/$reverse/$reverse.key /etc/ssl/v2ray/omr.key
+#			ln -f -s /root/.acme.sh/$reverse/fullchain.cer /etc/ssl/v2ray/omr.cer
+			#[ "$(shorewall  status | grep stopped)" = "" ] && shorewall close all all tcp 443
+		fi
+		VPS_CERT=1
+	else
+		echo "Not working domain detected..."
+	fi
+fi
+
+
 
 # Add OpenMPTCProuter VPS script version to /etc/motd
 if [ -f /etc/motd.head ]; then
@@ -508,6 +536,10 @@ if [ "$update" = "0" ]; then
 		echo 'MLVPN first port: 65201'
 		echo 'Your MLVPN password: '
 		echo $MLVPN_PASS
+	fi
+	if [ "$VPS_CERT" = "0" ]; then
+		echo 'Not working domain detected, not able to generate certificate for v2ray.'
+		echo 'You can set VPS_DOMAIN to a working domain if you want a certificate.'
 	fi
 	echo '===================================================================================='
 	echo 'Keys are also saved in /root/openmptcprouter_config.txt, you are free to remove them'
@@ -578,6 +610,10 @@ else
 			echo '!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!'
 			echo '===================================================================================='
 		fi
+	fi
+	if [ "$VPS_CERT" = "0" ]; then
+		echo 'Not working domain detected, not able to generate certificate for v2ray.'
+		echo 'You can set VPS_DOMAIN to a working domain if you want a certificate.'
 	fi
 	echo 'Restarting shorewall...'
 	systemctl -q restart shorewall

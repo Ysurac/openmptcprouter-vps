@@ -3,4 +3,4 @@ DEV=tun0
 SERVER=true
 MPTCP=true
 IPV6=true
-OPTIONS="chacha20 retry count -1 const 5000000 timeout 40000 keepalive count 5 idle 10 interval 2 buffer-size 32768 multiqueue"
+OPTIONS="chacha20 retry count -1 const 5000000 timeout 10000 keepalive count 5 idle 10 interval 2 buffer-size 32768 multiqueue"

@@ -1,6 +1,6 @@
 [Unit]
 Description=OMR
-After=network.target network-online.target glorytun-tcp@.service
+After=network.target network-online.target glorytun-tcp@.service glorytun-udp@.service
 
 [Service]
 Type=simple

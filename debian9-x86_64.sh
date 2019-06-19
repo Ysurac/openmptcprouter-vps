@@ -13,18 +13,18 @@ MLVPN_PASS=${MLVPN_PASS:-$(head -c 32 /dev/urandom | base64 -w0)}
 OPENVPN=${OPENVPN:-yes}
 INTERFACE=${INTERFACE:-$(ip -o -4 route show to default | grep -m 1 -Po '(?<=dev )(\S+)' | tr -d "\n")}
 #KERNEL_VERSION="4.19.36"
-KERNEL_VERSION="4.14.110"
+KERNEL_VERSION="4.14.127"
 #KERNEL_RELEASE="${KERNEL_VERSION}-mptcp_1.1+f446ba3"
-KERNEL_RELEASE="${KERNEL_VERSION}-mptcp_1.0+4c83d3a"
+KERNEL_RELEASE="${KERNEL_VERSION}-mptcp_1.0+7515c39"
 GLORYTUN_UDP_VERSION="db718d59426957eef89357d5b58ae59cae2f8c5d"
 MLVPN_VERSION="8f9720978b28c1954f9f229525333547283316d2"
 OBFS_VERSION="5cbfdcc28cdc912852cc3c99e3c7f5603d337805"
-OMR_ADMIN_VERSION="607b274ae2e49ecb9c2589fc86d94bc5a80c8e44"
+OMR_ADMIN_VERSION="b42343c80dff1a815bdf932ad1bac3cb5b7ae5f6"
 V2RAY_VERSION="v1.1.0"
 SHADOWSOCKS_VERSION="3.2.5"
 VPS_DOMAIN=${VPS_DOMAIN:-$(wget -4 -qO- -T 2 hostname.openmptcprouter.com)}
 
-OMR_VERSION="0.994"
+OMR_VERSION="0.996"
 
 set -e
 umask 0022
@@ -454,6 +454,8 @@ else
 	wget -O /etc/shorewall/interfaces https://www.openmptcprouter.com/server/shorewall4/interfaces
 	wget -O /etc/shorewall/snat https://www.openmptcprouter.com/server/shorewall4/snat
 	wget -O /etc/shorewall/stoppedrules https://www.openmptcprouter.com/server/shorewall4/stoppedrules
+	wget -O /etc/shorewall/tcinterfaces https://www.openmptcprouter.com/server/shorewall4/tcinterfaces
+	wget -O /etc/shorewall/shorewall.conf https://www.openmptcprouter.com/server/shorewall4/shorewall.conf
 	wget -O /etc/shorewall/params https://www.openmptcprouter.com/server/shorewall4/params
 	wget -O /etc/shorewall/params.vpn https://www.openmptcprouter.com/server/shorewall4/params.vpn
 	wget -O /etc/shorewall/params.net https://www.openmptcprouter.com/server/shorewall4/params.net

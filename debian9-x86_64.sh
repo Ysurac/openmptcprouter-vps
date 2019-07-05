@@ -68,7 +68,7 @@ elif [ -f /root/openmptcprouter_config.txt ]; then
 fi
 
 apt-get update
-apt-get -y install apt-transport-https
+DEBIAN_FRONTEND=noninteractive apt-get -y install apt-transport-https
 # Add OpenMPTCProuter repo
 echo 'deb https://repo.openmptcprouter.com stretch main' > /etc/apt/sources.list.d/openmptcprouter.list
 cat <<EOF | tee /etc/apt/preferences.d/openmptcprouter.pref
@@ -81,7 +81,7 @@ wget -O - http://repo.openmptcprouter.com/openmptcprouter.gpg.key | apt-key add 
 
 # Install mptcp kernel and shadowsocks
 apt-get update
-apt-get -y install dirmngr patch
+DEBIAN_FRONTEND=noninteractive apt-get -y install dirmngr patch
 #apt-key adv --keyserver hkp://keys.gnupg.net --recv-keys 379CE192D401AB61
 if [ "$ID" = "debian" ]; then
 	#echo 'deb http://dl.bintray.com/cpaasch/deb jessie main' >> /etc/apt/sources.list

@@ -12,24 +12,25 @@ MLVPN=${MLVPN:-yes}
 MLVPN_PASS=${MLVPN_PASS:-$(head -c 32 /dev/urandom | base64 -w0)}
 OPENVPN=${OPENVPN:-yes}
 INTERFACE=${INTERFACE:-$(ip -o -4 route show to default | grep -m 1 -Po '(?<=dev )(\S+)' | tr -d "\n")}
-#KERNEL_VERSION="4.19.36"
-KERNEL_VERSION="4.14.127"
-#KERNEL_RELEASE="${KERNEL_VERSION}-mptcp_1.1+f446ba3"
-KERNEL_RELEASE="${KERNEL_VERSION}-mptcp_1.0+7515c39"
-GLORYTUN_UDP_VERSION="db718d59426957eef89357d5b58ae59cae2f8c5d"
+KERNEL_VERSION="4.19.56"
+#KERNEL_VERSION="4.14.110"
+KERNEL_RELEASE="${KERNEL_VERSION}-mptcp_1.1+a289cca"
+#KERNEL_RELEASE="${KERNEL_VERSION}-mptcp_1.0+4c83d3a"
+GLORYTUN_UDP_VERSION="5e89ebc55003b4af395ec58dce301046f9a3e7b7"
 MLVPN_VERSION="8f9720978b28c1954f9f229525333547283316d2"
 OBFS_VERSION="5cbfdcc28cdc912852cc3c99e3c7f5603d337805"
-OMR_ADMIN_VERSION="b42343c80dff1a815bdf932ad1bac3cb5b7ae5f6"
+OMR_ADMIN_VERSION="65abfbf7f83c5bd5ff349a8a087383f671285494"
 V2RAY_VERSION="v1.1.0"
 SHADOWSOCKS_VERSION="3.2.5"
 VPS_DOMAIN=${VPS_DOMAIN:-$(wget -4 -qO- -T 2 hostname.openmptcprouter.com)}
 
-OMR_VERSION="0.996"
+OMR_VERSION="0.9962"
 
 set -e
 umask 0022
 export LC_ALL=C
-
+export PATH=$PATH:/sbin
+export DEBIAN_FRONTEND=noninteractive 
 rm -f /var/lib/dpkg/lock
 
 # Check Linux version
@@ -38,8 +39,8 @@ if test -f /etc/os-release ; then
 else
 	. /usr/lib/os-release
 fi
-if [ "$ID" = "debian" ] && [ "$VERSION_ID" != "9" ]; then
-	echo "This script only work with Debian Stretch (9.x)"
+if [ "$ID" = "debian" ] && [ "$VERSION_ID" != "9" ] && [ "$VERSION_ID" != "10" ]; then
+	echo "This script only work with Debian Stretch (9.x) or Debian Buster (10.x)"
 	exit 1
 elif [ "$ID" = "ubuntu" ] && [ "$VERSION_ID" != "18.04" ]; then
 	echo "This script only work with Ubuntu 18.04"
@@ -68,7 +69,7 @@ elif [ -f /root/openmptcprouter_config.txt ]; then
 fi
 
 apt-get update
-apt-get -y install apt-transport-https
+apt-get -y install apt-transport-https gnupg
 # Add OpenMPTCProuter repo
 echo 'deb https://repo.openmptcprouter.com stretch main' > /etc/apt/sources.list.d/openmptcprouter.list
 cat <<EOF | tee /etc/apt/preferences.d/openmptcprouter.pref
@@ -84,8 +85,10 @@ apt-get update
 apt-get -y install dirmngr patch
 #apt-key adv --keyserver hkp://keys.gnupg.net --recv-keys 379CE192D401AB61
 if [ "$ID" = "debian" ]; then
-	#echo 'deb http://dl.bintray.com/cpaasch/deb jessie main' >> /etc/apt/sources.list
-	echo 'deb http://deb.debian.org/debian stretch-backports main' > /etc/apt/sources.list.d/stretch-backports.list
+	if [ "$VERSION_ID" = "9" ]; then
+		#echo 'deb http://dl.bintray.com/cpaasch/deb jessie main' >> /etc/apt/sources.list
+		echo 'deb http://deb.debian.org/debian stretch-backports main' > /etc/apt/sources.list.d/stretch-backports.list
+	fi
 elif [ "$ID" = "ubuntu" ]; then
 	echo 'deb http://archive.ubuntu.com/ubuntu bionic-backports main' > /etc/apt/sources.list.d/bionic-backports.list
 	echo 'deb http://archive.ubuntu.com/ubuntu bionic universe' > /etc/apt/sources.list.d/bionic-universe.list
@@ -98,8 +101,8 @@ cd /boot
 apt-get -y install rename curl
 rename 's/^bzImage/vmlinuz/s' * >/dev/null 2>&1
 #apt-get -y install linux-mptcp
-DEBIAN_FRONTEND=noninteractive dpkg --force-all -E -i /tmp/linux-image-${KERNEL_RELEASE}_amd64.deb
-DEBIAN_FRONTEND=noninteractive dpkg --force-all -E -i /tmp/linux-headers-${KERNEL_RELEASE}_amd64.deb
+dpkg --force-all -E -i /tmp/linux-image-${KERNEL_RELEASE}_amd64.deb
+dpkg --force-all -E -i /tmp/linux-headers-${KERNEL_RELEASE}_amd64.deb
 
 # Check if mptcp kernel is grub default kernel
 echo "Set MPTCP kernel as grub default..."
@@ -148,7 +151,11 @@ systemctl enable haveged
 
 if [ "$ID" = "debian" ]; then
 	rm -f /var/lib/dpkg/lock
-	apt -y -t stretch-backports install libsodium-dev
+	if [ "$VERSION_ID" = "9" ]; then
+		apt -y -t stretch-backports install libsodium-dev
+	else
+		apt -y install libsodium-dev
+	fi
 elif [ "$ID" = "ubuntu" ]; then
 	rm -f /var/lib/dpkg/lock
 	apt-get -y install libsodium-dev
@@ -299,6 +306,7 @@ if [ "$MLVPN" = "yes" ]; then
 	rm -rf /tmp/mlvpn
 	cd /tmp
 	git clone https://github.com/markfoodyburton/MLVPN.git /tmp/mlvpn
+	#git clone https://github.com/flohoff/MLVPN.git /tmp/mlvpn
 	cd /tmp/mlvpn
 	git checkout ${MLVPN_VERSION}
 	./autogen.sh
@@ -378,7 +386,11 @@ if systemctl -q is-active glorytun-tcp@tun0.service; then
 	systemctl -q stop glorytun-tcp@tun0 > /dev/null 2>&1
 fi
 if [ "$ID" = "debian" ]; then
-	apt -t stretch-backports -y install libsodium-dev
+	if [ "$VERSION_ID" = "9" ]; then
+		apt -t stretch-backports -y install libsodium-dev
+	else
+		apt -y install libsodium-dev
+	fi
 elif [ "$ID" = "ubuntu" ]; then
 	apt-get -y install libsodium-dev
 fi
@@ -540,7 +552,7 @@ if [ "$update" = "0" ]; then
 		echo $MLVPN_PASS
 	fi
 	if [ "$VPS_CERT" = "0" ]; then
-		echo 'Not working domain detected, not able to generate certificate for v2ray.'
+		echo 'No working domain detected, not able to generate certificate for v2ray.'
 		echo 'You can set VPS_DOMAIN to a working domain if you want a certificate.'
 	fi
 	echo '===================================================================================='

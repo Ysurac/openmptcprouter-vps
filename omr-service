@@ -38,7 +38,7 @@ _ping() {
 		-c 1 \
 		-q
 	)
-	[ -n "$ret" ] && echo "$ret" | grep -sq " 0% packet loss" && {
+	[ -n "$ret" ] && echo "$ret" | grep -s " 0% packet loss" > /dev/null && {
 		return
 	}
 	false

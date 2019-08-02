@@ -19,12 +19,12 @@ KERNEL_RELEASE="${KERNEL_VERSION}-mptcp_1.1+a289cca"
 GLORYTUN_UDP_VERSION="5e89ebc55003b4af395ec58dce301046f9a3e7b7"
 MLVPN_VERSION="8f9720978b28c1954f9f229525333547283316d2"
 OBFS_VERSION="5cbfdcc28cdc912852cc3c99e3c7f5603d337805"
-OMR_ADMIN_VERSION="65abfbf7f83c5bd5ff349a8a087383f671285494"
+OMR_ADMIN_VERSION="172a02677857b895539e1e5634dc4aeb6bb2ddfb"
 V2RAY_VERSION="v1.1.0"
 SHADOWSOCKS_VERSION="3.2.5"
-VPS_DOMAIN=${VPS_DOMAIN:-$(wget -4 -qO- -T 2 hostname.openmptcprouter.com)}
+VPS_DOMAIN=${VPS_DOMAIN:-$(wget -4 -qO- -T 2 http://hostname.openmptcprouter.com)}
 
-OMR_VERSION="0.9962"
+OMR_VERSION="0.999"
 
 set -e
 umask 0022
@@ -500,7 +500,7 @@ if [ "$TLS" = "yes" ]; then
 		fi
 		VPS_CERT=1
 	else
-		echo "Not working domain detected..."
+		echo "No working domain detected..."
 	fi
 fi
 
@@ -626,7 +626,7 @@ else
 		fi
 	fi
 	if [ "$VPS_CERT" = "0" ]; then
-		echo 'Not working domain detected, not able to generate certificate for v2ray.'
+		echo 'No working domain detected, not able to generate certificate for v2ray.'
 		echo 'You can set VPS_DOMAIN to a working domain if you want a certificate.'
 	fi
 	echo 'Restarting shorewall...'

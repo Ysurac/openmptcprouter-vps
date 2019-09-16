@@ -24,7 +24,7 @@ V2RAY_VERSION="v1.1.0"
 SHADOWSOCKS_VERSION="3.2.5"
 VPS_DOMAIN=${VPS_DOMAIN:-$(wget -4 -qO- -T 2 http://hostname.openmptcprouter.com)}
 
-OMR_VERSION="0.999"
+OMR_VERSION="0.1000"
 
 set -e
 umask 0022
@@ -447,7 +447,6 @@ sed -i 's:Port 22:Port 65222:g' /etc/ssh/sshd_config
 
 # Remove fail2ban if available
 #systemctl -q disable fail2ban
-
 if [ "$update" = "0" ]; then
 	# Install and configure the firewall using shorewall
 	apt-get -y install shorewall shorewall6
@@ -481,6 +480,15 @@ else
 	wget -O /etc/shorewall6/snat https://www.openmptcprouter.com/server/shorewall6/snat
 	sed -i "s:eth0:$INTERFACE:g" /etc/shorewall6/*
 fi
+if [ "$ID" = "debian" ] && [ "$VERSION_ID" = "10" ]; then
+	update-alternatives --set iptables /usr/sbin/iptables-legacy
+	sed -i 's:DROP_DEFAULT=Drop:DROP_DEFAULT="Broadcast(DROP),Multicast(DROP)":g' /etc/shorewall/shorewall.conf
+	sed -i 's:REJECT_DEFAULT=Reject:REJECT_DEFAULT="Broadcast(DROP),Multicast(DROP)":g' /etc/shorewall/shorewall.conf
+	update-alternatives --set ip6tables /usr/sbin/ip6tables-legacy
+	sed -i 's:DROP_DEFAULT=Drop:DROP_DEFAULT="Broadcast(DROP),Multicast(DROP)":g' /etc/shorewall6/shorewall6.conf
+	sed -i 's:REJECT_DEFAULT=Reject:REJECT_DEFAULT="Broadcast(DROP),Multicast(DROP)":g' /etc/shorewall6/shorewall6.conf
+fi
+
 if [ "$TLS" = "yes" ]; then
 	VPS_CERT=0
 	apt-get -y install dnsutils socat
@@ -619,7 +627,7 @@ else
 			EOF
 			echo '===================================================================================='
 			echo '!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!'
-			echo 'OpenMPTCProuter VPS admin key (you need OpenMPTCProuter >= 0.42):'
+			echo 'OpenMPTCProuter Server key (you need OpenMPTCProuter >= 0.42):'
 			echo $OMR_ADMIN_PASS
 			echo '!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!'
 			echo '===================================================================================='

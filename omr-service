@@ -70,14 +70,26 @@ while true; do
 			allip_udp=$(ip -4 addr show gt-udp-tun0 2>/dev/null | grep inet)
 			[ -d "/sys/class/net/mlvpn0" ] && allip_mlvpn=$(ip -4 addr show mlvpn0 2>/dev/null | grep inet)
 			[ -d "/sys/class/net/tun0" ] && allip_openvpn=$(ip -4 addr show tun0 2>/dev/null | grep inet)
-			allip="$allip_tcp
+			[ -d "/sys/class/net/dsvpn0" ] && allip_dsvpn=$(ip -4 addr show dsvpn0 2>/dev/null | grep inet)
+			if [ -f /etc/openmptcprouter-vps-admin/current-vpn ]; then
+				current_vpn="$(cat /etc/openmptcprouter-vps-admin/current-vpn)"
+				[ "$current_vpn" = "glorytun_tcp" ] && allip="$allip_tcp"
+				[ "$current_vpn" = "glorytun_udp" ] && allip="$allip_udp"
+				[ "$current_vpn" = "mlvpn" ] && allip="$allip_mlvpn"
+				[ "$current_vpn" = "openvpn" ] && allip="$allip_openvpn"
+				[ "$current_vpn" = "dsvpn" ] && allip="$allip_dsvpn"
+			fi
+			if [ -z "$allip" ]; then
+				allip="$allip_tcp
 $allip_udp
 $allip_openvpn
+$allip_dsvpn
 $allip_mlvpn"
+			fi
 			while IFS= read -r inet; do
 				ip=$(echo $inet | awk '{print $2}' | cut -d/ -f1 | tr -d "\n")
 				if [ "$ip" != "" ]; then
-					_ping_range $(echo $ip | sed 's/.1/./' | tr -d "\n")
+					_ping_range $(echo $ip | sed 's/.1$/./' | tr -d "\n")
 					statusr=$?
 					if $(exit $statusr); then
 						_ping $ipd

@@ -14,6 +14,7 @@ cat > /etc/lighttpd/external.conf << 'EOF'
 server.bind="10.255.255.1"
 $SERVER["socket"] == "10.255.254.1:80" { }
 $SERVER["socket"] == "10.255.252.1:80" { }
+$SERVER["socket"] == "10.255.251.1:80" { }
 $SERVER["socket"] == "10.255.253.1:80" { }
 EOF
 systemctl -q restart lighttpd
@@ -32,6 +33,7 @@ interface=gt-tun0
 interface=gt-udp-tun0
 interface=tun0
 interface=mlvpn0
+interface=dsvpn0
 EOF
 systemctl -q restart pihole-FTL
 echo "Done"

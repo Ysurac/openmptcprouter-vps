@@ -1,6 +1,7 @@
 #!/bin/sh
 SHADOWSOCKS_PASS=${SHADOWSOCKS_PASS:-$(head -c 32 /dev/urandom | base64 -w0)}
 GLORYTUN_PASS=${GLORYTUN_PASS:-$(od  -vN "32" -An -tx1 /dev/urandom | tr '[:lower:]' '[:upper:]' | tr -d " \n")}
+DSVPN_PASS=${DSVPN_PASS:-$(od  -vN "32" -An -tx1 /dev/urandom | tr '[:lower:]' '[:upper:]' | tr -d " \n")}
 #NBCPU=${NBCPU:-$(nproc --all | tr -d "\n")}
 NBCPU=${NBCPU:-$(grep -c '^processor' /proc/cpuinfo | tr -d "\n")}
 OBFS=${OBFS:-yes}
@@ -11,20 +12,23 @@ OMR_ADMIN_PASS=${OMR_ADMIN_PASS:-$(od -vN "32" -An -tx1 /dev/urandom | tr '[:low
 MLVPN=${MLVPN:-yes}
 MLVPN_PASS=${MLVPN_PASS:-$(head -c 32 /dev/urandom | base64 -w0)}
 OPENVPN=${OPENVPN:-yes}
+DSVPN=${DSVPN:-yes}
 INTERFACE=${INTERFACE:-$(ip -o -4 route show to default | grep -m 1 -Po '(?<=dev )(\S+)' | tr -d "\n")}
-KERNEL_VERSION="4.19.56"
+KERNEL_VERSION="4.19.67"
 #KERNEL_VERSION="4.14.110"
-KERNEL_RELEASE="${KERNEL_VERSION}-mptcp_1.1+a289cca"
+KERNEL_RELEASE="${KERNEL_VERSION}-mptcp_1.4+4e10ec5"
 #KERNEL_RELEASE="${KERNEL_VERSION}-mptcp_1.0+4c83d3a"
-GLORYTUN_UDP_VERSION="5e89ebc55003b4af395ec58dce301046f9a3e7b7"
+GLORYTUN_UDP_VERSION="d451bc75b0c5784ce3851e8754fb824bffc3bcce"
 MLVPN_VERSION="8f9720978b28c1954f9f229525333547283316d2"
 OBFS_VERSION="5cbfdcc28cdc912852cc3c99e3c7f5603d337805"
-OMR_ADMIN_VERSION="172a02677857b895539e1e5634dc4aeb6bb2ddfb"
-V2RAY_VERSION="v1.1.0"
-SHADOWSOCKS_VERSION="3.2.5"
+OMR_ADMIN_VERSION="bc84d257ef2e47fc3ae4469bb86ee1d8396aa6d8"
+DSVPN_VERSION="57fb1bd5baf87c1e9b03833eb641897cab972895"
+#V2RAY_VERSION="v1.1.0"
+V2RAY_VERSION="v1.1.0-9-g2e56b2b"
+SHADOWSOCKS_VERSION="3.3.1"
 VPS_DOMAIN=${VPS_DOMAIN:-$(wget -4 -qO- -T 2 http://hostname.openmptcprouter.com)}
 
-OMR_VERSION="0.1000"
+OMR_VERSION="0.1001"
 
 set -e
 umask 0022
@@ -32,6 +36,7 @@ export LC_ALL=C
 export PATH=$PATH:/sbin
 export DEBIAN_FRONTEND=noninteractive 
 rm -f /var/lib/dpkg/lock
+rm -f /var/lib/dpkg/lock-frontend
 
 # Check Linux version
 if test -f /etc/os-release ; then
@@ -42,11 +47,11 @@ fi
 if [ "$ID" = "debian" ] && [ "$VERSION_ID" != "9" ] && [ "$VERSION_ID" != "10" ]; then
 	echo "This script only work with Debian Stretch (9.x) or Debian Buster (10.x)"
 	exit 1
-elif [ "$ID" = "ubuntu" ] && [ "$VERSION_ID" != "18.04" ]; then
-	echo "This script only work with Ubuntu 18.04"
+elif [ "$ID" = "ubuntu" ] && [ "$VERSION_ID" != "18.04" ] && [ "$VERSION_ID" != "19.04" ]; then
+	echo "This script only work with Ubuntu 18.04 or Ubuntu 19.04"
 	exit 1
 elif [ "$ID" != "debian" ] && [ "$ID" != "ubuntu" ]; then
-	echo "This script only work with Ubuntu 18.04 or Debian Stretch (9.x)"
+	echo "This script only work with Ubuntu 18.04, Ubuntu 19.04, Debian Stretch (9.x) or Debian Buster (10.x)"
 	exit 1
 fi
 
@@ -101,8 +106,11 @@ cd /boot
 apt-get -y install rename curl
 rename 's/^bzImage/vmlinuz/s' * >/dev/null 2>&1
 #apt-get -y install linux-mptcp
-dpkg --force-all -E -i /tmp/linux-image-${KERNEL_RELEASE}_amd64.deb
-dpkg --force-all -E -i /tmp/linux-headers-${KERNEL_RELEASE}_amd64.deb
+#dpkg --remove --force-remove-reinstreq linux-image-${KERNEL_VERSION}-mptcp
+#dpkg --remove --force-remove-reinstreq linux-headers-${KERNEL_VERSION}-mptcp
+dpkg --remove --force-remove-reinstreq linux-image-${KERNEL_VERSION}-mptcp
+dpkg --force-all -i -B /tmp/linux-image-${KERNEL_RELEASE}_amd64.deb
+dpkg --force-all -i -B /tmp/linux-headers-${KERNEL_RELEASE}_amd64.deb
 
 # Check if mptcp kernel is grub default kernel
 echo "Set MPTCP kernel as grub default..."
@@ -189,6 +197,10 @@ fi
 if ! grep -q bbr /etc/modules ; then
 	echo tcp_bbr >> /etc/modules
 fi
+# Load mctcpdesync Congestion module at boot time
+if ! grep -q mctcp_desync /etc/modules ; then
+	echo mctcp_desync >> /etc/modules
+fi
 
 if systemctl -q is-active omr-admin.service; then
 	systemctl -q stop omr-admin > /dev/null 2>&1
@@ -227,6 +239,7 @@ if [ "$update" = "0" ]; then
 	SHADOWSOCKS_PASS_JSON=$(echo $SHADOWSOCKS_PASS | sed 's/+/-/g; s/\//_/g;')
 	sed -i "s:MySecretKey:$SHADOWSOCKS_PASS_JSON:g" /etc/shadowsocks-libev/config.json
 fi
+[ ! -f /etc/shadowsocks-libev/local.acl ] && touch /etc/shadowsocks-libev/local.acl
 sed -i 's:aes-256-cfb:chacha20:g' /etc/shadowsocks-libev/config.json
 sed -i 's:json:json --no-delay:g' /lib/systemd/system/shadowsocks-libev-server@.service
 systemctl disable shadowsocks-libev
@@ -263,7 +276,8 @@ fi
 if [ "$V2RAY" = "yes" ]; then
 	echo "Install v2ray plugin"
 	rm -rf /tmp/v2ray-plugin-linux-amd64-${V2RAY_VERSION}.tar.gz
-	wget -O /tmp/v2ray-plugin-linux-amd64-${V2RAY_VERSION}.tar.gz https://github.com/shadowsocks/v2ray-plugin/releases/download/${V2RAY_VERSION}/v2ray-plugin-linux-amd64-${V2RAY_VERSION}.tar.gz
+	#wget -O /tmp/v2ray-plugin-linux-amd64-${V2RAY_VERSION}.tar.gz https://github.com/shadowsocks/v2ray-plugin/releases/download/${V2RAY_VERSION}/v2ray-plugin-linux-amd64-${V2RAY_VERSION}.tar.gz
+	wget -O /tmp/v2ray-plugin-linux-amd64-${V2RAY_VERSION}.tar.gz https://www.openmptcprouter.com/server/bin/v2ray-plugin-linux-amd64-${V2RAY_VERSION}.tar.gz
 	cd /tmp
 	tar xzvf v2ray-plugin-linux-amd64-${V2RAY_VERSION}.tar.gz
 	cp v2ray-plugin_linux_amd64 /usr/local/bin/v2ray-plugin
@@ -307,6 +321,7 @@ if [ "$MLVPN" = "yes" ]; then
 	cd /tmp
 	git clone https://github.com/markfoodyburton/MLVPN.git /tmp/mlvpn
 	#git clone https://github.com/flohoff/MLVPN.git /tmp/mlvpn
+	#git clone https://github.com/link4all/MLVPN.git /tmp/mlvpn
 	cd /tmp/mlvpn
 	git checkout ${MLVPN_VERSION}
 	./autogen.sh
@@ -314,6 +329,7 @@ if [ "$MLVPN" = "yes" ]; then
 	make
 	make install
 	wget -O /lib/systemd/network/mlvpn.network https://www.openmptcprouter.com/server/mlvpn.network
+	wget -O /lib/systemd/system/mlvpn@.service https://www.openmptcprouter.com/server/mlvpn@.service.in
 	mkdir -p /etc/mlvpn
 	if [ "$mlvpnupdate" = "0" ]; then
 		wget -O /etc/mlvpn/mlvpn0.conf https://www.openmptcprouter.com/server/mlvpn0.conf
@@ -381,6 +397,34 @@ systemctl enable systemd-networkd.service
 cd /tmp
 rm -rf /tmp/glorytun-udp
 
+if [ "$DSVPN" = "yes" ]; then
+	echo 'A Dead Simple VPN'
+	# Install A Dead Simple VPN
+	if systemctl -q is-active dsvpn-server.service; then
+		systemctl -q stop dsvpn-server > /dev/null 2>&1
+	fi
+	rm -f /var/lib/dpkg/lock
+	apt-get install -y --no-install-recommends build-essential git ca-certificates
+	rm -rf /tmp/dsvpn
+	cd /tmp
+	git clone https://github.com/jedisct1/dsvpn.git /tmp/dsvpn
+	cd /tmp/dsvpn
+	git checkout ${DSVPN_VERSION}
+	wget https://raw.githubusercontent.com/Ysurac/openmptcprouter-feeds/13b8d06d41f92f5599cdf1f453771c64d67dda7a/dsvpn/patches/nofirewall.patch
+	patch -p1 < nofirewall.patch
+	make CFLAGS='-DNO_DEFAULT_ROUTES -DNO_DEFAULT_FIREWALL'
+	make install
+	rm -f /lib/systemd/system/dsvpn/*
+	wget -O /lib/systemd/system/dsvpn-server.service https://www.openmptcprouter.com/server/dsvpn-server.service.in
+	mkdir -p /etc/dsvpn
+	if [ "$update" = "0" ]; then
+		echo "$DSVPN_PASS" > /etc/dsvpn/dsvpn.key
+	fi
+	systemctl enable dsvpn-server.service
+	cd /tmp
+	rm -rf /tmp/dsvpn
+fi
+
 # Install Glorytun TCP
 if systemctl -q is-active glorytun-tcp@tun0.service; then
 	systemctl -q stop glorytun-tcp@tun0 > /dev/null 2>&1
@@ -447,6 +491,7 @@ sed -i 's:Port 22:Port 65222:g' /etc/ssh/sshd_config
 
 # Remove fail2ban if available
 #systemctl -q disable fail2ban
+
 if [ "$update" = "0" ]; then
 	# Install and configure the firewall using shorewall
 	apt-get -y install shorewall shorewall6
@@ -536,12 +581,12 @@ fi
 if [ "$update" = "0" ]; then
 	# Display important info
 	echo '===================================================================================='
-	echo "OpenMPTCProuter VPS $OMR_VERSION is now installed !"
+	echo "OpenMPTCProuter Server $OMR_VERSION is now installed !"
 	echo 'SSH port: 65222 (instead of port 22)'
 	if [ "$OMR_ADMIN" = "yes" ]; then
 		echo '===================================================================================='
 		echo '!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!'
-		echo 'OpenMPTCProuter VPS admin key (you need OpenMPTCProuter >= 0.42):'
+		echo 'OpenMPTCProuter Server key (you need OpenMPTCProuter >= 0.42):'
 		echo $OMR_ADMIN_PASS
 		echo '!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!'
 		echo '===================================================================================='
@@ -554,6 +599,11 @@ if [ "$update" = "0" ]; then
 	echo 'Glorytun encryption: chacha20'
 	echo 'Your glorytun key: '
 	echo $GLORYTUN_PASS
+	if [ "$DSVPN" = "yes" ]; then
+		echo 'A Dead Simple VPN port: 65011'
+		echo 'A Dead Simple VPN key: '
+		echo $DSVPN_PASS
+	fi
 	if [ "$MLVPN" = "yes" ]; then
 		echo 'MLVPN first port: 65201'
 		echo 'Your MLVPN password: '
@@ -582,6 +632,12 @@ if [ "$update" = "0" ]; then
 	Glorytun encryption: chacha20
 	Your glorytun key: ${GLORYTUN_PASS}
 	EOF
+	if [ "$DSVPN" = "yes" ]; then
+		cat >> /root/openmptcprouter_config.txt <<-EOF
+		A Dead Simple VPN port: 65011
+		A Dead Simple VPN key: ${DSVPN_PASS}
+		EOF
+	fi
 	if [ "$MLVPN" = "yes" ]; then
 		cat >> /root/openmptcprouter_config.txt <<-EOF
 		MLVPN first port: 65201'
@@ -590,12 +646,12 @@ if [ "$update" = "0" ]; then
 	fi
 	if [ "$OMR_ADMIN" = "yes" ]; then
 		cat >> /root/openmptcprouter_config.txt <<-EOF
-		Your OpenMPTCProuter VPS Admin key: $OMR_ADMIN_PASS
+		Your OpenMPTCProuter Server key: $OMR_ADMIN_PASS
 		EOF
 	fi
 else
 	echo '===================================================================================='
-	echo "OpenMPTCProuter VPS is now updated to version $OMR_VERSION !"
+	echo "OpenMPTCProuter Server is now updated to version $OMR_VERSION !"
 	echo 'Keys are not changed, shorewall rules files preserved'
 	echo 'You need OpenMPTCProuter >= 0.30'
 	echo '===================================================================================='
@@ -605,6 +661,11 @@ else
 	if [ "$MLVPN" = "yes" ]; then
 		echo 'Restarting mlvpn...'
 		systemctl -q start mlvpn@mlvpn0
+		echo 'done'
+	fi
+	if [ "$DSVPN" = "yes" ]; then
+		echo 'Restarting dsvpn...'
+		systemctl -q start dsvpn-server
 		echo 'done'
 	fi
 	echo 'Restarting glorytun and omr...'
@@ -623,7 +684,7 @@ else
 		echo 'done'
 		if ! grep -q 'VPS Admin key' /root/openmptcprouter_config.txt ; then
 			cat >> /root/openmptcprouter_config.txt <<-EOF
-			Your OpenMPTCProuter VPS Admin key: $OMR_ADMIN_PASS
+			Your OpenMPTCProuter Server key: $OMR_ADMIN_PASS
 			EOF
 			echo '===================================================================================='
 			echo '!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!'

@@ -30,18 +30,18 @@ DNS(ACCEPT)     $FW             net
 #
 #       Allow Ping from/to the VPN
 #
-Ping(ACCEPT)    vpn             $FW
-Ping(ACCEPT)    vpn             net
-Ping(ACCEPT)    $FW             vpn
+ACCEPT		vpn		$FW		ipv6-icmp
+ACCEPT		vpn		net		ipv6-icmp
+ACCEPT		$FW		vpn		ipv6-icmp
 #
 #       Allow Ping from the firewall to the network
 #
-Ping(ACCEPT)    $FW             net
+ACCEPT		$FW		net		ipv6-icmp
 #
 # Drop Ping from the "bad" net zone.. and prevent your log from being flooded..
 #
-#Ping(DROP)     net             $FW
-Ping(ACCEPT)    net             $FW
+#DROP		net             $FW		ipv6-icmp
+ACCEPT		net		$FW		ipv6-icmp
 #
 #	Accept connection from port > 65000 for shadowsocks and glorytun on the firewall
 #
@@ -54,7 +54,8 @@ ACCEPT          net             $FW             tcp     65222
 #
 #	DHCP forward to the VPN from the firewall
 #
-DHCPfwd(ACCEPT)	$FW		vpn
+ACCEPT		$FW		vpn		udp	53
+ACCEPT		vpn		net		udp	53
 #
 #	Redirect all port from 1 to 64999 to the VPN client from the network
 #

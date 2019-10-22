@@ -1,7 +1,7 @@
 #!/bin/sh
 SHADOWSOCKS_PASS=${SHADOWSOCKS_PASS:-$(head -c 32 /dev/urandom | base64 -w0)}
-GLORYTUN_PASS=${GLORYTUN_PASS:-$(od  -vN "32" -An -tx1 /dev/urandom | tr '[:lower:]' '[:upper:]' | tr -d " \n")}
-DSVPN_PASS=${DSVPN_PASS:-$(od  -vN "32" -An -tx1 /dev/urandom | tr '[:lower:]' '[:upper:]' | tr -d " \n")}
+GLORYTUN_PASS=${GLORYTUN_PASS:-$(od -vN "32" -An -tx1 /dev/urandom | tr '[:lower:]' '[:upper:]' | tr -d " \n")}
+DSVPN_PASS=${DSVPN_PASS:-$(od -vN "32" -An -tx1 /dev/urandom | tr '[:lower:]' '[:upper:]' | tr -d " \n")}
 #NBCPU=${NBCPU:-$(nproc --all | tr -d "\n")}
 NBCPU=${NBCPU:-$(grep -c '^processor' /proc/cpuinfo | tr -d "\n")}
 OBFS=${OBFS:-yes}
@@ -15,9 +15,8 @@ OPENVPN=${OPENVPN:-yes}
 DSVPN=${DSVPN:-yes}
 INTERFACE=${INTERFACE:-$(ip -o -4 route show to default | grep -m 1 -Po '(?<=dev )(\S+)' | tr -d "\n")}
 KERNEL_VERSION="4.19.67"
-#KERNEL_VERSION="4.14.110"
-KERNEL_RELEASE="${KERNEL_VERSION}-mptcp_1.4+4e10ec5"
-#KERNEL_RELEASE="${KERNEL_VERSION}-mptcp_1.0+4c83d3a"
+KERNEL_PACKAGE_VERSION="1.4+4e10ec5"
+KERNEL_RELEASE="${KERNEL_VERSION}-mptcp_${KERNEL_PACKAGE_VERSION}"
 GLORYTUN_UDP_VERSION="d451bc75b0c5784ce3851e8754fb824bffc3bcce"
 MLVPN_VERSION="8f9720978b28c1954f9f229525333547283316d2"
 OBFS_VERSION="5cbfdcc28cdc912852cc3c99e3c7f5603d337805"
@@ -108,9 +107,12 @@ rename 's/^bzImage/vmlinuz/s' * >/dev/null 2>&1
 #apt-get -y install linux-mptcp
 #dpkg --remove --force-remove-reinstreq linux-image-${KERNEL_VERSION}-mptcp
 #dpkg --remove --force-remove-reinstreq linux-headers-${KERNEL_VERSION}-mptcp
-dpkg --remove --force-remove-reinstreq linux-image-${KERNEL_VERSION}-mptcp
-dpkg --force-all -i -B /tmp/linux-image-${KERNEL_RELEASE}_amd64.deb
-dpkg --force-all -i -B /tmp/linux-headers-${KERNEL_RELEASE}_amd64.deb
+if [ "$(dpkg -l | grep linux-image-${KERNEL_VERSION} | grep ${KERNEL_PACKAGE_VERSION})" = "" ]; then
+	echo "Install kernel linux-image-${KERNEL_RELEASE}"
+	echo "if kernel install fail run: dpkg --remove --force-remove-reinstreq linux-image-${KERNEL_VERSION}-mptcp"
+	dpkg --force-all -i -B /tmp/linux-image-${KERNEL_RELEASE}_amd64.deb
+	dpkg --force-all -i -B /tmp/linux-headers-${KERNEL_RELEASE}_amd64.deb
+fi
 
 # Check if mptcp kernel is grub default kernel
 echo "Set MPTCP kernel as grub default..."
@@ -153,12 +155,15 @@ patch -p1 < 020-NOCRYPTO.patch
 #cd /tmp
 #rm -rf /tmp/libbpf
 rm -f /var/lib/dpkg/lock
+rm -f /var/lib/dpkg/lock-frontend
 apt-get -y install --no-install-recommends devscripts equivs apg libcap2-bin libpam-cap libc-ares2 libc-ares-dev libev4 haveged
 rm -f /var/lib/dpkg/lock
+rm -f /var/lib/dpkg/lock-frontend
 systemctl enable haveged
 
 if [ "$ID" = "debian" ]; then
 	rm -f /var/lib/dpkg/lock
+	rm -f /var/lib/dpkg/lock-frontend
 	if [ "$VERSION_ID" = "9" ]; then
 		apt -y -t stretch-backports install libsodium-dev
 	else
@@ -166,15 +171,19 @@ if [ "$ID" = "debian" ]; then
 	fi
 elif [ "$ID" = "ubuntu" ]; then
 	rm -f /var/lib/dpkg/lock
+	rm -f /var/lib/dpkg/lock-frontend
 	apt-get -y install libsodium-dev
 	systemctl enable haveged
 fi
 cd /tmp/shadowsocks-libev-${SHADOWSOCKS_VERSION}
 rm -f /var/lib/dpkg/lock
+rm -f /var/lib/dpkg/lock-frontend
 mk-build-deps --install --tool "apt-get -o Debug::pkgProblemResolver=yes --no-install-recommends -y"
 rm -f /var/lib/dpkg/lock
+rm -f /var/lib/dpkg/lock-frontend
 dpkg-buildpackage -b -us -uc
 rm -f /var/lib/dpkg/lock
+rm -f /var/lib/dpkg/lock-frontend
 cd /tmp
 dpkg -i shadowsocks-libev_${SHADOWSOCKS_VERSION}-1_amd64.deb
 #mkdir -p /usr/lib/shadowsocks-libev
@@ -259,6 +268,7 @@ if [ "$OBFS" = "yes" ]; then
 	rm -rf /tmp/simple-obfs
 	cd /tmp
 	rm -f /var/lib/dpkg/lock
+	rm -f /var/lib/dpkg/lock-frontend
 	apt-get install -y --no-install-recommends build-essential autoconf libtool libssl-dev libpcre3-dev libev-dev asciidoc xmlto automake git ca-certificates
 	git clone https://github.com/shadowsocks/simple-obfs.git /tmp/simple-obfs
 	cd /tmp/simple-obfs
@@ -316,6 +326,7 @@ if [ "$MLVPN" = "yes" ]; then
 		mlvpnupdate="1"
 	fi
 	rm -f /var/lib/dpkg/lock
+	rm -f /var/lib/dpkg/lock-frontend
 	apt-get -y install build-essential pkg-config autoconf automake libpcap-dev unzip git
 	rm -rf /tmp/mlvpn
 	cd /tmp
@@ -353,6 +364,7 @@ fi
 if [ "$OPENVPN" = "yes" ]; then
 	echo "Install OpenVPN"
 	rm -f /var/lib/dpkg/lock
+	rm -f /var/lib/dpkg/lock-frontend
 	apt-get -y install openvpn
 	wget -O /lib/systemd/network/openvpn.network https://www.openmptcprouter.com/server/openvpn.network
 	if [ ! -f "/etc/openvpn/server/static.key" ]; then
@@ -369,6 +381,7 @@ if systemctl -q is-active glorytun-udp@tun0.service; then
 	systemctl -q stop glorytun-udp@tun0 > /dev/null 2>&1
 fi
 rm -f /var/lib/dpkg/lock
+rm -f /var/lib/dpkg/lock-frontend
 apt-get install -y --no-install-recommends build-essential git ca-certificates meson pkg-config
 rm -rf /tmp/glorytun-udp
 cd /tmp
@@ -387,7 +400,7 @@ wget -O /lib/systemd/system/glorytun-udp@.service https://www.openmptcprouter.co
 wget -O /lib/systemd/network/glorytun-udp.network https://www.openmptcprouter.com/server/glorytun-udp.network
 mkdir -p /etc/glorytun-udp
 wget -O /etc/glorytun-udp/tun0 https://www.openmptcprouter.com/server/tun0.glorytun-udp
-if [ "$update" = "0" ]; then
+if [ "$update" = "0" ] || [ ! -f /etc/glorytun-udp/tun0.key ]; then
 	echo "$GLORYTUN_PASS" > /etc/glorytun-udp/tun0.key
 elif [ ! -f /etc/glorytun-udp/tun0.key ] && [ -f /etc/glorytun-tcp/tun0.key ]; then
 	cp /etc/glorytun-tcp/tun0.key /etc/glorytun-udp/tun0.key
@@ -404,6 +417,7 @@ if [ "$DSVPN" = "yes" ]; then
 		systemctl -q stop dsvpn-server > /dev/null 2>&1
 	fi
 	rm -f /var/lib/dpkg/lock
+	rm -f /var/lib/dpkg/lock-frontend
 	apt-get install -y --no-install-recommends build-essential git ca-certificates
 	rm -rf /tmp/dsvpn
 	cd /tmp
@@ -417,7 +431,7 @@ if [ "$DSVPN" = "yes" ]; then
 	rm -f /lib/systemd/system/dsvpn/*
 	wget -O /lib/systemd/system/dsvpn-server.service https://www.openmptcprouter.com/server/dsvpn-server.service.in
 	mkdir -p /etc/dsvpn
-	if [ "$update" = "0" ]; then
+	if [ "$update" = "0" ] || [ ! -f /etc/dsvpn/dsvpn.key ]; then
 		echo "$DSVPN_PASS" > /etc/dsvpn/dsvpn.key
 	fi
 	systemctl enable dsvpn-server.service
@@ -439,6 +453,7 @@ elif [ "$ID" = "ubuntu" ]; then
 	apt-get -y install libsodium-dev
 fi
 rm -f /var/lib/dpkg/lock
+rm -f /var/lib/dpkg/lock-frontend
 apt-get -y install build-essential pkg-config autoconf automake
 rm -rf /tmp/glorytun-0.0.35
 cd /tmp
@@ -527,9 +542,11 @@ else
 fi
 if [ "$ID" = "debian" ] && [ "$VERSION_ID" = "10" ]; then
 	update-alternatives --set iptables /usr/sbin/iptables-legacy
+	update-alternatives --set ip6tables /usr/sbin/ip6tables-legacy
+fi
+if ([ "$ID" = "debian" ] && [ "$VERSION_ID" = "10" ]) || ([ "$ID" = "ubuntu" ] && [ "$VERSION_ID" = "19.04" ]); then
 	sed -i 's:DROP_DEFAULT=Drop:DROP_DEFAULT="Broadcast(DROP),Multicast(DROP)":g' /etc/shorewall/shorewall.conf
 	sed -i 's:REJECT_DEFAULT=Reject:REJECT_DEFAULT="Broadcast(DROP),Multicast(DROP)":g' /etc/shorewall/shorewall.conf
-	update-alternatives --set ip6tables /usr/sbin/ip6tables-legacy
 	sed -i 's:DROP_DEFAULT=Drop:DROP_DEFAULT="Broadcast(DROP),Multicast(DROP)":g' /etc/shorewall6/shorewall6.conf
 	sed -i 's:REJECT_DEFAULT=Reject:REJECT_DEFAULT="Broadcast(DROP),Multicast(DROP)":g' /etc/shorewall6/shorewall6.conf
 fi

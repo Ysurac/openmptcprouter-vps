@@ -1,5 +1,5 @@
 [Match]
-Name=tun*
+Name=tun0
 
 [Network]
 Description=OpenVPN tunnel

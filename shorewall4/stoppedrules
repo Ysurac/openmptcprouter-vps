@@ -23,4 +23,6 @@ ACCEPT          dsvpn0		-
 ACCEPT          -               dsvpn0
 ACCEPT          tun0		-
 ACCEPT          -               tun0
+ACCEPT          tun1		-
+ACCEPT          -               tun1
 

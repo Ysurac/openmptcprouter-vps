@@ -19,5 +19,6 @@ vpn	gt-tun0		nosmurfs,routefilter,tcpflags
 vpn	gt-udp-tun0	nosmurfs,routefilter,tcpflags
 vpn	mlvpn0		nosmurfs,routefilter,tcpflags
 vpn	tun0		nosmurfs,routefilter,tcpflags
+vpn	tun1		nosmurfs,routefilter,tcpflags
 vpn	dsvpn0		nosmurfs,routefilter,tcpflags
 

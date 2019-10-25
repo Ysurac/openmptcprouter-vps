@@ -14,20 +14,22 @@ MLVPN_PASS=${MLVPN_PASS:-$(head -c 32 /dev/urandom | base64 -w0)}
 OPENVPN=${OPENVPN:-yes}
 DSVPN=${DSVPN:-yes}
 INTERFACE=${INTERFACE:-$(ip -o -4 route show to default | grep -m 1 -Po '(?<=dev )(\S+)' | tr -d "\n")}
-KERNEL_VERSION="4.19.67"
-KERNEL_PACKAGE_VERSION="1.4+4e10ec5"
+KERNEL_VERSION="4.19.78"
+KERNEL_PACKAGE_VERSION="1.5+4e10ec5"
 KERNEL_RELEASE="${KERNEL_VERSION}-mptcp_${KERNEL_PACKAGE_VERSION}"
-GLORYTUN_UDP_VERSION="d451bc75b0c5784ce3851e8754fb824bffc3bcce"
+GLORYTUN_UDP_VERSION="8bd936929e98b202c0988c6d9757903661750a7c"
 MLVPN_VERSION="8f9720978b28c1954f9f229525333547283316d2"
 OBFS_VERSION="5cbfdcc28cdc912852cc3c99e3c7f5603d337805"
-OMR_ADMIN_VERSION="bc84d257ef2e47fc3ae4469bb86ee1d8396aa6d8"
+OMR_ADMIN_VERSION="933ed4a158540f64a61ee808e824fd6da00c1671"
 DSVPN_VERSION="57fb1bd5baf87c1e9b03833eb641897cab972895"
 #V2RAY_VERSION="v1.1.0"
 V2RAY_VERSION="v1.1.0-9-g2e56b2b"
-SHADOWSOCKS_VERSION="3.3.1"
+EASYRSA_VERSION="3.0.6"
+SHADOWSOCKS_VERSION="3.3.2"
 VPS_DOMAIN=${VPS_DOMAIN:-$(wget -4 -qO- -T 2 http://hostname.openmptcprouter.com)}
+VPSPATH="server-test"
 
-OMR_VERSION="0.1001"
+OMR_VERSION="0.1002"
 
 set -e
 umask 0022
@@ -116,7 +118,7 @@ fi
 
 # Check if mptcp kernel is grub default kernel
 echo "Set MPTCP kernel as grub default..."
-wget -O /tmp/update-grub.sh https://www.openmptcprouter.com/server/update-grub.sh
+wget -O /tmp/update-grub.sh https://www.openmptcprouter.com/${VPSPATH}/update-grub.sh
 cd /tmp
 bash update-grub.sh ${KERNEL_VERSION}-mptcp
 bash update-grub.sh ${KERNEL_RELEASE}
@@ -218,9 +220,10 @@ fi
 if [ "$OMR_ADMIN" = "yes" ]; then
 	echo 'Install OpenMPTCProuter VPS Admin'
 	apt-get -y install unzip gunicorn python3-flask-restful python3-openssl python3-pip python3-setuptools python3-wheel
-	pip3 -q install flask-jwt-simple
+	pip3 -q install flask-jwt-simple netjsonconfig
 	mkdir -p /etc/openmptcprouter-vps-admin
-	wget -O /lib/systemd/system/omr-admin.service https://www.openmptcprouter.com/server/omr-admin.service.in
+	mkdir -p /var/opt/openmptcprouter
+	wget -O /lib/systemd/system/omr-admin.service https://www.openmptcprouter.com/${VPSPATH}/omr-admin.service.in
 	wget -O /tmp/openmptcprouter-vps-admin.zip https://github.com/Ysurac/openmptcprouter-vps-admin/archive/${OMR_ADMIN_VERSION}.zip
 	cd /tmp
 	unzip -q -o openmptcprouter-vps-admin.zip
@@ -240,11 +243,11 @@ if [ "$OMR_ADMIN" = "yes" ]; then
 fi
 
 # Get shadowsocks optimization
-wget -O /etc/sysctl.d/90-shadowsocks.conf https://www.openmptcprouter.com/server/shadowsocks.conf
+wget -O /etc/sysctl.d/90-shadowsocks.conf https://www.openmptcprouter.com/${VPSPATH}/shadowsocks.conf
 
 # Install shadowsocks config and add a shadowsocks by CPU
 if [ "$update" = "0" ]; then
-	wget -O /etc/shadowsocks-libev/config.json https://www.openmptcprouter.com/server/config.json
+	wget -O /etc/shadowsocks-libev/config.json https://www.openmptcprouter.com/${VPSPATH}/config.json
 	SHADOWSOCKS_PASS_JSON=$(echo $SHADOWSOCKS_PASS | sed 's/+/-/g; s/\//_/g;')
 	sed -i "s:MySecretKey:$SHADOWSOCKS_PASS_JSON:g" /etc/shadowsocks-libev/config.json
 fi
@@ -287,7 +290,7 @@ if [ "$V2RAY" = "yes" ]; then
 	echo "Install v2ray plugin"
 	rm -rf /tmp/v2ray-plugin-linux-amd64-${V2RAY_VERSION}.tar.gz
 	#wget -O /tmp/v2ray-plugin-linux-amd64-${V2RAY_VERSION}.tar.gz https://github.com/shadowsocks/v2ray-plugin/releases/download/${V2RAY_VERSION}/v2ray-plugin-linux-amd64-${V2RAY_VERSION}.tar.gz
-	wget -O /tmp/v2ray-plugin-linux-amd64-${V2RAY_VERSION}.tar.gz https://www.openmptcprouter.com/server/bin/v2ray-plugin-linux-amd64-${V2RAY_VERSION}.tar.gz
+	wget -O /tmp/v2ray-plugin-linux-amd64-${V2RAY_VERSION}.tar.gz https://www.openmptcprouter.com/${VPSPATH}/bin/v2ray-plugin-linux-amd64-${V2RAY_VERSION}.tar.gz
 	cd /tmp
 	tar xzvf v2ray-plugin-linux-amd64-${V2RAY_VERSION}.tar.gz
 	cp v2ray-plugin_linux_amd64 /usr/local/bin/v2ray-plugin
@@ -339,11 +342,11 @@ if [ "$MLVPN" = "yes" ]; then
 	./configure --sysconfdir=/etc
 	make
 	make install
-	wget -O /lib/systemd/network/mlvpn.network https://www.openmptcprouter.com/server/mlvpn.network
-	wget -O /lib/systemd/system/mlvpn@.service https://www.openmptcprouter.com/server/mlvpn@.service.in
+	wget -O /lib/systemd/network/mlvpn.network https://www.openmptcprouter.com/${VPSPATH}/mlvpn.network
+	wget -O /lib/systemd/system/mlvpn@.service https://www.openmptcprouter.com/${VPSPATH}/mlvpn@.service.in
 	mkdir -p /etc/mlvpn
 	if [ "$mlvpnupdate" = "0" ]; then
-		wget -O /etc/mlvpn/mlvpn0.conf https://www.openmptcprouter.com/server/mlvpn0.conf
+		wget -O /etc/mlvpn/mlvpn0.conf https://www.openmptcprouter.com/${VPSPATH}/mlvpn0.conf
 		sed -i "s:MLVPN_PASS:$MLVPN_PASS:" /etc/mlvpn/mlvpn0.conf
 	fi
 	chmod 0600 /etc/mlvpn/mlvpn0.conf
@@ -366,13 +369,29 @@ if [ "$OPENVPN" = "yes" ]; then
 	rm -f /var/lib/dpkg/lock
 	rm -f /var/lib/dpkg/lock-frontend
 	apt-get -y install openvpn
-	wget -O /lib/systemd/network/openvpn.network https://www.openmptcprouter.com/server/openvpn.network
+	wget -O /lib/systemd/network/openvpn.network https://www.openmptcprouter.com/${VPSPATH}/openvpn.network
 	if [ ! -f "/etc/openvpn/server/static.key" ]; then
-		wget -O /etc/openvpn/tun0.conf https://www.openmptcprouter.com/server/openvpn-tun0.conf
+		wget -O /etc/openvpn/tun0.conf https://www.openmptcprouter.com/${VPSPATH}/openvpn-tun0.conf
 		cd /etc/openvpn/server
 		openvpn --genkey --secret static.key
 	fi
+	if [ ! -f "/etc/openvpn/server/server.crt" ]; then
+		openssl dhparam -out /etc/openvpn/server/dh2048.pem 2048
+		wget -O /tmp/EasyRSA-unix-v${EASYRSA_VERSION}.tgz https://github.com/OpenVPN/easy-rsa/releases/download/v3.0.6/EasyRSA-unix-v${EASYRSA_VERSION}.tgz
+		cd /tmp
+		tar xzvf EasyRSA-unix-v${EASYRSA_VERSION}.tgz
+		cd /tmp/EasyRSA-v${EASYRSA_VERSION}
+		./easyrsa init-pki
+		./easyrsa --batch build-ca nopass
+		EASYRSA_CERT_EXPIRE=3650 ./easyrsa build-server-full server nopass
+		EASYRSA_CERT_EXPIRE=3650 ./easyrsa build-client-full "client" nopass
+		EASYRSA_CRL_DAYS=3650 ./easyrsa gen-crl
+		cp pki/ca.crt pki/private/ca.key pki/issued/server.crt pki/private/server.key pki/crl.pem /etc/openvpn/server
+		cp pki/issued/client.crt pki/private/client.key /etc/openvpn/client
+		wget -O /etc/openvpn/tun1.conf https://www.openmptcprouter.com/${VPSPATH}/openvpn-tun1.conf
+	fi
 	systemctl enable openvpn@tun0.service
+	systemctl enable openvpn@tun1.service
 fi
 
 echo 'Glorytun UDP'
@@ -394,12 +413,12 @@ ninja -C build install
 sed -i 's:EmitDNS=yes:EmitDNS=no:g' /lib/systemd/network/glorytun.network
 rm /lib/systemd/system/glorytun*
 rm /lib/systemd/network/glorytun*
-wget -O /usr/local/bin/glorytun-udp-run https://www.openmptcprouter.com/server/glorytun-udp-run
+wget -O /usr/local/bin/glorytun-udp-run https://www.openmptcprouter.com/${VPSPATH}/glorytun-udp-run
 chmod 755 /usr/local/bin/glorytun-udp-run
-wget -O /lib/systemd/system/glorytun-udp@.service https://www.openmptcprouter.com/server/glorytun-udp%40.service.in
-wget -O /lib/systemd/network/glorytun-udp.network https://www.openmptcprouter.com/server/glorytun-udp.network
+wget -O /lib/systemd/system/glorytun-udp@.service https://www.openmptcprouter.com/${VPSPATH}/glorytun-udp%40.service.in
+wget -O /lib/systemd/network/glorytun-udp.network https://www.openmptcprouter.com/${VPSPATH}/glorytun-udp.network
 mkdir -p /etc/glorytun-udp
-wget -O /etc/glorytun-udp/tun0 https://www.openmptcprouter.com/server/tun0.glorytun-udp
+wget -O /etc/glorytun-udp/tun0 https://www.openmptcprouter.com/${VPSPATH}/tun0.glorytun-udp
 if [ "$update" = "0" ] || [ ! -f /etc/glorytun-udp/tun0.key ]; then
 	echo "$GLORYTUN_PASS" > /etc/glorytun-udp/tun0.key
 elif [ ! -f /etc/glorytun-udp/tun0.key ] && [ -f /etc/glorytun-tcp/tun0.key ]; then
@@ -429,7 +448,7 @@ if [ "$DSVPN" = "yes" ]; then
 	make CFLAGS='-DNO_DEFAULT_ROUTES -DNO_DEFAULT_FIREWALL'
 	make install
 	rm -f /lib/systemd/system/dsvpn/*
-	wget -O /lib/systemd/system/dsvpn-server.service https://www.openmptcprouter.com/server/dsvpn-server.service.in
+	wget -O /lib/systemd/system/dsvpn-server.service https://www.openmptcprouter.com/${VPSPATH}/dsvpn-server.service.in
 	mkdir -p /etc/dsvpn
 	if [ "$update" = "0" ] || [ ! -f /etc/dsvpn/dsvpn.key ]; then
 		echo "$DSVPN_PASS" > /etc/dsvpn/dsvpn.key
@@ -464,12 +483,12 @@ cd glorytun-0.0.35
 ./configure
 make
 cp glorytun /usr/local/bin/glorytun-tcp
-wget -O /usr/local/bin/glorytun-tcp-run https://www.openmptcprouter.com/server/glorytun-tcp-run
+wget -O /usr/local/bin/glorytun-tcp-run https://www.openmptcprouter.com/${VPSPATH}/glorytun-tcp-run
 chmod 755 /usr/local/bin/glorytun-tcp-run
-wget -O /lib/systemd/system/glorytun-tcp@.service https://www.openmptcprouter.com/server/glorytun-tcp%40.service.in
-wget -O /lib/systemd/network/glorytun-tcp.network https://www.openmptcprouter.com/server/glorytun.network
+wget -O /lib/systemd/system/glorytun-tcp@.service https://www.openmptcprouter.com/${VPSPATH}/glorytun-tcp%40.service.in
+wget -O /lib/systemd/network/glorytun-tcp.network https://www.openmptcprouter.com/${VPSPATH}/glorytun.network
 mkdir -p /etc/glorytun-tcp
-wget -O /etc/glorytun-tcp/tun0 https://www.openmptcprouter.com/server/tun0.glorytun
+wget -O /etc/glorytun-tcp/tun0 https://www.openmptcprouter.com/${VPSPATH}/tun0.glorytun
 if [ "$update" = "0" ]; then
 	echo "$GLORYTUN_PASS" > /etc/glorytun-tcp/tun0.key
 fi
@@ -484,13 +503,13 @@ if ! grep -q tun /etc/modules ; then
 fi
 
 # Add multipath utility
-wget -O /usr/local/bin/multipath https://www.openmptcprouter.com/server/multipath
+wget -O /usr/local/bin/multipath https://www.openmptcprouter.com/${VPSPATH}/multipath
 chmod 755 /usr/local/bin/multipath
 
 # Add OpenMPTCProuter service
-wget -O /usr/local/bin/omr-service https://www.openmptcprouter.com/server/omr-service
+wget -O /usr/local/bin/omr-service https://www.openmptcprouter.com/${VPSPATH}/omr-service
 chmod 755 /usr/local/bin/omr-service
-wget -O /lib/systemd/system/omr.service https://www.openmptcprouter.com/server/omr.service.in
+wget -O /lib/systemd/system/omr.service https://www.openmptcprouter.com/${VPSPATH}/omr.service.in
 if systemctl -q is-active omr-6in4.service; then
 	systemctl -q stop omr-6in4 > /dev/null 2>&1
 	systemctl -q disable omr-6in4 > /dev/null 2>&1
@@ -510,34 +529,34 @@ sed -i 's:Port 22:Port 65222:g' /etc/ssh/sshd_config
 if [ "$update" = "0" ]; then
 	# Install and configure the firewall using shorewall
 	apt-get -y install shorewall shorewall6
-	wget -O /etc/shorewall/openmptcprouter-shorewall.tar.gz https://www.openmptcprouter.com/server/openmptcprouter-shorewall.tar.gz
+	wget -O /etc/shorewall/openmptcprouter-shorewall.tar.gz https://www.openmptcprouter.com/${VPSPATH}/openmptcprouter-shorewall.tar.gz
 	tar xzf /etc/shorewall/openmptcprouter-shorewall.tar.gz -C /etc/shorewall
 	rm /etc/shorewall/openmptcprouter-shorewall.tar.gz
 	sed -i "s:eth0:$INTERFACE:g" /etc/shorewall/*
 	systemctl enable shorewall
-	wget -O /etc/shorewall6/openmptcprouter-shorewall6.tar.gz https://www.openmptcprouter.com/server/openmptcprouter-shorewall6.tar.gz
+	wget -O /etc/shorewall6/openmptcprouter-shorewall6.tar.gz https://www.openmptcprouter.com/${VPSPATH}/openmptcprouter-shorewall6.tar.gz
 	tar xzf /etc/shorewall6/openmptcprouter-shorewall6.tar.gz -C /etc/shorewall6
 	rm /etc/shorewall6/openmptcprouter-shorewall6.tar.gz
 	sed -i "s:eth0:$INTERFACE:g" /etc/shorewall6/*
 	systemctl enable shorewall6
 else
 	# Update only needed firewall files
-	wget -O /etc/shorewall/interfaces https://www.openmptcprouter.com/server/shorewall4/interfaces
-	wget -O /etc/shorewall/snat https://www.openmptcprouter.com/server/shorewall4/snat
-	wget -O /etc/shorewall/stoppedrules https://www.openmptcprouter.com/server/shorewall4/stoppedrules
-	wget -O /etc/shorewall/tcinterfaces https://www.openmptcprouter.com/server/shorewall4/tcinterfaces
-	wget -O /etc/shorewall/shorewall.conf https://www.openmptcprouter.com/server/shorewall4/shorewall.conf
-	wget -O /etc/shorewall/params https://www.openmptcprouter.com/server/shorewall4/params
-	wget -O /etc/shorewall/params.vpn https://www.openmptcprouter.com/server/shorewall4/params.vpn
-	wget -O /etc/shorewall/params.net https://www.openmptcprouter.com/server/shorewall4/params.net
+	wget -O /etc/shorewall/interfaces https://www.openmptcprouter.com/${VPSPATH}/shorewall4/interfaces
+	wget -O /etc/shorewall/snat https://www.openmptcprouter.com/${VPSPATH}/shorewall4/snat
+	wget -O /etc/shorewall/stoppedrules https://www.openmptcprouter.com/${VPSPATH}/shorewall4/stoppedrules
+	wget -O /etc/shorewall/tcinterfaces https://www.openmptcprouter.com/${VPSPATH}/shorewall4/tcinterfaces
+	wget -O /etc/shorewall/shorewall.conf https://www.openmptcprouter.com/${VPSPATH}/shorewall4/shorewall.conf
+	wget -O /etc/shorewall/params https://www.openmptcprouter.com/${VPSPATH}/shorewall4/params
+	wget -O /etc/shorewall/params.vpn https://www.openmptcprouter.com/${VPSPATH}/shorewall4/params.vpn
+	wget -O /etc/shorewall/params.net https://www.openmptcprouter.com/${VPSPATH}/shorewall4/params.net
 	sed -i "s:eth0:$INTERFACE:g" /etc/shorewall/*
 	sed -i 's/^.*#DNAT/#DNAT/g' /etc/shorewall/rules
 	sed -i 's:10.0.0.2:$OMR_ADDR:g' /etc/shorewall/rules
-	wget -O /etc/shorewall6/params https://www.openmptcprouter.com/server/shorewall6/params
-	wget -O /etc/shorewall6/params.net https://www.openmptcprouter.com/server/shorewall6/params.net
-	wget -O /etc/shorewall6/interfaces https://www.openmptcprouter.com/server/shorewall6/interfaces
-	wget -O /etc/shorewall6/stoppedrules https://www.openmptcprouter.com/server/shorewall6/stoppedrules
-	wget -O /etc/shorewall6/snat https://www.openmptcprouter.com/server/shorewall6/snat
+	wget -O /etc/shorewall6/params https://www.openmptcprouter.com/${VPSPATH}/shorewall6/params
+	wget -O /etc/shorewall6/params.net https://www.openmptcprouter.com/${VPSPATH}/shorewall6/params.net
+	wget -O /etc/shorewall6/interfaces https://www.openmptcprouter.com/${VPSPATH}/shorewall6/interfaces
+	wget -O /etc/shorewall6/stoppedrules https://www.openmptcprouter.com/${VPSPATH}/shorewall6/stoppedrules
+	wget -O /etc/shorewall6/snat https://www.openmptcprouter.com/${VPSPATH}/shorewall6/snat
 	sed -i "s:eth0:$INTERFACE:g" /etc/shorewall6/*
 fi
 if [ "$ID" = "debian" ] && [ "$VERSION_ID" = "10" ]; then
@@ -693,6 +712,7 @@ else
 	if [ "$OPENVPN" = "yes" ]; then
 		echo 'Restarting OpenVPN'
 		systemctl -q restart openvpn@tun0
+		systemctl -q restart openvpn@tun1
 		echo 'done'
 	fi
 	if [ "$OMR_ADMIN" = "yes" ]; then

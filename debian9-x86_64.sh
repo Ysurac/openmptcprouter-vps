@@ -14,18 +14,19 @@ MLVPN_PASS=${MLVPN_PASS:-$(head -c 32 /dev/urandom | base64 -w0)}
 OPENVPN=${OPENVPN:-yes}
 DSVPN=${DSVPN:-yes}
 INTERFACE=${INTERFACE:-$(ip -o -4 route show to default | grep -m 1 -Po '(?<=dev )(\S+)' | tr -d "\n")}
-KERNEL_VERSION="4.19.78"
-KERNEL_PACKAGE_VERSION="1.5+4e10ec5"
+KERNEL_VERSION="4.19.80"
+KERNEL_PACKAGE_VERSION="1.5+b498036"
 KERNEL_RELEASE="${KERNEL_VERSION}-mptcp_${KERNEL_PACKAGE_VERSION}"
-GLORYTUN_UDP_VERSION="8bd936929e98b202c0988c6d9757903661750a7c"
-MLVPN_VERSION="8f9720978b28c1954f9f229525333547283316d2"
-OBFS_VERSION="5cbfdcc28cdc912852cc3c99e3c7f5603d337805"
-OMR_ADMIN_VERSION="9ac484ebfdcbf211e7595c50c6e8ced3c779ffbc"
-DSVPN_VERSION="57fb1bd5baf87c1e9b03833eb641897cab972895"
+GLORYTUN_UDP_VERSION="b9aaab661fb879e891d34a91b5d2e78088fd9d9d"
+#MLVPN_VERSION="8f9720978b28c1954f9f229525333547283316d2"
+MLVPN_VERSION="f45cec350a6879b8b020143a78134a022b5df2a7"
+OBFS_VERSION="486bebd9208539058e57e23a12f23103016e09b4"
+OMR_ADMIN_VERSION="85a4cf4492a5f890b0498ed0ac97a06802438588"
+DSVPN_VERSION="8abb2d22c1059ebf86ab1bdb62e71da3e22cf604"
 #V2RAY_VERSION="v1.1.0"
 V2RAY_VERSION="v1.1.0-9-g2e56b2b"
 EASYRSA_VERSION="3.0.6"
-SHADOWSOCKS_VERSION="3.3.2"
+SHADOWSOCKS_VERSION="3.3.3"
 VPS_DOMAIN=${VPS_DOMAIN:-$(wget -4 -qO- -T 2 http://hostname.openmptcprouter.com)}
 VPSPATH="server-test"
 
@@ -135,6 +136,10 @@ tar xzf shadowsocks-libev-${SHADOWSOCKS_VERSION}.tar.gz
 cd shadowsocks-libev-${SHADOWSOCKS_VERSION}
 wget https://raw.githubusercontent.com/Ysurac/openmptcprouter-feeds/master/shadowsocks-libev/patches/020-NOCRYPTO.patch
 patch -p1 < 020-NOCRYPTO.patch
+wget https://github.com/Ysurac/shadowsocks-libev/commit/31b93ac2b054bc3f68ea01569649e6882d72218e.patch
+patch -p1 < 31b93ac2b054bc3f68ea01569649e6882d72218e.patch
+wget https://github.com/Ysurac/shadowsocks-libev/commit/2e52734b3bf176966e78e77cf080a1e8c6b2b570.patch
+patch -p1 < 2e52734b3bf176966e78e77cf080a1e8c6b2b570.patch
 # Shadowsocks eBPF support
 #wget https://raw.githubusercontent.com/Ysurac/openmptcprouter-feeds/master/shadowsocks-libev/patches/030-eBPF.patch
 #patch -p1 < 030-eBPF.patch
@@ -212,15 +217,44 @@ fi
 if ! grep -q mctcp_desync /etc/modules ; then
 	echo mctcp_desync >> /etc/modules
 fi
+# Load ndiffports module at boot time
+if ! grep -q mctcp_ndiffports /etc/modules ; then
+	echo mctcp_ndiffports >> /etc/modules
+fi
+# Load redundant module at boot time
+if ! grep -q mctcp_redundant /etc/modules ; then
+	echo mctcp_redundant >> /etc/modules
+fi
+# Load rr module at boot time
+if ! grep -q mctcp_rr /etc/modules ; then
+	echo mctcp_rr >> /etc/modules
+fi
+# Load mctcp ECF scheduler at boot time
+if ! grep -q mctcp_ecf /etc/modules ; then
+	echo mctcp_ecf >> /etc/modules
+fi
+# Load mctcp BLEST scheduler at boot time
+if ! grep -q mctcp_blest /etc/modules ; then
+	echo mctcp_blest >> /etc/modules
+fi
 
 if systemctl -q is-active omr-admin.service; then
 	systemctl -q stop omr-admin > /dev/null 2>&1
 fi
 
 if [ "$OMR_ADMIN" = "yes" ]; then
-	echo 'Install OpenMPTCProuter VPS Admin'
-	apt-get -y install unzip gunicorn python3-flask-restful python3-openssl python3-pip python3-setuptools python3-wheel
-	pip3 -q install flask-jwt-simple netjsonconfig
+	if [ "$ID" = "debian" ] && [ "$VERSION_ID" = "9" ]; then
+		echo 'Install OpenMPTCProuter VPS Admin'
+		echo 'deb http://ftp.de.debian.org/debian testing main' >> /etc/apt/sources.list
+		#echo 'APT::Default-Release "stable";' | tee -a /etc/apt/apt.conf.d/00local
+		apt-get update
+		apt-get -y -t testing install python3.7-dev
+	fi
+	#apt-get -y install unzip gunicorn python3-flask-restful python3-openssl python3-pip python3-setuptools python3-wheel
+	apt-get -y install unzip python3-openssl python3-pip python3-setuptools python3-wheel
+	echo '-- pip3 install'
+	#pip3 -q install flask-jwt-simple netjsonconfig
+	pip3 -q install pyjwt passlib uvicorn fastapi netjsonconfig python-multipart
 	mkdir -p /etc/openmptcprouter-vps-admin
 	mkdir -p /var/opt/openmptcprouter
 	wget -O /lib/systemd/system/omr-admin.service https://www.openmptcprouter.com/${VPSPATH}/omr-admin.service.in
@@ -229,7 +263,7 @@ if [ "$OMR_ADMIN" = "yes" ]; then
 	unzip -q -o openmptcprouter-vps-admin.zip
 	if [ -f /usr/local/bin/omr-admin.py ]; then
 		cp /tmp/openmptcprouter-vps-admin-${OMR_ADMIN_VERSION}/omr-admin.py /usr/local/bin/
-		OMR_ADMIN_PASS=$(grep -Po '"pass":.*?[^\\]"' /etc/openmptcprouter-vps-admin/omr-admin-config.json | awk -F':' '{print $2}' | sed 's/"//g')
+		OMR_ADMIN_PASS=$(grep -Po '"'"pass"'"\s*:\s*"\K([^"]*)' /etc/openmptcprouter-vps-admin/omr-admin-config.json | tr -d  "\n")
 	else
 		sed -i "s:MySecretKey:$OMR_ADMIN_PASS:g" /tmp/openmptcprouter-vps-admin-${OMR_ADMIN_VERSION}/omr-admin-config.json
 		cp /tmp/openmptcprouter-vps-admin-${OMR_ADMIN_VERSION}/omr-admin-config.json /etc/openmptcprouter-vps-admin/
@@ -246,22 +280,25 @@ fi
 wget -O /etc/sysctl.d/90-shadowsocks.conf https://www.openmptcprouter.com/${VPSPATH}/shadowsocks.conf
 
 # Install shadowsocks config and add a shadowsocks by CPU
-if [ "$update" = "0" ]; then
-	wget -O /etc/shadowsocks-libev/config.json https://www.openmptcprouter.com/${VPSPATH}/config.json
+if [ "$update" = "0" ] || [ ! -f /etc/shadowsocks-libev/manager.json ]; then
+	#wget -O /etc/shadowsocks-libev/config.json https://www.openmptcprouter.com/${VPSPATH}/config.json
+	wget -O /etc/shadowsocks-libev/manager.json https://www.openmptcprouter.com/${VPSPATH}/manager.json
 	SHADOWSOCKS_PASS_JSON=$(echo $SHADOWSOCKS_PASS | sed 's/+/-/g; s/\//_/g;')
 	sed -i "s:MySecretKey:$SHADOWSOCKS_PASS_JSON:g" /etc/shadowsocks-libev/config.json
 fi
 [ ! -f /etc/shadowsocks-libev/local.acl ] && touch /etc/shadowsocks-libev/local.acl
-sed -i 's:aes-256-cfb:chacha20:g' /etc/shadowsocks-libev/config.json
-sed -i 's:json:json --no-delay:g' /lib/systemd/system/shadowsocks-libev-server@.service
+#sed -i 's:aes-256-cfb:chacha20:g' /etc/shadowsocks-libev/config.json
+#sed -i 's:json:json --no-delay:g' /lib/systemd/system/shadowsocks-libev-server@.service
+wget -O /lib/systemd/system/shadowsocks-libev-manager@.service https://www.openmptcprouter.com/${VPSPATH}/shadowsocks-libev-manager@.service.in
 systemctl disable shadowsocks-libev
-systemctl enable shadowsocks-libev-server@config.service
-if [ $NBCPU -gt 1 ]; then
-	for i in $NBCPU; do
-		ln -fs /etc/shadowsocks-libev/config.json /etc/shadowsocks-libev/config$i.json
-		systemctl enable shadowsocks-libev-server@config$i.service
-	done
-fi
+#systemctl enable shadowsocks-libev-server@config.service
+systemctl enable shadowsocks-libev-manager@manager.service
+#if [ $NBCPU -gt 1 ]; then
+#	for i in $NBCPU; do
+#		ln -fs /etc/shadowsocks-libev/config.json /etc/shadowsocks-libev/config$i.json
+#		systemctl enable shadowsocks-libev-server@config$i.service
+#	done
+#fi
 if ! grep -q 'DefaultLimitNOFILE=65536' /etc/systemd/system.conf ; then
 	echo 'DefaultLimitNOFILE=65536' >> /etc/systemd/system.conf
 fi
@@ -333,8 +370,8 @@ if [ "$MLVPN" = "yes" ]; then
 	apt-get -y install build-essential pkg-config autoconf automake libpcap-dev unzip git
 	rm -rf /tmp/mlvpn
 	cd /tmp
-	git clone https://github.com/markfoodyburton/MLVPN.git /tmp/mlvpn
-	#git clone https://github.com/flohoff/MLVPN.git /tmp/mlvpn
+	#git clone https://github.com/markfoodyburton/MLVPN.git /tmp/mlvpn
+	git clone https://github.com/flohoff/MLVPN.git /tmp/mlvpn
 	#git clone https://github.com/link4all/MLVPN.git /tmp/mlvpn
 	cd /tmp/mlvpn
 	git checkout ${MLVPN_VERSION}
@@ -369,7 +406,8 @@ if [ "$OPENVPN" = "yes" ]; then
 	rm -f /var/lib/dpkg/lock
 	rm -f /var/lib/dpkg/lock-frontend
 	apt-get -y install openvpn
-	wget -O /lib/systemd/network/openvpn.network https://www.openmptcprouter.com/${VPSPATH}/openvpn.network
+	#wget -O /lib/systemd/network/openvpn.network https://www.openmptcprouter.com/${VPSPATH}/openvpn.network
+	rm -f /lib/systemd/network/openvpn.network
 	if [ ! -f "/etc/openvpn/server/static.key" ]; then
 		wget -O /etc/openvpn/tun0.conf https://www.openmptcprouter.com/${VPSPATH}/openvpn-tun0.conf
 		cd /etc/openvpn/server

@@ -5,7 +5,7 @@
     "mode":"tcp_and_udp",
     "key":"MySecretKey",
     "timeout":600,
-    "method":"chacha20",
+    "method":"chacha20-ietf-poly1305",
     "verbose":0,
     "prefer_ipv6": false,
     "fast_open": true,

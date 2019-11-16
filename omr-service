@@ -108,21 +108,22 @@ $allip_mlvpn"
 					fi
 				fi
 			done < <(printf '%s\n' "$allip")
-			[ -z "$iface" ] && {
+			[ -z "$iface" ] && [ -f /etc/openmptcprouter-vps-admin/current-vpn ] && {
 				logger -t "OMR-Service" "Restart Glorytun and networkd"
-				systemctl -q restart glorytun-tcp@tun0
-				systemctl -q restart glorytun-udp@tun0
+				current_vpn="$(cat /etc/openmptcprouter-vps-admin/current-vpn)"
+				[ "$current_vpn" = "glorytun_tcp" ] && systemctl -q restart glorytun-tcp@tun0
+				[ "$current_vpn" = "glorytun_udp" ] && systemctl -q restart glorytun-udp@tun0
 				systemctl -q restart systemd-networkd
 				_multipath
 				sleep 10
 			}
 		fi
 	fi
-	result="$(curl -Isk -m 30 https://127.0.0.1:65500/status | head -n 1 | grep 401)"
-	if [ "$result" = "" ]; then
-		logger -t "OMR-Service" "Restart OMR Admin"
-		systemctl -q restart omr-admin
-		sleep 10
-	fi
+	#result="$(curl -Isk -m 30 https://127.0.0.1:65500/status | head -n 1 | grep 405)"
+	#if [ "$result" = "" ]; then
+	#	logger -t "OMR-Service" "Restart OMR Admin"
+	#	systemctl -q restart omr-admin
+	#	sleep 10
+	#fi
 	sleep 10
 done

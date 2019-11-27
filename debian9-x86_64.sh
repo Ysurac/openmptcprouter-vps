@@ -15,16 +15,16 @@ OPENVPN=${OPENVPN:-yes}
 DSVPN=${DSVPN:-yes}
 INTERFACE=${INTERFACE:-$(ip -o -4 route show to default | grep -m 1 -Po '(?<=dev )(\S+)' | tr -d "\n")}
 KERNEL_VERSION="4.19.80"
-KERNEL_PACKAGE_VERSION="1.5+b498036"
+KERNEL_PACKAGE_VERSION="1.6+c62d9f6"
 KERNEL_RELEASE="${KERNEL_VERSION}-mptcp_${KERNEL_PACKAGE_VERSION}"
 GLORYTUN_UDP_VERSION="b9aaab661fb879e891d34a91b5d2e78088fd9d9d"
 #MLVPN_VERSION="8f9720978b28c1954f9f229525333547283316d2"
 MLVPN_VERSION="f45cec350a6879b8b020143a78134a022b5df2a7"
 OBFS_VERSION="486bebd9208539058e57e23a12f23103016e09b4"
-OMR_ADMIN_VERSION="85a4cf4492a5f890b0498ed0ac97a06802438588"
+OMR_ADMIN_VERSION="1b2737c54ee62b8c30a8c30a3e6d64f042a5b7d5"
 DSVPN_VERSION="8abb2d22c1059ebf86ab1bdb62e71da3e22cf604"
 #V2RAY_VERSION="v1.1.0"
-V2RAY_VERSION="v1.1.0-9-g2e56b2b"
+V2RAY_VERSION="v1.2.0-2-g68e2207"
 EASYRSA_VERSION="3.0.6"
 SHADOWSOCKS_VERSION="3.3.3"
 VPS_DOMAIN=${VPS_DOMAIN:-$(wget -4 -qO- -T 2 http://hostname.openmptcprouter.com)}
@@ -408,11 +408,11 @@ if [ "$OPENVPN" = "yes" ]; then
 	apt-get -y install openvpn
 	#wget -O /lib/systemd/network/openvpn.network https://www.openmptcprouter.com/${VPSPATH}/openvpn.network
 	rm -f /lib/systemd/network/openvpn.network
-	if [ ! -f "/etc/openvpn/server/static.key" ]; then
-		wget -O /etc/openvpn/tun0.conf https://www.openmptcprouter.com/${VPSPATH}/openvpn-tun0.conf
-		cd /etc/openvpn/server
-		openvpn --genkey --secret static.key
-	fi
+	#if [ ! -f "/etc/openvpn/server/static.key" ]; then
+	#	wget -O /etc/openvpn/tun0.conf https://www.openmptcprouter.com/${VPSPATH}/openvpn-tun0.conf
+	#	cd /etc/openvpn/server
+	#	openvpn --genkey --secret static.key
+	#fi
 	if [ ! -f "/etc/openvpn/server/server.crt" ]; then
 		openssl dhparam -out /etc/openvpn/server/dh2048.pem 2048
 		wget -O /tmp/EasyRSA-unix-v${EASYRSA_VERSION}.tgz https://github.com/OpenVPN/easy-rsa/releases/download/v3.0.6/EasyRSA-unix-v${EASYRSA_VERSION}.tgz
@@ -426,6 +426,7 @@ if [ "$OPENVPN" = "yes" ]; then
 		EASYRSA_CRL_DAYS=3650 ./easyrsa gen-crl
 		cp pki/ca.crt pki/private/ca.key pki/issued/server.crt pki/private/server.key pki/crl.pem /etc/openvpn/server
 		cp pki/issued/client.crt pki/private/client.key /etc/openvpn/client
+		wget -O /etc/openvpn/tun0.conf https://www.openmptcprouter.com/${VPSPATH}/openvpn-tun0.conf
 		wget -O /etc/openvpn/tun1.conf https://www.openmptcprouter.com/${VPSPATH}/openvpn-tun1.conf
 	fi
 	systemctl enable openvpn@tun0.service

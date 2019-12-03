@@ -21,7 +21,7 @@ GLORYTUN_UDP_VERSION="b9aaab661fb879e891d34a91b5d2e78088fd9d9d"
 #MLVPN_VERSION="8f9720978b28c1954f9f229525333547283316d2"
 MLVPN_VERSION="f45cec350a6879b8b020143a78134a022b5df2a7"
 OBFS_VERSION="486bebd9208539058e57e23a12f23103016e09b4"
-OMR_ADMIN_VERSION="1b2737c54ee62b8c30a8c30a3e6d64f042a5b7d5"
+OMR_ADMIN_VERSION="b4024d55b331a0c99e2faec09e63939df2265c5a"
 DSVPN_VERSION="8abb2d22c1059ebf86ab1bdb62e71da3e22cf604"
 #V2RAY_VERSION="v1.1.0"
 V2RAY_VERSION="v1.2.0-2-g68e2207"
@@ -30,7 +30,7 @@ SHADOWSOCKS_VERSION="3.3.3"
 VPS_DOMAIN=${VPS_DOMAIN:-$(wget -4 -qO- -T 2 http://hostname.openmptcprouter.com)}
 VPSPATH="server-test"
 
-OMR_VERSION="0.1002"
+OMR_VERSION="0.1002-test1"
 
 set -e
 umask 0022
@@ -245,13 +245,16 @@ fi
 if [ "$OMR_ADMIN" = "yes" ]; then
 	if [ "$ID" = "debian" ] && [ "$VERSION_ID" = "9" ]; then
 		echo 'Install OpenMPTCProuter VPS Admin'
-		echo 'deb http://ftp.de.debian.org/debian testing main' >> /etc/apt/sources.list
-		#echo 'APT::Default-Release "stable";' | tee -a /etc/apt/apt.conf.d/00local
+		echo 'deb http://ftp.de.debian.org/debian buster main' > /etc/apt/sources.list.d/buster.list
+		echo 'APT::Default-Release "stretch";' | tee -a /etc/apt/apt.conf.d/00local
 		apt-get update
-		apt-get -y -t testing install python3.7-dev
+		apt-get -y -t buster install python3.7-dev
+		apt-get -y -t buster install unzip python3-openssl python3-pip python3-setuptools python3-wheel
+	else
+		apt-get -y install unzip python3-openssl python3-pip python3-setuptools python3-wheel
 	fi
 	#apt-get -y install unzip gunicorn python3-flask-restful python3-openssl python3-pip python3-setuptools python3-wheel
-	apt-get -y install unzip python3-openssl python3-pip python3-setuptools python3-wheel
+	#apt-get -y install unzip python3-openssl python3-pip python3-setuptools python3-wheel
 	echo '-- pip3 install'
 	#pip3 -q install flask-jwt-simple netjsonconfig
 	pip3 -q install pyjwt passlib uvicorn fastapi netjsonconfig python-multipart
@@ -264,12 +267,19 @@ if [ "$OMR_ADMIN" = "yes" ]; then
 	if [ -f /usr/local/bin/omr-admin.py ]; then
 		cp /tmp/openmptcprouter-vps-admin-${OMR_ADMIN_VERSION}/omr-admin.py /usr/local/bin/
 		OMR_ADMIN_PASS=$(grep -Po '"'"pass"'"\s*:\s*"\K([^"]*)' /etc/openmptcprouter-vps-admin/omr-admin-config.json | tr -d  "\n")
+		[ -z "$OMR_ADMIN_PASS" ] && OMR_ADMIN_PASS=$(grep -Po '"'"user_password"'"\s*:\s*"\K([^"]*)' /etc/openmptcprouter-vps-admin/omr-admin-config.json | tr -d  "\n")
 	else
 		sed -i "s:MySecretKey:$OMR_ADMIN_PASS:g" /tmp/openmptcprouter-vps-admin-${OMR_ADMIN_VERSION}/omr-admin-config.json
 		cp /tmp/openmptcprouter-vps-admin-${OMR_ADMIN_VERSION}/omr-admin-config.json /etc/openmptcprouter-vps-admin/
 		cp /tmp/openmptcprouter-vps-admin-${OMR_ADMIN_VERSION}/omr-admin.py /usr/local/bin/
 		cd /etc/openmptcprouter-vps-admin
 		openssl req -new -newkey rsa:2048 -days 365 -nodes -x509 -keyout key.pem -out cert.pem -subj "/C=US/ST=Oregon/L=Portland/O=OpenMPTCProuterVPS/OU=Org/CN=www.openmptcprouter.vps"
+	fi
+	if [ "$(grep user_password /etc/openmptcprouter-vps-admin/omr-admin-config.json)" = "" ]; then
+		sed -i "s:MySecretKey:$OMR_ADMIN_PASS:g" /tmp/openmptcprouter-vps-admin-${OMR_ADMIN_VERSION}/omr-admin-config.json
+		cp /tmp/openmptcprouter-vps-admin-${OMR_ADMIN_VERSION}/omr-admin-config.json /etc/openmptcprouter-vps-admin/
+		cp /tmp/openmptcprouter-vps-admin-${OMR_ADMIN_VERSION}/omr-admin.py /usr/local/bin/
+		cd /etc/openmptcprouter-vps-admin
 	fi
 	chmod u+x /usr/local/bin/omr-admin.py
 	systemctl enable omr-admin.service
@@ -279,26 +289,30 @@ fi
 # Get shadowsocks optimization
 wget -O /etc/sysctl.d/90-shadowsocks.conf https://www.openmptcprouter.com/${VPSPATH}/shadowsocks.conf
 
+if [ "$update" != 0 ] && [ ! -f /etc/shadowsocks-libev/manager.json ]; then
+	SHADOWSOCKS_PASS=$(grep -Po '"'"key"'"\s*:\s*"\K([^"]*)' /etc/shadowsocks-libev/config.json | tr -d  "\n" | sed 's/-/+/g; s/_/\//g;')
+fi
+
 # Install shadowsocks config and add a shadowsocks by CPU
 if [ "$update" = "0" ] || [ ! -f /etc/shadowsocks-libev/manager.json ]; then
 	#wget -O /etc/shadowsocks-libev/config.json https://www.openmptcprouter.com/${VPSPATH}/config.json
 	wget -O /etc/shadowsocks-libev/manager.json https://www.openmptcprouter.com/${VPSPATH}/manager.json
 	SHADOWSOCKS_PASS_JSON=$(echo $SHADOWSOCKS_PASS | sed 's/+/-/g; s/\//_/g;')
-	sed -i "s:MySecretKey:$SHADOWSOCKS_PASS_JSON:g" /etc/shadowsocks-libev/config.json
+	#sed -i "s:MySecretKey:$SHADOWSOCKS_PASS_JSON:g" /etc/shadowsocks-libev/config.json
+	sed -i "s:MySecretKey:$SHADOWSOCKS_PASS_JSON:g" /etc/shadowsocks-libev/manager.json
 fi
 [ ! -f /etc/shadowsocks-libev/local.acl ] && touch /etc/shadowsocks-libev/local.acl
 #sed -i 's:aes-256-cfb:chacha20:g' /etc/shadowsocks-libev/config.json
 #sed -i 's:json:json --no-delay:g' /lib/systemd/system/shadowsocks-libev-server@.service
 wget -O /lib/systemd/system/shadowsocks-libev-manager@.service https://www.openmptcprouter.com/${VPSPATH}/shadowsocks-libev-manager@.service.in
 systemctl disable shadowsocks-libev
-#systemctl enable shadowsocks-libev-server@config.service
+[ -f /etc/shadowsocks-libev/config.json ] && systemctl disable shadowsocks-libev-server@config.service
 systemctl enable shadowsocks-libev-manager@manager.service
-#if [ $NBCPU -gt 1 ]; then
-#	for i in $NBCPU; do
-#		ln -fs /etc/shadowsocks-libev/config.json /etc/shadowsocks-libev/config$i.json
-#		systemctl enable shadowsocks-libev-server@config$i.service
-#	done
-#fi
+if [ $NBCPU -gt 1 ]; then
+	for i in $NBCPU; do
+		[ -f /etc/shadowsocks-libev/config$i.json ] && systemctl disable shadowsocks-libev-server@config$i.service
+	done
+fi
 if ! grep -q 'DefaultLimitNOFILE=65536' /etc/systemd/system.conf ; then
 	echo 'DefaultLimitNOFILE=65536' >> /etc/systemd/system.conf
 fi
@@ -309,7 +323,12 @@ if [ "$OBFS" = "yes" ]; then
 	cd /tmp
 	rm -f /var/lib/dpkg/lock
 	rm -f /var/lib/dpkg/lock-frontend
-	apt-get install -y --no-install-recommends build-essential autoconf libtool libssl-dev libpcre3-dev libev-dev asciidoc xmlto automake git ca-certificates
+	if [ "$ID" = "debian" ] && [ "$VERSION_ID" = "9" ]; then
+		apt-get install -y --no-install-recommends -t buster libssl-dev
+		apt-get install -y --no-install-recommends build-essential autoconf libtool libpcre3-dev libev-dev asciidoc xmlto automake git ca-certificates
+	else
+		apt-get install -y --no-install-recommends build-essential autoconf libtool libssl-dev libpcre3-dev libev-dev asciidoc xmlto automake git ca-certificates
+	fi
 	git clone https://github.com/shadowsocks/simple-obfs.git /tmp/simple-obfs
 	cd /tmp/simple-obfs
 	git checkout ${OBFS_VERSION}
@@ -782,11 +801,11 @@ else
 	sysctl -p /etc/sysctl.d/90-shadowsocks.conf > /dev/null 2>&1
 	echo 'done'
 	echo 'Restarting shadowsocks...'
-	systemctl -q restart shadowsocks-libev-server@config
-	if [ $NBCPU -gt 1 ]; then
-		for i in $NBCPU; do
-			systemctl restart shadowsocks-libev-server@config$i
-		done
-	fi
+	systemctl -q restart shadowsocks-libev-manager@config
+#	if [ $NBCPU -gt 1 ]; then
+#		for i in $NBCPU; do
+#			systemctl restart shadowsocks-libev-server@config$i
+#		done
+#	fi
 	echo 'done'
 fi

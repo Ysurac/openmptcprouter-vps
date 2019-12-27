@@ -29,9 +29,9 @@ V2RAY_VERSION="v1.2.0-2-g68e2207"
 EASYRSA_VERSION="3.0.6"
 SHADOWSOCKS_VERSION="3.3.3"
 VPS_DOMAIN=${VPS_DOMAIN:-$(wget -4 -qO- -T 2 http://hostname.openmptcprouter.com)}
-VPSPATH="server"
+VPSPATH="server-test"
 
-OMR_VERSION="0.1005"
+OMR_VERSION="0.1006-test1"
 
 set -e
 umask 0022
@@ -456,7 +456,7 @@ if [ "$OPENVPN" = "yes" ]; then
 	echo "Install OpenVPN"
 	rm -f /var/lib/dpkg/lock
 	rm -f /var/lib/dpkg/lock-frontend
-	apt-get -y install openvpn
+	apt-get -y install openvpn easy-rsa
 	#wget -O /lib/systemd/network/openvpn.network https://www.openmptcprouter.com/${VPSPATH}/openvpn.network
 	rm -f /lib/systemd/network/openvpn.network
 	#if [ ! -f "/etc/openvpn/server/static.key" ]; then
@@ -464,19 +464,24 @@ if [ "$OPENVPN" = "yes" ]; then
 	#	cd /etc/openvpn/server
 	#	openvpn --genkey --secret static.key
 	#fi
-	if [ ! -f "/etc/openvpn/server/server.crt" ]; then
+	if [ -f "/etc/openvpn/server/server.crt" ]; then
+		cp /etc/openvpn/server/ca.crt /etc/openvpn/ca/pki/ca.crt
+		cp /etc/openvpn/server/ca.key /etc/openvpn/ca/pki/private/ca.key
+		cp /etc/openvpn/server/server.crt /etc/openvpn/ca/pki/issued/server.crt
+		cp /etc/openvpn/server/server.key /etc/openvpn/ca/pki/private/server.key
+		cp /etc/openvpn/server/crl.pem /etc/openvpn/ca/pki/crl.pem
+		cp /etc/openvpn/client/client.crt /etc/openvpn/ca/pki/issued/openmptcprouter.crt
+		cp /etc/openvpn/client/client.key /etc/openvpn/ca/pki/private/openmptcprouter.key
+	fi
+	if [ ! -f "/etc/openvpn/pki/issued/server.crt" ]; then
 		openssl dhparam -out /etc/openvpn/server/dh2048.pem 2048
-		wget -O /tmp/EasyRSA-unix-v${EASYRSA_VERSION}.tgz https://github.com/OpenVPN/easy-rsa/releases/download/v3.0.6/EasyRSA-unix-v${EASYRSA_VERSION}.tgz
-		cd /tmp
-		tar xzvf EasyRSA-unix-v${EASYRSA_VERSION}.tgz
-		cd /tmp/EasyRSA-v${EASYRSA_VERSION}
+		make-cadir /etc/openvpn/ca
+		cd /etc/openvpn/ca
 		./easyrsa init-pki
 		./easyrsa --batch build-ca nopass
 		EASYRSA_CERT_EXPIRE=3650 ./easyrsa build-server-full server nopass
 		EASYRSA_CERT_EXPIRE=3650 ./easyrsa build-client-full "client" nopass
 		EASYRSA_CRL_DAYS=3650 ./easyrsa gen-crl
-		cp pki/ca.crt pki/private/ca.key pki/issued/server.crt pki/private/server.key pki/crl.pem /etc/openvpn/server
-		cp pki/issued/client.crt pki/private/client.key /etc/openvpn/client
 		wget -O /etc/openvpn/tun0.conf https://www.openmptcprouter.com/${VPSPATH}/openvpn-tun0.conf
 		wget -O /etc/openvpn/tun1.conf https://www.openmptcprouter.com/${VPSPATH}/openvpn-tun1.conf
 	fi

@@ -6,6 +6,7 @@ DSVPN_PASS=${DSVPN_PASS:-$(od -vN "32" -An -tx1 /dev/urandom | tr '[:lower:]' '[
 NBCPU=${NBCPU:-$(grep -c '^processor' /proc/cpuinfo | tr -d "\n")}
 OBFS=${OBFS:-yes}
 V2RAY=${V2RAY:-yes}
+UPDATE_DEBIAN=${UPDATE_DEBIAN:-yes}
 TLS=${TLS:-yes}
 OMR_ADMIN=${OMR_ADMIN:-yes}
 OMR_ADMIN_PASS=${OMR_ADMIN_PASS:-$(od -vN "32" -An -tx1 /dev/urandom | tr '[:lower:]' '[:upper:]' | tr -d " \n")}
@@ -21,16 +22,16 @@ GLORYTUN_UDP_VERSION="b9aaab661fb879e891d34a91b5d2e78088fd9d9d"
 #MLVPN_VERSION="8f9720978b28c1954f9f229525333547283316d2"
 MLVPN_VERSION="f45cec350a6879b8b020143a78134a022b5df2a7"
 OBFS_VERSION="486bebd9208539058e57e23a12f23103016e09b4"
-OMR_ADMIN_VERSION="b4024d55b331a0c99e2faec09e63939df2265c5a"
-DSVPN_VERSION="8abb2d22c1059ebf86ab1bdb62e71da3e22cf604"
+OMR_ADMIN_VERSION="8801c7a33bf3275a0bbee7ceb238904722910845"
+DSVPN_VERSION="3b99d2ef6c02b2ef68b5784bec8adfdd55b29b1a"
 #V2RAY_VERSION="v1.1.0"
 V2RAY_VERSION="v1.2.0-2-g68e2207"
 EASYRSA_VERSION="3.0.6"
 SHADOWSOCKS_VERSION="3.3.3"
 VPS_DOMAIN=${VPS_DOMAIN:-$(wget -4 -qO- -T 2 http://hostname.openmptcprouter.com)}
-VPSPATH="server-test"
+VPSPATH="server"
 
-OMR_VERSION="0.1002-test1"
+OMR_VERSION="0.1005"
 
 set -e
 umask 0022
@@ -77,6 +78,18 @@ fi
 
 apt-get update
 apt-get -y install apt-transport-https gnupg
+
+#if [ "$ID" = "debian" ] && [ "$VERSION_ID" = "9" ] && [ "$UPDATE_DEBIAN" = "yes" ] && [ "$update" = "0" ]; then
+if [ "$ID" = "debian" ] && [ "$VERSION_ID" = "9" ] && [ "$UPDATE_DEBIAN" = "yes" ]; then
+	echo "Update Debian 9 Stretch to Debian 10 Buster"
+	apt-get -y -f --force-yes upgrade
+	apt-get -y -f --force-yes dist-upgrade
+	sed -i 's:stretch:buster:g' /etc/apt/sources.list
+	apt-get update
+	apt-get -y -o Dpkg::Options::="--force-confdef" -o Dpkg::Options::="--force-confnew" upgrade
+	apt-get -y -o Dpkg::Options::="--force-confdef" -o Dpkg::Options::="--force-confnew" dist-upgrade
+	VERSION_ID="10"
+fi
 # Add OpenMPTCProuter repo
 echo 'deb https://repo.openmptcprouter.com stretch main' > /etc/apt/sources.list.d/openmptcprouter.list
 cat <<EOF | tee /etc/apt/preferences.d/openmptcprouter.pref
@@ -164,6 +177,7 @@ patch -p1 < 2e52734b3bf176966e78e77cf080a1e8c6b2b570.patch
 rm -f /var/lib/dpkg/lock
 rm -f /var/lib/dpkg/lock-frontend
 apt-get -y install --no-install-recommends devscripts equivs apg libcap2-bin libpam-cap libc-ares2 libc-ares-dev libev4 haveged
+sleep 1
 rm -f /var/lib/dpkg/lock
 rm -f /var/lib/dpkg/lock-frontend
 systemctl enable haveged
@@ -180,7 +194,6 @@ elif [ "$ID" = "ubuntu" ]; then
 	rm -f /var/lib/dpkg/lock
 	rm -f /var/lib/dpkg/lock-frontend
 	apt-get -y install libsodium-dev
-	systemctl enable haveged
 fi
 cd /tmp/shadowsocks-libev-${SHADOWSOCKS_VERSION}
 rm -f /var/lib/dpkg/lock
@@ -243,21 +256,39 @@ if systemctl -q is-active omr-admin.service; then
 fi
 
 if [ "$OMR_ADMIN" = "yes" ]; then
+	echo 'Install OpenMPTCProuter VPS Admin'
 	if [ "$ID" = "debian" ] && [ "$VERSION_ID" = "9" ]; then
-		echo 'Install OpenMPTCProuter VPS Admin'
-		echo 'deb http://ftp.de.debian.org/debian buster main' > /etc/apt/sources.list.d/buster.list
-		echo 'APT::Default-Release "stretch";' | tee -a /etc/apt/apt.conf.d/00local
-		apt-get update
-		apt-get -y -t buster install python3.7-dev
-		apt-get -y -t buster install unzip python3-openssl python3-pip python3-setuptools python3-wheel
+		#echo 'deb http://ftp.de.debian.org/debian buster main' > /etc/apt/sources.list.d/buster.list
+		#echo 'APT::Default-Release "stretch";' | tee -a /etc/apt/apt.conf.d/00local
+		#apt-get update
+		apt-get -y install unzip
+		#apt-get -y -t buster install python3.7-dev
+		#apt-get -y -t buster install python3-pip python3-setuptools python3-wheel
+		if [ "$(whereis python3 | grep python3.7)" = "" ]; then
+			apt-get -y install libffi-dev build-essential zlib1g-dev libncurses5-dev libgdbm-dev libnss3-dev libssl-dev libreadline-dev wget
+			wget -O /tmp/Python-3.7.2.tgz https://www.python.org/ftp/python/3.7.2/Python-3.7.2.tgz
+			cd /tmp
+			tar xzf Python-3.7.2.tgz
+			cd Python-3.7.2
+			./configure --enable-optimizations
+			make
+			make altinstall
+			cd /tmp
+			rm -rf /tmp/Python-3.7.2
+			update-alternatives --install /usr/bin/python3 python3 /usr/local/bin/python3.7 1
+			update-alternatives --install /usr/bin/pip3 pip3 /usr/local/bin/pip3.7 1
+			sed -i 's:/usr/bin/python3 :/usr/bin/python3\.7 :g' /usr/bin/lsb_release
+		fi
+		pip3 -q install setuptools wheel
+		pip3 -q install pyopenssl
 	else
-		apt-get -y install unzip python3-openssl python3-pip python3-setuptools python3-wheel
+		apt-get -y install unzip python3-openssl python3-pip python3-setuptools python3-wheel python3-dev
 	fi
 	#apt-get -y install unzip gunicorn python3-flask-restful python3-openssl python3-pip python3-setuptools python3-wheel
 	#apt-get -y install unzip python3-openssl python3-pip python3-setuptools python3-wheel
-	echo '-- pip3 install'
+	echo '-- pip3 install needed python modules'
 	#pip3 -q install flask-jwt-simple netjsonconfig
-	pip3 -q install pyjwt passlib uvicorn fastapi netjsonconfig python-multipart
+	pip3 install pyjwt passlib uvicorn fastapi netjsonconfig python-multipart
 	mkdir -p /etc/openmptcprouter-vps-admin
 	mkdir -p /var/opt/openmptcprouter
 	wget -O /lib/systemd/system/omr-admin.service https://www.openmptcprouter.com/${VPSPATH}/omr-admin.service.in
@@ -324,7 +355,8 @@ if [ "$OBFS" = "yes" ]; then
 	rm -f /var/lib/dpkg/lock
 	rm -f /var/lib/dpkg/lock-frontend
 	if [ "$ID" = "debian" ] && [ "$VERSION_ID" = "9" ]; then
-		apt-get install -y --no-install-recommends -t buster libssl-dev
+		#apt-get install -y --no-install-recommends -t buster libssl-dev
+		apt-get install -y --no-install-recommends libssl-dev
 		apt-get install -y --no-install-recommends build-essential autoconf libtool libpcre3-dev libev-dev asciidoc xmlto automake git ca-certificates
 	else
 		apt-get install -y --no-install-recommends build-essential autoconf libtool libssl-dev libpcre3-dev libev-dev asciidoc xmlto automake git ca-certificates
@@ -487,6 +519,10 @@ systemctl enable systemd-networkd.service
 cd /tmp
 rm -rf /tmp/glorytun-udp
 
+# Add chrony for time sync
+apt-get install -y chrony
+systemctl enable chrony
+
 if [ "$DSVPN" = "yes" ]; then
 	echo 'A Dead Simple VPN'
 	# Install A Dead Simple VPN
@@ -501,7 +537,7 @@ if [ "$DSVPN" = "yes" ]; then
 	git clone https://github.com/jedisct1/dsvpn.git /tmp/dsvpn
 	cd /tmp/dsvpn
 	git checkout ${DSVPN_VERSION}
-	wget https://raw.githubusercontent.com/Ysurac/openmptcprouter-feeds/13b8d06d41f92f5599cdf1f453771c64d67dda7a/dsvpn/patches/nofirewall.patch
+	wget https://github.com/Ysurac/openmptcprouter-feeds/raw/develop/dsvpn/patches/nofirewall.patch
 	patch -p1 < nofirewall.patch
 	make CFLAGS='-DNO_DEFAULT_ROUTES -DNO_DEFAULT_FIREWALL'
 	make install
@@ -618,6 +654,7 @@ else
 	sed -i "s:eth0:$INTERFACE:g" /etc/shorewall6/*
 fi
 if [ "$ID" = "debian" ] && [ "$VERSION_ID" = "10" ]; then
+	apt-get -y install iptables
 	update-alternatives --set iptables /usr/sbin/iptables-legacy
 	update-alternatives --set ip6tables /usr/sbin/ip6tables-legacy
 fi
@@ -656,14 +693,14 @@ fi
 # Add OpenMPTCProuter VPS script version to /etc/motd
 if [ -f /etc/motd.head ]; then
 	if grep --quiet 'OpenMPTCProuter VPS' /etc/motd.head; then
-		sed -i "s:< OpenMPTCProuter VPS [0-9]*\.[0-9]* >:< OpenMPTCProuter VPS $OMR_VERSION >:g" /etc/motd.head
+		sed -i "s:< OpenMPTCProuter VPS [0-9]*\.[0-9]*\(\|-test[0-9]*\) >:< OpenMPTCProuter VPS $OMR_VERSION >:g" /etc/motd.head
 		sed -i "s:< OpenMPTCProuter VPS \$OMR_VERSION >:< OpenMPTCProuter VPS $OMR_VERSION >:g" /etc/motd.head
 	else
 		echo "< OpenMPTCProuter VPS $OMR_VERSION >" >> /etc/motd.head
 	fi
 elif [ -f /etc/motd ]; then
 	if grep --quiet 'OpenMPTCProuter VPS' /etc/motd; then
-		sed -i "s:< OpenMPTCProuter VPS [0-9]*\.[0-9]* >:< OpenMPTCProuter VPS $OMR_VERSION >:g" /etc/motd
+		sed -i "s:< OpenMPTCProuter VPS [0-9]*\.[0-9]*\(\|-test[0-9]*\) >:< OpenMPTCProuter VPS $OMR_VERSION >:g" /etc/motd
 		sed -i "s:< OpenMPTCProuter VPS \$OMR_VERSION >:< OpenMPTCProuter VPS $OMR_VERSION >:g" /etc/motd
 	else
 		echo "< OpenMPTCProuter VPS $OMR_VERSION >" >> /etc/motd
@@ -801,7 +838,7 @@ else
 	sysctl -p /etc/sysctl.d/90-shadowsocks.conf > /dev/null 2>&1
 	echo 'done'
 	echo 'Restarting shadowsocks...'
-	systemctl -q restart shadowsocks-libev-manager@config
+	systemctl -q restart shadowsocks-libev-manager@manager
 #	if [ $NBCPU -gt 1 ]; then
 #		for i in $NBCPU; do
 #			systemctl restart shadowsocks-libev-server@config$i

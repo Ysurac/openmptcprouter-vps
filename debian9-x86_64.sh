@@ -10,6 +10,7 @@ UPDATE_DEBIAN=${UPDATE_DEBIAN:-yes}
 TLS=${TLS:-yes}
 OMR_ADMIN=${OMR_ADMIN:-yes}
 OMR_ADMIN_PASS=${OMR_ADMIN_PASS:-$(od -vN "32" -An -tx1 /dev/urandom | tr '[:lower:]' '[:upper:]' | tr -d " \n")}
+OMR_ADMIN_PASS_ADMIN=${OMR_ADMIN_PASS_ADMIN:-$(od -vN "32" -An -tx1 /dev/urandom | tr '[:lower:]' '[:upper:]' | tr -d " \n")}
 MLVPN=${MLVPN:-yes}
 MLVPN_PASS=${MLVPN_PASS:-$(head -c 32 /dev/urandom | base64 -w0)}
 OPENVPN=${OPENVPN:-yes}
@@ -296,22 +297,23 @@ if [ "$OMR_ADMIN" = "yes" ]; then
 	cd /tmp
 	unzip -q -o openmptcprouter-vps-admin.zip
 	if [ -f /usr/local/bin/omr-admin.py ]; then
+		apt-get -y install jq
 		cp /tmp/openmptcprouter-vps-admin-${OMR_ADMIN_VERSION}/omr-admin.py /usr/local/bin/
 		OMR_ADMIN_PASS=$(grep -Po '"'"pass"'"\s*:\s*"\K([^"]*)' /etc/openmptcprouter-vps-admin/omr-admin-config.json | tr -d  "\n")
-		[ -z "$OMR_ADMIN_PASS" ] && OMR_ADMIN_PASS=$(grep -Po '"'"user_password"'"\s*:\s*"\K([^"]*)' /etc/openmptcprouter-vps-admin/omr-admin-config.json | tr -d  "\n")
+		[ -z "$OMR_ADMIN_PASS" ] && OMR_ADMIN_PASS=$(cat /etc/openmptcprouter-vps-admin/omr-admin-config.json | jq -r .users[0].openmptcprouter.user_password | tr -d "\n")
 	else
-		sed -i "s:MySecretKey:$OMR_ADMIN_PASS:g" /tmp/openmptcprouter-vps-admin-${OMR_ADMIN_VERSION}/omr-admin-config.json
 		cp /tmp/openmptcprouter-vps-admin-${OMR_ADMIN_VERSION}/omr-admin-config.json /etc/openmptcprouter-vps-admin/
 		cp /tmp/openmptcprouter-vps-admin-${OMR_ADMIN_VERSION}/omr-admin.py /usr/local/bin/
 		cd /etc/openmptcprouter-vps-admin
 		openssl req -new -newkey rsa:2048 -days 365 -nodes -x509 -keyout key.pem -out cert.pem -subj "/C=US/ST=Oregon/L=Portland/O=OpenMPTCProuterVPS/OU=Org/CN=www.openmptcprouter.vps"
 	fi
 	if [ "$(grep user_password /etc/openmptcprouter-vps-admin/omr-admin-config.json)" = "" ]; then
-		sed -i "s:MySecretKey:$OMR_ADMIN_PASS:g" /tmp/openmptcprouter-vps-admin-${OMR_ADMIN_VERSION}/omr-admin-config.json
 		cp /tmp/openmptcprouter-vps-admin-${OMR_ADMIN_VERSION}/omr-admin-config.json /etc/openmptcprouter-vps-admin/
 		cp /tmp/openmptcprouter-vps-admin-${OMR_ADMIN_VERSION}/omr-admin.py /usr/local/bin/
 		cd /etc/openmptcprouter-vps-admin
 	fi
+	sed -i "s:MySecretKey:$OMR_ADMIN_PASS:g" /tmp/openmptcprouter-vps-admin-${OMR_ADMIN_VERSION}/omr-admin-config.json
+	sed -i "s:AdminMySecretKey:$OMR_ADMIN_PASS_ADMIN:g" /tmp/openmptcprouter-vps-admin-${OMR_ADMIN_VERSION}/omr-admin-config.json
 	chmod u+x /usr/local/bin/omr-admin.py
 	systemctl enable omr-admin.service
 	rm -rf /tmp/tmp/openmptcprouter-vps-admin-${OMR_ADMIN_VERSION}
@@ -745,6 +747,10 @@ if [ "$update" = "0" ]; then
 		echo 'Your MLVPN password: '
 		echo $MLVPN_PASS
 	fi
+	if [ "$OMR_ADMIN" = "yes" ]; then
+		echo 'OpenMPTCProuter API Admin key: '
+		echo $OMR_ADMIN_PASS_ADMIN
+	fi
 	if [ "$VPS_CERT" = "0" ]; then
 		echo 'No working domain detected, not able to generate certificate for v2ray.'
 		echo 'You can set VPS_DOMAIN to a working domain if you want a certificate.'
@@ -782,6 +788,7 @@ if [ "$update" = "0" ]; then
 	fi
 	if [ "$OMR_ADMIN" = "yes" ]; then
 		cat >> /root/openmptcprouter_config.txt <<-EOF
+		Your OpenMPTCProuter ADMIN Server key: $OMR_ADMIN_PASS_ADMIN
 		Your OpenMPTCProuter Server key: $OMR_ADMIN_PASS
 		EOF
 	fi

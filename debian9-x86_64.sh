@@ -23,7 +23,7 @@ GLORYTUN_UDP_VERSION="b9aaab661fb879e891d34a91b5d2e78088fd9d9d"
 #MLVPN_VERSION="8f9720978b28c1954f9f229525333547283316d2"
 MLVPN_VERSION="f45cec350a6879b8b020143a78134a022b5df2a7"
 OBFS_VERSION="486bebd9208539058e57e23a12f23103016e09b4"
-OMR_ADMIN_VERSION="860ac891d467a1428568d7e79822e90fc99a37d5"
+OMR_ADMIN_VERSION="6e819bc92915f8ce222107c951a384967c70247d"
 DSVPN_VERSION="3b99d2ef6c02b2ef68b5784bec8adfdd55b29b1a"
 #V2RAY_VERSION="v1.1.0"
 V2RAY_VERSION="v1.2.0-2-g68e2207"
@@ -77,7 +77,13 @@ elif [ -f /root/openmptcprouter_config.txt ]; then
 	update="1"
 fi
 
+rm -f /var/lib/dpkg/lock
+rm -f /var/lib/dpkg/lock-frontend
+rm -f /var/cache/apt/archives/lock
 apt-get update
+rm -f /var/lib/dpkg/lock
+rm -f /var/lib/dpkg/lock-frontend
+rm -f /var/cache/apt/archives/lock
 apt-get -y install apt-transport-https gnupg
 
 #if [ "$ID" = "debian" ] && [ "$VERSION_ID" = "9" ] && [ "$UPDATE_DEBIAN" = "yes" ] && [ "$update" = "0" ]; then
@@ -103,6 +109,7 @@ wget -O - http://repo.openmptcprouter.com/openmptcprouter.gpg.key | apt-key add 
 
 # Install mptcp kernel and shadowsocks
 apt-get update
+sleep 2
 apt-get -y install dirmngr patch
 #apt-key adv --keyserver hkp://keys.gnupg.net --recv-keys 379CE192D401AB61
 if [ "$ID" = "debian" ]; then
@@ -115,6 +122,7 @@ elif [ "$ID" = "ubuntu" ]; then
 	echo 'deb http://archive.ubuntu.com/ubuntu bionic universe' > /etc/apt/sources.list.d/bionic-universe.list
 fi
 apt-get update
+sleep 2
 wget -O /tmp/linux-image-${KERNEL_RELEASE}_amd64.deb https://www.openmptcprouter.com/kernel/linux-image-${KERNEL_RELEASE}_amd64.deb
 wget -O /tmp/linux-headers-${KERNEL_RELEASE}_amd64.deb https://www.openmptcprouter.com/kernel/linux-headers-${KERNEL_RELEASE}_amd64.deb
 # Rename bzImage to vmlinuz, needed when custom kernel was used
@@ -305,15 +313,15 @@ if [ "$OMR_ADMIN" = "yes" ]; then
 		cp /tmp/openmptcprouter-vps-admin-${OMR_ADMIN_VERSION}/omr-admin-config.json /etc/openmptcprouter-vps-admin/
 		cp /tmp/openmptcprouter-vps-admin-${OMR_ADMIN_VERSION}/omr-admin.py /usr/local/bin/
 		cd /etc/openmptcprouter-vps-admin
-		openssl req -new -newkey rsa:2048 -days 365 -nodes -x509 -keyout key.pem -out cert.pem -subj "/C=US/ST=Oregon/L=Portland/O=OpenMPTCProuterVPS/OU=Org/CN=www.openmptcprouter.vps"
 	fi
 	if [ "$(grep user_password /etc/openmptcprouter-vps-admin/omr-admin-config.json)" = "" ]; then
 		cp /tmp/openmptcprouter-vps-admin-${OMR_ADMIN_VERSION}/omr-admin-config.json /etc/openmptcprouter-vps-admin/
 		cp /tmp/openmptcprouter-vps-admin-${OMR_ADMIN_VERSION}/omr-admin.py /usr/local/bin/
 		cd /etc/openmptcprouter-vps-admin
 	fi
-	sed -i "s:MySecretKey:$OMR_ADMIN_PASS:g" /tmp/openmptcprouter-vps-admin-${OMR_ADMIN_VERSION}/omr-admin-config.json
-	sed -i "s:AdminMySecretKey:$OMR_ADMIN_PASS_ADMIN:g" /tmp/openmptcprouter-vps-admin-${OMR_ADMIN_VERSION}/omr-admin-config.json
+	openssl req -new -newkey rsa:2048 -days 3650 -nodes -x509 -keyout key.pem -out cert.pem -subj "/C=US/ST=Oregon/L=Portland/O=OpenMPTCProuterVPS/OU=Org/CN=www.openmptcprouter.vps"
+	sed -i "s:AdminMySecretKey:$OMR_ADMIN_PASS_ADMIN:g" /etc/openmptcprouter-vps-admin/omr-admin-config.json
+	sed -i "s:MySecretKey:$OMR_ADMIN_PASS:g" /etc/openmptcprouter-vps-admin/omr-admin-config.json
 	chmod u+x /usr/local/bin/omr-admin.py
 	systemctl enable omr-admin.service
 	rm -rf /tmp/tmp/openmptcprouter-vps-admin-${OMR_ADMIN_VERSION}

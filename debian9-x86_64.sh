@@ -492,9 +492,9 @@ if [ "$OPENVPN" = "yes" ]; then
 		EASYRSA_CERT_EXPIRE=3650 ./easyrsa build-server-full server nopass
 		EASYRSA_CERT_EXPIRE=3650 ./easyrsa build-client-full "client" nopass
 		EASYRSA_CRL_DAYS=3650 ./easyrsa gen-crl
-		wget -O /etc/openvpn/tun0.conf https://www.openmptcprouter.com/${VPSPATH}/openvpn-tun0.conf
-		wget -O /etc/openvpn/tun1.conf https://www.openmptcprouter.com/${VPSPATH}/openvpn-tun1.conf
 	fi
+	wget -O /etc/openvpn/tun0.conf https://www.openmptcprouter.com/${VPSPATH}/openvpn-tun0.conf
+	wget -O /etc/openvpn/tun1.conf https://www.openmptcprouter.com/${VPSPATH}/openvpn-tun1.conf
 	systemctl enable openvpn@tun0.service
 	systemctl enable openvpn@tun1.service
 fi

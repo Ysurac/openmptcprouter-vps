@@ -1,0 +1,12 @@
+[Unit]
+Description=OMR-Admin
+After=network.target network-online.target
+
+[Service]
+Type=simple
+Restart=always
+ExecStart=/usr/local/bin/omr-admin.py
+CapabilityBoundingSet=CAP_NET_ADMIN CAP_NET_RAW
+
+[Install]
+WantedBy=multi-user.target

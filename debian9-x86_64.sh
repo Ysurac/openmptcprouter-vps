@@ -796,7 +796,7 @@ if [ "$update" = "0" ]; then
 	fi
 	if [ "$OMR_ADMIN" = "yes" ]; then
 		cat >> /root/openmptcprouter_config.txt <<-EOF
-		Your OpenMPTCProuter ADMIN Server key: $OMR_ADMIN_PASS_ADMIN
+		Your OpenMPTCProuter ADMIN API Server key: $OMR_ADMIN_PASS_ADMIN
 		Your OpenMPTCProuter Server key: $OMR_ADMIN_PASS
 		EOF
 	fi

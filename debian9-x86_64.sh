@@ -478,17 +478,19 @@ if [ "$OPENVPN" = "yes" ]; then
 		if [ ! -d /etc/openvpn/ca ]; then
 			make-cadir /etc/openvpn/ca
 		fi
-		cp /etc/openvpn/server/ca.crt /etc/openvpn/ca/pki/ca.crt
-		cp /etc/openvpn/server/ca.key /etc/openvpn/ca/pki/private/ca.key
-		cp /etc/openvpn/server/server.crt /etc/openvpn/ca/pki/issued/server.crt
-		cp /etc/openvpn/server/server.key /etc/openvpn/ca/pki/private/server.key
-		cp /etc/openvpn/server/crl.pem /etc/openvpn/ca/pki/crl.pem
-		cp /etc/openvpn/client/client.crt /etc/openvpn/ca/pki/issued/openmptcprouter.crt
-		cp /etc/openvpn/client/client.key /etc/openvpn/ca/pki/private/openmptcprouter.key
+		mv /etc/openvpn/server/ca.crt /etc/openvpn/ca/pki/ca.crt
+		mv /etc/openvpn/server/ca.key /etc/openvpn/ca/pki/private/ca.key
+		mv /etc/openvpn/server/server.crt /etc/openvpn/ca/pki/issued/server.crt
+		mv /etc/openvpn/server/server.key /etc/openvpn/ca/pki/private/server.key
+		mv /etc/openvpn/server/crl.pem /etc/openvpn/ca/pki/crl.pem
+		mv /etc/openvpn/client/client.crt /etc/openvpn/ca/pki/issued/openmptcprouter.crt
+		mv /etc/openvpn/client/client.key /etc/openvpn/ca/pki/private/openmptcprouter.key
 	fi
-	if [ ! -f "/etc/openvpn/pki/issued/server.crt" ]; then
+	if [ ! -f "/etc/openvpn/ca/pki/issued/server.crt" ]; then
 		openssl dhparam -out /etc/openvpn/server/dh2048.pem 2048
-		make-cadir /etc/openvpn/ca
+		if [ ! -d /etc/openvpn/ca ]; then
+			make-cadir /etc/openvpn/ca
+		fi
 		cd /etc/openvpn/ca
 		./easyrsa init-pki
 		./easyrsa --batch build-ca nopass

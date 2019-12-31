@@ -30,9 +30,9 @@ V2RAY_VERSION="v1.2.0-2-g68e2207"
 EASYRSA_VERSION="3.0.6"
 SHADOWSOCKS_VERSION="3.3.3"
 VPS_DOMAIN=${VPS_DOMAIN:-$(wget -4 -qO- -T 2 http://hostname.openmptcprouter.com)}
-VPSPATH="server-test"
+VPSPATH="server"
 
-OMR_VERSION="0.1006-test1"
+OMR_VERSION="0.1006"
 
 set -e
 umask 0022

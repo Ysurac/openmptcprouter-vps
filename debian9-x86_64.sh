@@ -475,7 +475,9 @@ if [ "$OPENVPN" = "yes" ]; then
 	#	openvpn --genkey --secret static.key
 	#fi
 	if [ -f "/etc/openvpn/server/server.crt" ]; then
-		make-cadir /etc/openvpn/ca
+		if [ ! -d /etc/openvpn/ca ]; then
+			make-cadir /etc/openvpn/ca
+		fi
 		cp /etc/openvpn/server/ca.crt /etc/openvpn/ca/pki/ca.crt
 		cp /etc/openvpn/server/ca.key /etc/openvpn/ca/pki/private/ca.key
 		cp /etc/openvpn/server/server.crt /etc/openvpn/ca/pki/issued/server.crt

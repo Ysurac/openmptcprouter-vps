@@ -1,0 +1,22 @@
+{
+    "mptcp": true,
+    "ipv6_first": true,
+    "no_delay": true,
+    "ebpf": false,
+    "server": [
+        "[::0]",
+        "0.0.0.0"
+    ],
+    "method": "chacha20-ietf-poly1305",
+    "fast_open": true,
+    "timeout": 600,
+    "port_key": {
+        "65101": "MySecretKey",
+    },
+    "local_port": 1081,
+    "verbose": 0,
+    "acl": "/etc/shadowsocks-libev/local.acl",
+    "mode": "tcp_and_udp",
+    "reuse_port": true,
+    "prefer_ipv6": false
+}

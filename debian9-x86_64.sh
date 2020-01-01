@@ -478,6 +478,7 @@ if [ "$OPENVPN" = "yes" ]; then
 		if [ ! -d /etc/openvpn/ca ]; then
 			make-cadir /etc/openvpn/ca
 		fi
+		mkdir -p /etc/openvpn/ca/pki/private /etc/openvpn/ca/pki/issued
 		mv /etc/openvpn/server/ca.crt /etc/openvpn/ca/pki/ca.crt
 		mv /etc/openvpn/server/ca.key /etc/openvpn/ca/pki/private/ca.key
 		mv /etc/openvpn/server/server.crt /etc/openvpn/ca/pki/issued/server.crt

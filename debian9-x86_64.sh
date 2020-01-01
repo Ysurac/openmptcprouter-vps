@@ -740,6 +740,8 @@ if [ "$update" = "0" ]; then
 		echo '!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!'
 		echo 'OpenMPTCProuter Server key (you need OpenMPTCProuter >= 0.42):'
 		echo $OMR_ADMIN_PASS
+		echo 'OpenMPTCProuter Server username (you need OpenMPTCProuter >= 0.42):'
+		echo 'openmptcprouter'
 		echo '!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!'
 		echo '===================================================================================='
 	fi
@@ -804,6 +806,7 @@ if [ "$update" = "0" ]; then
 		cat >> /root/openmptcprouter_config.txt <<-EOF
 		Your OpenMPTCProuter ADMIN API Server key: $OMR_ADMIN_PASS_ADMIN
 		Your OpenMPTCProuter Server key: $OMR_ADMIN_PASS
+		Your OpenMPTCProuter Server username: openmptcprouter
 		EOF
 	fi
 else
@@ -843,11 +846,14 @@ else
 		if ! grep -q 'VPS Admin key' /root/openmptcprouter_config.txt ; then
 			cat >> /root/openmptcprouter_config.txt <<-EOF
 			Your OpenMPTCProuter Server key: $OMR_ADMIN_PASS
+			Your OpenMPTCProuter Server username: openmptcprouter
 			EOF
 			echo '===================================================================================='
 			echo '!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!'
 			echo 'OpenMPTCProuter Server key (you need OpenMPTCProuter >= 0.42):'
 			echo $OMR_ADMIN_PASS
+			echo 'OpenMPTCProuter Server username (you need OpenMPTCProuter >= 0.42):'
+			echo 'openmptcprouter'
 			echo '!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!'
 			echo '===================================================================================='
 		fi

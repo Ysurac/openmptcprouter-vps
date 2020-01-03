@@ -474,6 +474,26 @@ if [ "$OPENVPN" = "yes" ]; then
 	#	cd /etc/openvpn/server
 	#	openvpn --genkey --secret static.key
 	#fi
+	if [ "$ID" = "ubuntu" ] && [ "$VERSION_ID" = "18.04" ]; then
+		wget -O /tmp/EasyRSA-unix-v${EASYRSA_VERSION}.tgz https://github.com/OpenVPN/easy-rsa/releases/download/v3.0.6/EasyRSA-unix-v${EASYRSA_VERSION}.tgz
+		cd /tmp
+		tar xzvf EasyRSA-unix-v${EASYRSA_VERSION}.tgz
+		cd /tmp/EasyRSA-v${EASYRSA_VERSION}
+		mkdir -p /etc/openvpn/ca/pki/private /etc/openvpn/ca/pki/issued
+		./easyrsa init-pki
+		./easyrsa --batch build-ca nopass
+		EASYRSA_CERT_EXPIRE=3650 ./easyrsa build-server-full server nopass
+		EASYRSA_CERT_EXPIRE=3650 ./easyrsa build-client-full "openmptcprouter" nopass
+		EASYRSA_CRL_DAYS=3650 ./easyrsa gen-crl
+		mv pki/ca.crt /etc/openvpn/ca/pki/ca.crt
+		mv pki/private/ca.key /etc/openvpn/ca/pki/private/ca.key
+		mv pki/issued/server.crt /etc/openvpn/ca/pki/issued/server.crt
+		mv pki/private/server.key /etc/openvpn/ca/pki/private/server.key
+		mv pki/crl.pem /etc/openvpn/ca/pki/crl.pem
+		mv pki/issued/openmptcprouter.crt /etc/openvpn/ca/pki/issued/openmptcprouter.crt
+		mv pki/private/openmptcprouter.key /etc/openvpn/ca/pki/private/openmptcprouter.key
+	fi
+
 	if [ -f "/etc/openvpn/server/server.crt" ]; then
 		if [ ! -d /etc/openvpn/ca ]; then
 			make-cadir /etc/openvpn/ca
@@ -496,8 +516,12 @@ if [ "$OPENVPN" = "yes" ]; then
 		./easyrsa init-pki
 		./easyrsa --batch build-ca nopass
 		EASYRSA_CERT_EXPIRE=3650 ./easyrsa build-server-full server nopass
-		EASYRSA_CERT_EXPIRE=3650 ./easyrsa build-client-full "client" nopass
+		EASYRSA_CERT_EXPIRE=3650 ./easyrsa build-client-full "openmptcprouter" nopass
 		EASYRSA_CRL_DAYS=3650 ./easyrsa gen-crl
+	fi
+	if [ ! -f "/etc/openvpn/ca/pki/issued/openmptcprouter.crt" ]; then
+		mv /etc/openvpn/ca/pki/issued/client.crt /etc/openvpn/ca/pki/issued/openmptcprouter.crt
+		mv /etc/openvpn/ca/pki/private/client.key /etc/openvpn/ca/pki/private/openmptcprouter.key
 	fi
 	wget -O /etc/openvpn/tun0.conf https://www.openmptcprouter.com/${VPSPATH}/openvpn-tun0.conf
 	wget -O /etc/openvpn/tun1.conf https://www.openmptcprouter.com/${VPSPATH}/openvpn-tun1.conf
@@ -766,6 +790,10 @@ if [ "$update" = "0" ]; then
 	if [ "$OMR_ADMIN" = "yes" ]; then
 		echo 'OpenMPTCProuter API Admin key: '
 		echo $OMR_ADMIN_PASS_ADMIN
+		echo 'OpenMPTCProuter Server key: '
+		echo $OMR_ADMIN_PASS
+		echo 'OpenMPTCProuter Server username: '
+		echo 'openmptcprouter'
 	fi
 	if [ "$VPS_CERT" = "0" ]; then
 		echo 'No working domain detected, not able to generate certificate for v2ray.'

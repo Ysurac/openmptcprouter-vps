@@ -475,7 +475,6 @@ if [ "$OPENVPN" = "yes" ]; then
 	#	openvpn --genkey --secret static.key
 	#fi
 	if [ "$ID" = "ubuntu" ] && [ "$VERSION_ID" = "18.04" ]; then
-		openssl dhparam -out /etc/openvpn/server/dh2048.pem 2048
 		wget -O /tmp/EasyRSA-unix-v${EASYRSA_VERSION}.tgz https://github.com/OpenVPN/easy-rsa/releases/download/v3.0.6/EasyRSA-unix-v${EASYRSA_VERSION}.tgz
 		cd /tmp
 		tar xzvf EasyRSA-unix-v${EASYRSA_VERSION}.tgz
@@ -509,7 +508,6 @@ if [ "$OPENVPN" = "yes" ]; then
 		mv /etc/openvpn/client/client.key /etc/openvpn/ca/pki/private/openmptcprouter.key
 	fi
 	if [ ! -f "/etc/openvpn/ca/pki/issued/server.crt" ]; then
-		openssl dhparam -out /etc/openvpn/server/dh2048.pem 2048
 		if [ ! -d /etc/openvpn/ca ]; then
 			make-cadir /etc/openvpn/ca
 		fi
@@ -523,6 +521,9 @@ if [ "$OPENVPN" = "yes" ]; then
 	if [ ! -f "/etc/openvpn/ca/pki/issued/openmptcprouter.crt" ]; then
 		mv /etc/openvpn/ca/pki/issued/client.crt /etc/openvpn/ca/pki/issued/openmptcprouter.crt
 		mv /etc/openvpn/ca/pki/private/client.key /etc/openvpn/ca/pki/private/openmptcprouter.key
+	fi
+	if [ ! -f "/etc/openvpn/server/dh2048.pem" ]; then
+		openssl dhparam -out /etc/openvpn/server/dh2048.pem 2048
 	fi
 	wget -O /etc/openvpn/tun0.conf https://www.openmptcprouter.com/${VPSPATH}/openvpn-tun0.conf
 	wget -O /etc/openvpn/tun1.conf https://www.openmptcprouter.com/${VPSPATH}/openvpn-tun1.conf

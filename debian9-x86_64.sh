@@ -39,8 +39,6 @@ umask 0022
 export LC_ALL=C
 export PATH=$PATH:/sbin
 export DEBIAN_FRONTEND=noninteractive 
-rm -f /var/lib/dpkg/lock
-rm -f /var/lib/dpkg/lock-frontend
 
 # Check Linux version
 if test -f /etc/os-release ; then
@@ -58,6 +56,19 @@ elif [ "$ID" != "debian" ] && [ "$ID" != "ubuntu" ]; then
 	echo "This script only work with Ubuntu 18.04, Ubuntu 19.04, Debian Stretch (9.x) or Debian Buster (10.x)"
 	exit 1
 fi
+
+# Check if DPKG is locked and for broken packages
+dpkg -i /dev/zero 2>/dev/null
+if [ "$?" -eq 2 ]; then
+	echo "E: dpkg database is locked. Check that an update is not running in background..."
+	exit 1
+fi
+apt-get check >/dev/null 2>&1
+if [ "$?" -ne 0 ]; then
+	echo "E: \`apt-get check\` failed, you may have broken packages. Aborting..."
+	exit 1
+fi
+
 
 # Fix old string...
 if [ -f /etc/motd ] && grep --quiet 'OpenMPCTProuter VPS' /etc/motd ; then

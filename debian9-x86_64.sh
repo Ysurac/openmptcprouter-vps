@@ -251,24 +251,24 @@ if ! grep -q mctcp_desync /etc/modules ; then
 	echo mctcp_desync >> /etc/modules
 fi
 # Load ndiffports module at boot time
-if ! grep -q mctcp_ndiffports /etc/modules ; then
-	echo mctcp_ndiffports >> /etc/modules
+if ! grep -q mptcp_ndiffports /etc/modules ; then
+	echo mptcp_ndiffports >> /etc/modules
 fi
 # Load redundant module at boot time
-if ! grep -q mctcp_redundant /etc/modules ; then
-	echo mctcp_redundant >> /etc/modules
+if ! grep -q mptcp_redundant /etc/modules ; then
+	echo mptcp_redundant >> /etc/modules
 fi
 # Load rr module at boot time
-if ! grep -q mctcp_rr /etc/modules ; then
-	echo mctcp_rr >> /etc/modules
+if ! grep -q mptcp_rr /etc/modules ; then
+	echo mptcp_rr >> /etc/modules
 fi
 # Load mctcp ECF scheduler at boot time
-if ! grep -q mctcp_ecf /etc/modules ; then
-	echo mctcp_ecf >> /etc/modules
+if ! grep -q mptcp_ecf /etc/modules ; then
+	echo mptcp_ecf >> /etc/modules
 fi
 # Load mctcp BLEST scheduler at boot time
-if ! grep -q mctcp_blest /etc/modules ; then
-	echo mctcp_blest >> /etc/modules
+if ! grep -q mptcp_blest /etc/modules ; then
+	echo mptcp_blest >> /etc/modules
 fi
 
 if systemctl -q is-active omr-admin.service; then
@@ -494,7 +494,7 @@ if [ "$OPENVPN" = "yes" ]; then
 		./easyrsa init-pki
 		./easyrsa --batch build-ca nopass
 		EASYRSA_CERT_EXPIRE=3650 ./easyrsa build-server-full server nopass
-		EASYRSA_CERT_EXPIRE=3650 ./easyrsa build-client-full "openmptcprouter" nopass
+		EASYRSA_CERT_EXPIRE=3650 EASYRSA_REQ_CN=openmptcprouter ./easyrsa build-client-full "openmptcprouter" nopass
 		EASYRSA_CRL_DAYS=3650 ./easyrsa gen-crl
 		mv pki/ca.crt /etc/openvpn/ca/pki/ca.crt
 		mv pki/private/ca.key /etc/openvpn/ca/pki/private/ca.key
@@ -538,6 +538,7 @@ if [ "$OPENVPN" = "yes" ]; then
 	fi
 	wget -O /etc/openvpn/tun0.conf https://www.openmptcprouter.com/${VPSPATH}/openvpn-tun0.conf
 	wget -O /etc/openvpn/tun1.conf https://www.openmptcprouter.com/${VPSPATH}/openvpn-tun1.conf
+	mkdir -p /etc/openvpn/ccd
 	systemctl enable openvpn@tun0.service
 	systemctl enable openvpn@tun1.service
 fi
@@ -564,8 +565,10 @@ rm /lib/systemd/network/glorytun*
 wget -O /usr/local/bin/glorytun-udp-run https://www.openmptcprouter.com/${VPSPATH}/glorytun-udp-run
 chmod 755 /usr/local/bin/glorytun-udp-run
 wget -O /lib/systemd/system/glorytun-udp@.service https://www.openmptcprouter.com/${VPSPATH}/glorytun-udp%40.service.in
-wget -O /lib/systemd/network/glorytun-udp.network https://www.openmptcprouter.com/${VPSPATH}/glorytun-udp.network
+#wget -O /lib/systemd/network/glorytun-udp.network https://www.openmptcprouter.com/${VPSPATH}/glorytun-udp.network
+rm -f /lib/systemd/network/glorytun-udp.network
 mkdir -p /etc/glorytun-udp
+wget -O /etc/glorytun-udp/post.sh https://www.openmptcprouter.com/${VPSPATH}/glorytun-udp-post.sh
 wget -O /etc/glorytun-udp/tun0 https://www.openmptcprouter.com/${VPSPATH}/tun0.glorytun-udp
 if [ "$update" = "0" ] || [ ! -f /etc/glorytun-udp/tun0.key ]; then
 	echo "$GLORYTUN_PASS" > /etc/glorytun-udp/tun0.key
@@ -638,8 +641,10 @@ cp glorytun /usr/local/bin/glorytun-tcp
 wget -O /usr/local/bin/glorytun-tcp-run https://www.openmptcprouter.com/${VPSPATH}/glorytun-tcp-run
 chmod 755 /usr/local/bin/glorytun-tcp-run
 wget -O /lib/systemd/system/glorytun-tcp@.service https://www.openmptcprouter.com/${VPSPATH}/glorytun-tcp%40.service.in
-wget -O /lib/systemd/network/glorytun-tcp.network https://www.openmptcprouter.com/${VPSPATH}/glorytun.network
+#wget -O /lib/systemd/network/glorytun-tcp.network https://www.openmptcprouter.com/${VPSPATH}/glorytun.network
+rm -f /lib/systemd/network/glorytun-tcp.network
 mkdir -p /etc/glorytun-tcp
+wget -O /etc/glorytun-tcp/post.sh https://www.openmptcprouter.com/${VPSPATH}/glorytun-tcp-post.sh
 wget -O /etc/glorytun-tcp/tun0 https://www.openmptcprouter.com/${VPSPATH}/tun0.glorytun
 if [ "$update" = "0" ]; then
 	echo "$GLORYTUN_PASS" > /etc/glorytun-tcp/tun0.key
@@ -801,7 +806,7 @@ if [ "$update" = "0" ]; then
 		echo $MLVPN_PASS
 	fi
 	if [ "$OMR_ADMIN" = "yes" ]; then
-		echo 'OpenMPTCProuter API Admin key: '
+		echo "OpenMPTCProuter API Admin key (only for configuration via API, you don't need it): "
 		echo $OMR_ADMIN_PASS_ADMIN
 		echo 'OpenMPTCProuter Server key: '
 		echo $OMR_ADMIN_PASS
@@ -845,7 +850,7 @@ if [ "$update" = "0" ]; then
 	fi
 	if [ "$OMR_ADMIN" = "yes" ]; then
 		cat >> /root/openmptcprouter_config.txt <<-EOF
-		Your OpenMPTCProuter ADMIN API Server key: $OMR_ADMIN_PASS_ADMIN
+		Your OpenMPTCProuter ADMIN API Server key (only for configuration via API access, you don't need it): $OMR_ADMIN_PASS_ADMIN
 		Your OpenMPTCProuter Server key: $OMR_ADMIN_PASS
 		Your OpenMPTCProuter Server username: openmptcprouter
 		EOF
@@ -884,7 +889,7 @@ else
 		echo 'Restarting OpenMPTCProuter VPS admin'
 		systemctl -q restart omr-admin
 		echo 'done'
-		if ! grep -q 'VPS Admin key' /root/openmptcprouter_config.txt ; then
+		if ! grep -q 'Server key' /root/openmptcprouter_config.txt ; then
 			cat >> /root/openmptcprouter_config.txt <<-EOF
 			Your OpenMPTCProuter Server key: $OMR_ADMIN_PASS
 			Your OpenMPTCProuter Server username: openmptcprouter

@@ -7,6 +7,7 @@ Type=simple
 Restart=always
 EnvironmentFile=/etc/glorytun-udp/%i
 ExecStart=/usr/local/bin/glorytun-udp-run /etc/glorytun-udp/%i
+ExecStartPost=-/etc/glorytun-udp/post.sh %i
 CapabilityBoundingSet=CAP_NET_ADMIN
 
 [Install]

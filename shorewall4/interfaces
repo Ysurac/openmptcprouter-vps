@@ -15,10 +15,9 @@
 ###############################################################################
 #ZONE   INTERFACE       OPTIONS
 net	$NET_IFACE	dhcp,tcpflags,routefilter,nosmurfs,sourceroute=0
-vpn	gt-tun0		nosmurfs,routefilter,tcpflags
-vpn	gt-udp-tun0	nosmurfs,routefilter,tcpflags
-vpn	mlvpn0		nosmurfs,routefilter,tcpflags
-vpn	tun0		nosmurfs,routefilter,tcpflags
-vpn	tun1		nosmurfs,routefilter,tcpflags
-vpn	dsvpn0		nosmurfs,routefilter,tcpflags
+vpn	gt-tun+		nosmurfs,routefilter,tcpflags
+vpn	gt-udp-tun+	nosmurfs,routefilter,tcpflags
+vpn	mlvpn+		nosmurfs,routefilter,tcpflags
+vpn	tun+		nosmurfs,routefilter,tcpflags
+vpn	dsvpn+		nosmurfs,routefilter,tcpflags
 

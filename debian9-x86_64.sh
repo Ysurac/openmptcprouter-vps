@@ -358,7 +358,7 @@ if [ "$update" = "0" ] || [ ! -f /etc/shadowsocks-libev/manager.json ]; then
 	SHADOWSOCKS_PASS_JSON=$(echo $SHADOWSOCKS_PASS | sed 's/+/-/g; s/\//_/g;')
 	if [ $NBCPU -gt 1 ]; then
 		for i in $NBCPU; do
-			sed -i '0,/65101/ s/        "65101.*/&\n&/' manager.json
+			sed -i '0,/65101/ s/        "65101.*/&\n&/' /etc/shadowsocks-libev/manager.json
 		done
 	fi
 	#sed -i "s:MySecretKey:$SHADOWSOCKS_PASS_JSON:g" /etc/shadowsocks-libev/config.json

@@ -23,7 +23,7 @@ GLORYTUN_UDP_VERSION="7f30cdc5ee2e89f0008144ad71f4c0bd4215a0f4"
 #MLVPN_VERSION="8f9720978b28c1954f9f229525333547283316d2"
 MLVPN_VERSION="f45cec350a6879b8b020143a78134a022b5df2a7"
 OBFS_VERSION="486bebd9208539058e57e23a12f23103016e09b4"
-OMR_ADMIN_VERSION="60a72b11bedb94ccc03da58d8c418642c0230402"
+OMR_ADMIN_VERSION="983ac0349b63e011043b5b4c1e4fd0dadea9cb9b"
 DSVPN_VERSION="3b99d2ef6c02b2ef68b5784bec8adfdd55b29b1a"
 #V2RAY_VERSION="v1.1.0"
 V2RAY_VERSION="v1.2.0-8-g59b8f4f"
@@ -308,10 +308,16 @@ if [ "$OMR_ADMIN" = "yes" ]; then
 	fi
 	#apt-get -y install unzip gunicorn python3-flask-restful python3-openssl python3-pip python3-setuptools python3-wheel
 	#apt-get -y install unzip python3-openssl python3-pip python3-setuptools python3-wheel
-	apt-get -y install python3-passlib python3-jwt python3-netaddr
+	if [ "$ID" = "ubuntu" ]; then
+		apt-get -y install python3-passlib python3-netaddr
+		apt-get -y remove python3-jwt
+		pip3 -q install pyjwt
+	else
+		apt-get -y install python3-passlib python3-jwt python3-netaddr
+	fi
 	echo '-- pip3 install needed python modules'
 	#pip3 install pyjwt passlib uvicorn fastapi netjsonconfig python-multipart netaddr
-	pip3 install fastapi netjsonconfig python-multipart uvicorn
+	pip3 -q install fastapi netjsonconfig python-multipart uvicorn
 	mkdir -p /etc/openmptcprouter-vps-admin/omr-6in4
 	mkdir -p /var/opt/openmptcprouter
 	wget -O /lib/systemd/system/omr-admin.service https://www.openmptcprouter.com/${VPSPATH}/omr-admin.service.in
@@ -358,7 +364,7 @@ if [ "$update" = "0" ] || [ ! -f /etc/shadowsocks-libev/manager.json ]; then
 	SHADOWSOCKS_PASS_JSON=$(echo $SHADOWSOCKS_PASS | sed 's/+/-/g; s/\//_/g;')
 	if [ $NBCPU -gt 1 ]; then
 		for i in $NBCPU; do
-			sed -i '0,/65101/ s/        "65101.*/&\n&/' manager.json
+			sed -i '0,/65101/ s/        "65101.*/&\n&/' /etc/shadowsocks-libev/manager.json
 		done
 	fi
 	#sed -i "s:MySecretKey:$SHADOWSOCKS_PASS_JSON:g" /etc/shadowsocks-libev/config.json
@@ -502,19 +508,25 @@ if [ "$OPENVPN" = "yes" ]; then
 		cd /tmp
 		tar xzvf EasyRSA-unix-v${EASYRSA_VERSION}.tgz
 		cd /tmp/EasyRSA-v${EASYRSA_VERSION}
-		mkdir -p /etc/openvpn/ca/pki/private /etc/openvpn/ca/pki/issued
-		./easyrsa init-pki
-		./easyrsa --batch build-ca nopass
-		EASYRSA_CERT_EXPIRE=3650 ./easyrsa build-server-full server nopass
-		EASYRSA_CERT_EXPIRE=3650 EASYRSA_REQ_CN=openmptcprouter ./easyrsa build-client-full "openmptcprouter" nopass
-		EASYRSA_CRL_DAYS=3650 ./easyrsa gen-crl
-		mv pki/ca.crt /etc/openvpn/ca/pki/ca.crt
-		mv pki/private/ca.key /etc/openvpn/ca/pki/private/ca.key
-		mv pki/issued/server.crt /etc/openvpn/ca/pki/issued/server.crt
-		mv pki/private/server.key /etc/openvpn/ca/pki/private/server.key
-		mv pki/crl.pem /etc/openvpn/ca/pki/crl.pem
-		mv pki/issued/openmptcprouter.crt /etc/openvpn/ca/pki/issued/openmptcprouter.crt
-		mv pki/private/openmptcprouter.key /etc/openvpn/ca/pki/private/openmptcprouter.key
+		mkdir /etc/openvpn/ca
+		cp easyrsa /etc/openvpn/ca/
+		cp openssl-easyrsa.cnf /etc/openvpn/ca/
+		cp vars.example /etc/openvpn/ca/vars
+		cp -r x509-types /etc/openvpn/ca/
+
+		#mkdir -p /etc/openvpn/ca/pki/private /etc/openvpn/ca/pki/issued
+		#./easyrsa init-pki
+		#./easyrsa --batch build-ca nopass
+		#EASYRSA_CERT_EXPIRE=3650 ./easyrsa build-server-full server nopass
+		#EASYRSA_CERT_EXPIRE=3650 EASYRSA_REQ_CN=openmptcprouter ./easyrsa build-client-full "openmptcprouter" nopass
+		#EASYRSA_CRL_DAYS=3650 ./easyrsa gen-crl
+		#mv pki/ca.crt /etc/openvpn/ca/pki/ca.crt
+		#mv pki/private/ca.key /etc/openvpn/ca/pki/private/ca.key
+		#mv pki/issued/server.crt /etc/openvpn/ca/pki/issued/server.crt
+		#mv pki/private/server.key /etc/openvpn/ca/pki/private/server.key
+		#mv pki/crl.pem /etc/openvpn/ca/pki/crl.pem
+		#mv pki/issued/openmptcprouter.crt /etc/openvpn/ca/pki/issued/openmptcprouter.crt
+		#mv pki/private/openmptcprouter.key /etc/openvpn/ca/pki/private/openmptcprouter.key
 	fi
 
 	if [ -f "/etc/openvpn/server/server.crt" ]; then

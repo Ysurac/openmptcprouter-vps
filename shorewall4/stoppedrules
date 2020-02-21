@@ -13,16 +13,14 @@
 ###############################################################################
 #ACTION         SOURCE          DEST            PROTO   DEST            SOURCE
 #                                                       PORT(S)         PORT(S)
-ACCEPT          gt-tun0         -
-ACCEPT          -               gt-tun0
-ACCEPT          gt-udp-tun0     -
-ACCEPT          -               gt-udp-tun0
-ACCEPT          mlvpn0		-
-ACCEPT          -               mlvpn0
-ACCEPT          dsvpn0		-
-ACCEPT          -               dsvpn0
-ACCEPT          tun0		-
-ACCEPT          -               tun0
-ACCEPT          tun1		-
-ACCEPT          -               tun1
+ACCEPT          gt-tun+         -
+ACCEPT          -               gt-tun+
+ACCEPT          gt-udp-tun+     -
+ACCEPT          -               gt-udp-tun+
+ACCEPT          mlvpn+		-
+ACCEPT          -               mlvpn+
+ACCEPT          dsvpn+		-
+ACCEPT          -               dsvpn+
+ACCEPT          tun+		-
+ACCEPT          -               tun+
 

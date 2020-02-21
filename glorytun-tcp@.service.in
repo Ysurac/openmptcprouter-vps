@@ -6,6 +6,7 @@ After=network.target network-online.target
 Type=simple
 Restart=always
 ExecStart=/usr/local/bin/glorytun-tcp-run /etc/glorytun-tcp/%i
+ExecStartPost=-/etc/glorytun-tcp/post.sh /etc/glorytun-tcp/%i
 CapabilityBoundingSet=CAP_NET_ADMIN CAP_NET_RAW
 
 [Install]

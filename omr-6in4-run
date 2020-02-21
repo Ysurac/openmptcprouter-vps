@@ -1,0 +1,22 @@
+#!/bin/sh
+
+set -e
+
+if [ ! -f "$2" ]; then
+        echo "usage: $(basename "$0") FILE"
+        exit 1
+fi
+
+. "$(readlink -f "$2")"
+
+DEV="omr-6in4-$(basename "$2")"
+
+if [ "$1" = "start" ]; then
+        [ -n "$(ip tunnel show ${DEV})" ] && ip tunnel del ${DEV} 2>&1 >/dev/null
+        ip tunnel add ${DEV} mode sit remote ${REMOTEIP} local ${LOCALIP}
+        ip -6 addr add ${LOCALIP6} dev ${DEV}
+        ip link set ${DEV} up
+fi
+if [ "$1" = "stop" ]; then
+        ip tunnel del ${DEV}
+fi

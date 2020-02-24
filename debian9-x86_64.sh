@@ -16,8 +16,8 @@ MLVPN_PASS=${MLVPN_PASS:-$(head -c 32 /dev/urandom | base64 -w0)}
 OPENVPN=${OPENVPN:-yes}
 DSVPN=${DSVPN:-yes}
 INTERFACE=${INTERFACE:-$(ip -o -4 route show to default | grep -m 1 -Po '(?<=dev )(\S+)' | tr -d "\n")}
-KERNEL_VERSION="4.19.80"
-KERNEL_PACKAGE_VERSION="1.6+c62d9f6"
+KERNEL_VERSION="4.19.104"
+KERNEL_PACKAGE_VERSION="1.7+b864616"
 KERNEL_RELEASE="${KERNEL_VERSION}-mptcp_${KERNEL_PACKAGE_VERSION}"
 GLORYTUN_UDP_VERSION="13703fb15fb6a225ccf2488e3680ac14331c1c9e"
 #MLVPN_VERSION="8f9720978b28c1954f9f229525333547283316d2"
@@ -508,7 +508,7 @@ if [ "$OPENVPN" = "yes" ]; then
 		cd /tmp
 		tar xzvf EasyRSA-unix-v${EASYRSA_VERSION}.tgz
 		cd /tmp/EasyRSA-v${EASYRSA_VERSION}
-		mkdir -f /etc/openvpn/ca
+		mkdir -p /etc/openvpn/ca
 		cp easyrsa /etc/openvpn/ca/
 		cp openssl-easyrsa.cnf /etc/openvpn/ca/
 		cp vars.example /etc/openvpn/ca/vars

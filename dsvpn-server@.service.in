@@ -1,0 +1,10 @@
+[Unit]
+Description=Dead Simple VPN - Server on %I
+
+[Service]
+ExecStart=/usr/local/bin/dsvpn-run /etc/dsvpn/%i
+Restart=always
+RestartSec=15
+
+[Install]
+WantedBy=network.target

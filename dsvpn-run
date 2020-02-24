@@ -1,0 +1,19 @@
+#!/bin/sh
+
+set -e
+
+if [ ! -f "$1" ]; then
+        echo "usage: $(basename "$0") FILE"
+        exit 1
+fi
+
+. "$(readlink -f "$1")"
+
+exec dsvpn \
+	${MODE:+server} \
+	"$1".key \
+	auto \
+	${PORT:+65401} \
+	${DEV:+dsvpn0} \
+	${LOCALTUNIP:+10.255.251.1} \
+	${REMOTETUNIP:+10.255.251.1}

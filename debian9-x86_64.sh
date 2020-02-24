@@ -19,11 +19,11 @@ INTERFACE=${INTERFACE:-$(ip -o -4 route show to default | grep -m 1 -Po '(?<=dev
 KERNEL_VERSION="4.19.80"
 KERNEL_PACKAGE_VERSION="1.6+c62d9f6"
 KERNEL_RELEASE="${KERNEL_VERSION}-mptcp_${KERNEL_PACKAGE_VERSION}"
-GLORYTUN_UDP_VERSION="7f30cdc5ee2e89f0008144ad71f4c0bd4215a0f4"
+GLORYTUN_UDP_VERSION="13703fb15fb6a225ccf2488e3680ac14331c1c9e"
 #MLVPN_VERSION="8f9720978b28c1954f9f229525333547283316d2"
 MLVPN_VERSION="f45cec350a6879b8b020143a78134a022b5df2a7"
 OBFS_VERSION="486bebd9208539058e57e23a12f23103016e09b4"
-OMR_ADMIN_VERSION="60a72b11bedb94ccc03da58d8c418642c0230402"
+OMR_ADMIN_VERSION="9f69540b62b9919123dc39e256421ad4d55f51dc"
 DSVPN_VERSION="3b99d2ef6c02b2ef68b5784bec8adfdd55b29b1a"
 #V2RAY_VERSION="v1.1.0"
 V2RAY_VERSION="v1.2.0-8-g59b8f4f"
@@ -308,10 +308,16 @@ if [ "$OMR_ADMIN" = "yes" ]; then
 	fi
 	#apt-get -y install unzip gunicorn python3-flask-restful python3-openssl python3-pip python3-setuptools python3-wheel
 	#apt-get -y install unzip python3-openssl python3-pip python3-setuptools python3-wheel
-	apt-get -y install python3-passlib python3-jwt python3-netaddr
+	if [ "$ID" = "ubuntu" ]; then
+		apt-get -y install python3-passlib python3-netaddr
+		apt-get -y remove python3-jwt
+		pip3 -q install pyjwt
+	else
+		apt-get -y install python3-passlib python3-jwt python3-netaddr
+	fi
 	echo '-- pip3 install needed python modules'
 	#pip3 install pyjwt passlib uvicorn fastapi netjsonconfig python-multipart netaddr
-	pip3 install fastapi netjsonconfig python-multipart uvicorn
+	pip3 -q install fastapi netjsonconfig python-multipart uvicorn
 	mkdir -p /etc/openmptcprouter-vps-admin/omr-6in4
 	mkdir -p /var/opt/openmptcprouter
 	wget -O /lib/systemd/system/omr-admin.service https://www.openmptcprouter.com/${VPSPATH}/omr-admin.service.in
@@ -502,19 +508,25 @@ if [ "$OPENVPN" = "yes" ]; then
 		cd /tmp
 		tar xzvf EasyRSA-unix-v${EASYRSA_VERSION}.tgz
 		cd /tmp/EasyRSA-v${EASYRSA_VERSION}
-		mkdir -p /etc/openvpn/ca/pki/private /etc/openvpn/ca/pki/issued
-		./easyrsa init-pki
-		./easyrsa --batch build-ca nopass
-		EASYRSA_CERT_EXPIRE=3650 ./easyrsa build-server-full server nopass
-		EASYRSA_CERT_EXPIRE=3650 EASYRSA_REQ_CN=openmptcprouter ./easyrsa build-client-full "openmptcprouter" nopass
-		EASYRSA_CRL_DAYS=3650 ./easyrsa gen-crl
-		mv pki/ca.crt /etc/openvpn/ca/pki/ca.crt
-		mv pki/private/ca.key /etc/openvpn/ca/pki/private/ca.key
-		mv pki/issued/server.crt /etc/openvpn/ca/pki/issued/server.crt
-		mv pki/private/server.key /etc/openvpn/ca/pki/private/server.key
-		mv pki/crl.pem /etc/openvpn/ca/pki/crl.pem
-		mv pki/issued/openmptcprouter.crt /etc/openvpn/ca/pki/issued/openmptcprouter.crt
-		mv pki/private/openmptcprouter.key /etc/openvpn/ca/pki/private/openmptcprouter.key
+		mkdir /etc/openvpn/ca
+		cp easyrsa /etc/openvpn/ca/
+		cp openssl-easyrsa.cnf /etc/openvpn/ca/
+		cp vars.example /etc/openvpn/ca/vars
+		cp -r x509-types /etc/openvpn/ca/
+
+		#mkdir -p /etc/openvpn/ca/pki/private /etc/openvpn/ca/pki/issued
+		#./easyrsa init-pki
+		#./easyrsa --batch build-ca nopass
+		#EASYRSA_CERT_EXPIRE=3650 ./easyrsa build-server-full server nopass
+		#EASYRSA_CERT_EXPIRE=3650 EASYRSA_REQ_CN=openmptcprouter ./easyrsa build-client-full "openmptcprouter" nopass
+		#EASYRSA_CRL_DAYS=3650 ./easyrsa gen-crl
+		#mv pki/ca.crt /etc/openvpn/ca/pki/ca.crt
+		#mv pki/private/ca.key /etc/openvpn/ca/pki/private/ca.key
+		#mv pki/issued/server.crt /etc/openvpn/ca/pki/issued/server.crt
+		#mv pki/private/server.key /etc/openvpn/ca/pki/private/server.key
+		#mv pki/crl.pem /etc/openvpn/ca/pki/crl.pem
+		#mv pki/issued/openmptcprouter.crt /etc/openvpn/ca/pki/issued/openmptcprouter.crt
+		#mv pki/private/openmptcprouter.key /etc/openvpn/ca/pki/private/openmptcprouter.key
 	fi
 
 	if [ -f "/etc/openvpn/server/server.crt" ]; then
@@ -686,9 +698,9 @@ wget -O /usr/local/bin/multipath https://www.openmptcprouter.com/${VPSPATH}/mult
 chmod 755 /usr/local/bin/multipath
 
 # Add OpenMPTCProuter service
-#wget -O /usr/local/bin/omr-service https://www.openmptcprouter.com/${VPSPATH}/omr-service
-#chmod 755 /usr/local/bin/omr-service
-#wget -O /lib/systemd/system/omr.service https://www.openmptcprouter.com/${VPSPATH}/omr.service.in
+wget -O /usr/local/bin/omr-service https://www.openmptcprouter.com/${VPSPATH}/omr-service
+chmod 755 /usr/local/bin/omr-service
+wget -O /lib/systemd/system/omr.service https://www.openmptcprouter.com/${VPSPATH}/omr.service.in
 wget -O /usr/local/bin/omr-6in4-run https://www.openmptcprouter.com/${VPSPATH}/omr-6in4-run
 chmod 755 /usr/local/bin/omr-6in4-run
 wget -O /lib/systemd/system/omr6in4@.service https://www.openmptcprouter.com/${VPSPATH}/omr6in4%40.service.in
@@ -696,7 +708,7 @@ if systemctl -q is-active omr-6in4.service; then
 	systemctl -q stop omr-6in4 > /dev/null 2>&1
 	systemctl -q disable omr-6in4 > /dev/null 2>&1
 fi
-#systemctl enable omr.service
+systemctl enable omr.service
 
 # Change SSH port to 65222
 sed -i 's:#Port 22:Port 65222:g' /etc/ssh/sshd_config

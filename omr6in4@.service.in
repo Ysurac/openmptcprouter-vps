@@ -1,0 +1,11 @@
+[Unit]
+Description=OMR6IN4 on %I
+After=network.target network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/bin/omr-6in4-run start /etc/openmptcprouter-vps-admin/omr-6in4/%i
+ExecStop=/usr/local/bin/omr-6in4-run start /etc/openmptcprouter-vps-admin/omr-6in4/%i
+
+[Install]
+WantedBy=multi-user.target

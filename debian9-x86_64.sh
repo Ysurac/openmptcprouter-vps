@@ -23,7 +23,7 @@ GLORYTUN_UDP_VERSION="7f30cdc5ee2e89f0008144ad71f4c0bd4215a0f4"
 #MLVPN_VERSION="8f9720978b28c1954f9f229525333547283316d2"
 MLVPN_VERSION="f45cec350a6879b8b020143a78134a022b5df2a7"
 OBFS_VERSION="486bebd9208539058e57e23a12f23103016e09b4"
-OMR_ADMIN_VERSION="4ed9794b3ccc75d0d0bc01dc4d2ae689e51bb3de"
+OMR_ADMIN_VERSION="8e7379e5db352a30efbd6af60924ccad3b350fbd"
 DSVPN_VERSION="3b99d2ef6c02b2ef68b5784bec8adfdd55b29b1a"
 #V2RAY_VERSION="v1.1.0"
 V2RAY_VERSION="v1.2.0-8-g59b8f4f"
@@ -503,12 +503,12 @@ if [ "$OPENVPN" = "yes" ]; then
 	#	cd /etc/openvpn/server
 	#	openvpn --genkey --secret static.key
 	#fi
-	if [ "$ID" = "ubuntu" ] && [ "$VERSION_ID" = "18.04" ]; then
+	if [ "$ID" = "ubuntu" ] && [ "$VERSION_ID" = "18.04" ] && [ ! -d /etc/openvpn/ca ]; then
 		wget -O /tmp/EasyRSA-unix-v${EASYRSA_VERSION}.tgz https://github.com/OpenVPN/easy-rsa/releases/download/v3.0.6/EasyRSA-unix-v${EASYRSA_VERSION}.tgz
 		cd /tmp
 		tar xzvf EasyRSA-unix-v${EASYRSA_VERSION}.tgz
 		cd /tmp/EasyRSA-v${EASYRSA_VERSION}
-		mkdir /etc/openvpn/ca
+		mkdir -f /etc/openvpn/ca
 		cp easyrsa /etc/openvpn/ca/
 		cp openssl-easyrsa.cnf /etc/openvpn/ca/
 		cp vars.example /etc/openvpn/ca/vars

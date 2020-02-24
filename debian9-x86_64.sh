@@ -698,9 +698,9 @@ wget -O /usr/local/bin/multipath https://www.openmptcprouter.com/${VPSPATH}/mult
 chmod 755 /usr/local/bin/multipath
 
 # Add OpenMPTCProuter service
-#wget -O /usr/local/bin/omr-service https://www.openmptcprouter.com/${VPSPATH}/omr-service
-#chmod 755 /usr/local/bin/omr-service
-#wget -O /lib/systemd/system/omr.service https://www.openmptcprouter.com/${VPSPATH}/omr.service.in
+wget -O /usr/local/bin/omr-service https://www.openmptcprouter.com/${VPSPATH}/omr-service
+chmod 755 /usr/local/bin/omr-service
+wget -O /lib/systemd/system/omr.service https://www.openmptcprouter.com/${VPSPATH}/omr.service.in
 wget -O /usr/local/bin/omr-6in4-run https://www.openmptcprouter.com/${VPSPATH}/omr-6in4-run
 chmod 755 /usr/local/bin/omr-6in4-run
 wget -O /lib/systemd/system/omr6in4@.service https://www.openmptcprouter.com/${VPSPATH}/omr6in4%40.service.in
@@ -708,7 +708,7 @@ if systemctl -q is-active omr-6in4.service; then
 	systemctl -q stop omr-6in4 > /dev/null 2>&1
 	systemctl -q disable omr-6in4 > /dev/null 2>&1
 fi
-#systemctl enable omr.service
+systemctl enable omr.service
 
 # Change SSH port to 65222
 sed -i 's:#Port 22:Port 65222:g' /etc/ssh/sshd_config

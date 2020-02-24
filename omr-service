@@ -113,7 +113,7 @@ $allip_mlvpn"
 				current_vpn="$(cat /etc/openmptcprouter-vps-admin/current-vpn)"
 				[ "$current_vpn" = "glorytun_tcp" ] && systemctl -q restart glorytun-tcp@tun0
 				[ "$current_vpn" = "glorytun_udp" ] && systemctl -q restart glorytun-udp@tun0
-				systemctl -q restart systemd-networkd
+				#systemctl -q restart systemd-networkd
 				_multipath
 				sleep 10
 			}

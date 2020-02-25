@@ -99,7 +99,7 @@ $allip_mlvpn"
 							ip tunnel change omr-6in4 mode sit remote $ipd local $ip
 							#echo "VPS_ADDR=$ip" > /etc/shorewall/params.vpn
 							#echo "OMR_ADDR=$ipd" >> /etc/shorewall/params.vpn
-							#iface=$(ip -4 addr | grep $ip/ | awk '{print $7}' | tr -d "\n")
+							iface=$(ip -4 addr | grep $ip/ | awk '{print $7}' | tr -d "\n")
 							#echo "VPS_IFACE=$iface" >> /etc/shorewall/params.vpn
 							#systemctl reload shorewall
 							_multipath

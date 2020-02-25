@@ -97,11 +97,11 @@ $allip_mlvpn"
 						if $(exit $statusp); then
 							logger -t "OMR-Service" "Set new 6in4 tunnel IPs"
 							ip tunnel change omr-6in4 mode sit remote $ipd local $ip
-							echo "VPS_ADDR=$ip" > /etc/shorewall/params.vpn
-							echo "OMR_ADDR=$ipd" >> /etc/shorewall/params.vpn
-							iface=$(ip -4 addr | grep $ip/ | awk '{print $7}' | tr -d "\n")
-							echo "VPS_IFACE=$iface" >> /etc/shorewall/params.vpn
-							systemctl reload shorewall
+							#echo "VPS_ADDR=$ip" > /etc/shorewall/params.vpn
+							#echo "OMR_ADDR=$ipd" >> /etc/shorewall/params.vpn
+							#iface=$(ip -4 addr | grep $ip/ | awk '{print $7}' | tr -d "\n")
+							#echo "VPS_IFACE=$iface" >> /etc/shorewall/params.vpn
+							#systemctl reload shorewall
 							_multipath
 							break
 						fi
@@ -109,7 +109,7 @@ $allip_mlvpn"
 				fi
 			done < <(printf '%s\n' "$allip")
 			[ -z "$iface" ] && [ -f /etc/openmptcprouter-vps-admin/current-vpn ] && {
-				logger -t "OMR-Service" "Restart Glorytun and networkd"
+				logger -t "OMR-Service" "Restart Glorytun"
 				current_vpn="$(cat /etc/openmptcprouter-vps-admin/current-vpn)"
 				[ "$current_vpn" = "glorytun_tcp" ] && systemctl -q restart glorytun-tcp@tun0
 				[ "$current_vpn" = "glorytun_udp" ] && systemctl -q restart glorytun-udp@tun0

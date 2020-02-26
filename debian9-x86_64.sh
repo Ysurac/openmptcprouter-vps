@@ -708,7 +708,7 @@ if systemctl -q is-active omr-6in4.service; then
 	systemctl -q stop omr-6in4 > /dev/null 2>&1
 	systemctl -q disable omr-6in4 > /dev/null 2>&1
 fi
-systemctl enable omr.service
+#systemctl enable omr.service
 
 # Change SSH port to 65222
 sed -i 's:#Port 22:Port 65222:g' /etc/ssh/sshd_config
@@ -915,7 +915,7 @@ else
 	echo 'Restarting glorytun and omr...'
 	systemctl -q start glorytun-tcp@tun0
 	systemctl -q start glorytun-udp@tun0
-	systemctl -q restart omr
+	#systemctl -q restart omr
 	echo 'done'
 	if [ "$OPENVPN" = "yes" ]; then
 		echo 'Restarting OpenVPN'

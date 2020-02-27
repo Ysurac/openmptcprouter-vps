@@ -704,11 +704,15 @@ chmod 755 /usr/local/bin/multipath
 wget -O /usr/local/bin/omr-6in4-run https://www.openmptcprouter.com/${VPSPATH}/omr-6in4-run
 chmod 755 /usr/local/bin/omr-6in4-run
 wget -O /lib/systemd/system/omr6in4@.service https://www.openmptcprouter.com/${VPSPATH}/omr6in4%40.service.in
+if systemctl -q is-active omr.service; then
+	systemctl -q stop omr > /dev/null 2>&1
+	systemctl -q disable omr > /dev/null 2>&1
+fi
 if systemctl -q is-active omr-6in4.service; then
 	systemctl -q stop omr-6in4 > /dev/null 2>&1
 	systemctl -q disable omr-6in4 > /dev/null 2>&1
 fi
-#systemctl enable omr.service
+systemctl enable omr6in4@user1.service
 
 # Change SSH port to 65222
 sed -i 's:#Port 22:Port 65222:g' /etc/ssh/sshd_config
@@ -749,6 +753,7 @@ else
 	sed -i 's:10.0.0.2:$OMR_ADDR:g' /etc/shorewall/rules
 	wget -O /etc/shorewall6/params https://www.openmptcprouter.com/${VPSPATH}/shorewall6/params
 	wget -O /etc/shorewall6/params.net https://www.openmptcprouter.com/${VPSPATH}/shorewall6/params.net
+	wget -O /etc/shorewall6/params.vpn https://www.openmptcprouter.com/${VPSPATH}/shorewall6/params.vpn
 	wget -O /etc/shorewall6/interfaces https://www.openmptcprouter.com/${VPSPATH}/shorewall6/interfaces
 	wget -O /etc/shorewall6/stoppedrules https://www.openmptcprouter.com/${VPSPATH}/shorewall6/stoppedrules
 	wget -O /etc/shorewall6/snat https://www.openmptcprouter.com/${VPSPATH}/shorewall6/snat

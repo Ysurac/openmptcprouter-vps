@@ -15,5 +15,5 @@
 ###############################################################################
 #ZONE   INTERFACE       OPTIONS
 net	$NET_IFACE            dhcp,tcpflags,rpfilter,forward=1,routeback
-vpn	omr-6in4        tcpflags,forward=1,routeback
+vpn	omr-6in4-user+        tcpflags,forward=1,routeback
 

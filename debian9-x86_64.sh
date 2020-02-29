@@ -32,7 +32,7 @@ SHADOWSOCKS_VERSION="3.3.3"
 VPS_DOMAIN=${VPS_DOMAIN:-$(wget -4 -qO- -T 2 http://hostname.openmptcprouter.com)}
 VPSPATH="server"
 
-OMR_VERSION="0.1011"
+OMR_VERSION="0.1012"
 
 set -e
 umask 0022

@@ -23,7 +23,7 @@ GLORYTUN_UDP_VERSION="a9408e799ddbb74b5476fba70a495770322cd327"
 #MLVPN_VERSION="8f9720978b28c1954f9f229525333547283316d2"
 MLVPN_VERSION="f45cec350a6879b8b020143a78134a022b5df2a7"
 OBFS_VERSION="486bebd9208539058e57e23a12f23103016e09b4"
-OMR_ADMIN_VERSION="9f69540b62b9919123dc39e256421ad4d55f51dc"
+OMR_ADMIN_VERSION="6cc1a3236a61344a03245284082a9602da709aca"
 DSVPN_VERSION="3b99d2ef6c02b2ef68b5784bec8adfdd55b29b1a"
 #V2RAY_VERSION="v1.1.0"
 V2RAY_VERSION="v1.2.0-8-g59b8f4f"
@@ -698,21 +698,18 @@ wget -O /usr/local/bin/multipath https://www.openmptcprouter.com/${VPSPATH}/mult
 chmod 755 /usr/local/bin/multipath
 
 # Add OpenMPTCProuter service
-#wget -O /usr/local/bin/omr-service https://www.openmptcprouter.com/${VPSPATH}/omr-service
-#chmod 755 /usr/local/bin/omr-service
-#wget -O /lib/systemd/system/omr.service https://www.openmptcprouter.com/${VPSPATH}/omr.service.in
+wget -O /usr/local/bin/omr-service https://www.openmptcprouter.com/${VPSPATH}/omr-service
+chmod 755 /usr/local/bin/omr-service
+wget -O /lib/systemd/system/omr.service https://www.openmptcprouter.com/${VPSPATH}/omr.service.in
 wget -O /usr/local/bin/omr-6in4-run https://www.openmptcprouter.com/${VPSPATH}/omr-6in4-run
 chmod 755 /usr/local/bin/omr-6in4-run
 wget -O /lib/systemd/system/omr6in4@.service https://www.openmptcprouter.com/${VPSPATH}/omr6in4%40.service.in
-if systemctl -q is-active omr.service; then
-	systemctl -q stop omr > /dev/null 2>&1
-	systemctl -q disable omr > /dev/null 2>&1
-fi
 if systemctl -q is-active omr-6in4.service; then
 	systemctl -q stop omr-6in4 > /dev/null 2>&1
 	systemctl -q disable omr-6in4 > /dev/null 2>&1
 fi
 systemctl enable omr6in4@user1.service
+systemctl enable omr.service
 
 # Change SSH port to 65222
 sed -i 's:#Port 22:Port 65222:g' /etc/ssh/sshd_config
@@ -917,10 +914,12 @@ else
 		systemctl -q start dsvpn-server@dsvpn0
 		echo 'done'
 	fi
-	echo 'Restarting glorytun and omr...'
+	echo 'Restarting glorytun...'
 	systemctl -q start glorytun-tcp@tun0
 	systemctl -q start glorytun-udp@tun0
-	#systemctl -q restart omr
+	echo 'done'
+	echo 'Restarting omr...'
+	systemctl -q restart omr
 	echo 'done'
 	if [ "$OPENVPN" = "yes" ]; then
 		echo 'Restarting OpenVPN'

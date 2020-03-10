@@ -23,7 +23,7 @@ GLORYTUN_UDP_VERSION="a9408e799ddbb74b5476fba70a495770322cd327"
 #MLVPN_VERSION="8f9720978b28c1954f9f229525333547283316d2"
 MLVPN_VERSION="f45cec350a6879b8b020143a78134a022b5df2a7"
 OBFS_VERSION="486bebd9208539058e57e23a12f23103016e09b4"
-OMR_ADMIN_VERSION="9f69540b62b9919123dc39e256421ad4d55f51dc"
+OMR_ADMIN_VERSION="0bee06d21605c9d9b4494a77e71043ce432aa5c2"
 DSVPN_VERSION="3b99d2ef6c02b2ef68b5784bec8adfdd55b29b1a"
 #V2RAY_VERSION="v1.1.0"
 V2RAY_VERSION="v1.2.0-8-g59b8f4f"
@@ -32,7 +32,7 @@ SHADOWSOCKS_VERSION="3.3.3"
 VPS_DOMAIN=${VPS_DOMAIN:-$(wget -4 -qO- -T 2 http://hostname.openmptcprouter.com)}
 VPSPATH="server"
 
-OMR_VERSION="0.1012"
+OMR_VERSION="0.1013"
 
 set -e
 umask 0022
@@ -570,7 +570,7 @@ fi
 echo 'Glorytun UDP'
 # Install Glorytun UDP
 if systemctl -q is-active glorytun-udp@tun0.service; then
-	systemctl -q stop glorytun-udp@tun0 > /dev/null 2>&1
+	systemctl -q stop glorytun-udp@* > /dev/null 2>&1
 fi
 rm -f /var/lib/dpkg/lock
 rm -f /var/lib/dpkg/lock-frontend
@@ -648,7 +648,7 @@ fi
 
 # Install Glorytun TCP
 if systemctl -q is-active glorytun-tcp@tun0.service; then
-	systemctl -q stop glorytun-tcp@tun0 > /dev/null 2>&1
+	systemctl -q stop glorytun-tcp@* > /dev/null 2>&1
 fi
 if [ "$ID" = "debian" ]; then
 	if [ "$VERSION_ID" = "9" ]; then
@@ -708,7 +708,7 @@ if systemctl -q is-active omr-6in4.service; then
 	systemctl -q stop omr-6in4 > /dev/null 2>&1
 	systemctl -q disable omr-6in4 > /dev/null 2>&1
 fi
-systemctl enable omr6in4@user1.service
+systemctl enable omr6in4@user0.service
 systemctl enable omr.service
 
 # Change SSH port to 65222
@@ -906,18 +906,20 @@ else
 	echo 'done'
 	if [ "$MLVPN" = "yes" ]; then
 		echo 'Restarting mlvpn...'
-		systemctl -q start mlvpn@mlvpn0
+		systemctl -q restart mlvpn@mlvpn0
 		echo 'done'
 	fi
 	if [ "$DSVPN" = "yes" ]; then
 		echo 'Restarting dsvpn...'
-		systemctl -q start dsvpn-server@dsvpn0
+		systemctl -q restart dsvpn-server@* || true
 		echo 'done'
 	fi
-	echo 'Restarting glorytun and omr...'
-	systemctl -q start glorytun-tcp@tun0
-	systemctl -q start glorytun-udp@tun0
-	systemctl -q restart omr
+	echo 'Restarting glorytun...'
+	systemctl -q restart glorytun-tcp@* || true
+	systemctl -q restart glorytun-udp@* || true
+	echo 'done'
+	echo 'Restarting omr6in4...'
+	systemctl -q restart omr6in4@* || true
 	echo 'done'
 	if [ "$OPENVPN" = "yes" ]; then
 		echo 'Restarting OpenVPN'
@@ -954,6 +956,9 @@ else
 	echo 'done'
 	echo 'Apply latest sysctl...'
 	sysctl -p /etc/sysctl.d/90-shadowsocks.conf > /dev/null 2>&1
+	echo 'done'
+	echo 'Restarting omr...'
+	systemctl -q restart omr
 	echo 'done'
 	echo 'Restarting shadowsocks...'
 	systemctl -q restart shadowsocks-libev-manager@manager

@@ -9,7 +9,7 @@ NotifyAccess=main
 ExecStart=/usr/local/sbin/mlvpn --config /etc/mlvpn/%i.conf --name %i --user mlvpn --quiet
 ExecReload=/bin/kill -HUP $MAINPID
 WorkingDirectory=/etc/mlvpn
-Restart=on-failure
+Restart=always
 
 [Install]
 WantedBy=multi-user.target

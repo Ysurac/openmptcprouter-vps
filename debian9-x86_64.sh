@@ -16,14 +16,14 @@ MLVPN_PASS=${MLVPN_PASS:-$(head -c 32 /dev/urandom | base64 -w0)}
 OPENVPN=${OPENVPN:-yes}
 DSVPN=${DSVPN:-yes}
 INTERFACE=${INTERFACE:-$(ip -o -4 route show to default | grep -m 1 -Po '(?<=dev )(\S+)' | tr -d "\n")}
-KERNEL_VERSION="4.19.80"
-KERNEL_PACKAGE_VERSION="1.6+c62d9f6"
+KERNEL_VERSION="4.19.104"
+KERNEL_PACKAGE_VERSION="1.7+b864616"
 KERNEL_RELEASE="${KERNEL_VERSION}-mptcp_${KERNEL_PACKAGE_VERSION}"
-GLORYTUN_UDP_VERSION="13703fb15fb6a225ccf2488e3680ac14331c1c9e"
+GLORYTUN_UDP_VERSION="a9408e799ddbb74b5476fba70a495770322cd327"
 #MLVPN_VERSION="8f9720978b28c1954f9f229525333547283316d2"
 MLVPN_VERSION="f45cec350a6879b8b020143a78134a022b5df2a7"
 OBFS_VERSION="486bebd9208539058e57e23a12f23103016e09b4"
-OMR_ADMIN_VERSION="9f69540b62b9919123dc39e256421ad4d55f51dc"
+OMR_ADMIN_VERSION="0bee06d21605c9d9b4494a77e71043ce432aa5c2"
 DSVPN_VERSION="3b99d2ef6c02b2ef68b5784bec8adfdd55b29b1a"
 #V2RAY_VERSION="v1.1.0"
 V2RAY_VERSION="v1.2.0-8-g59b8f4f"
@@ -503,12 +503,12 @@ if [ "$OPENVPN" = "yes" ]; then
 	#	cd /etc/openvpn/server
 	#	openvpn --genkey --secret static.key
 	#fi
-	if [ "$ID" = "ubuntu" ] && [ "$VERSION_ID" = "18.04" ]; then
+	if [ "$ID" = "ubuntu" ] && [ "$VERSION_ID" = "18.04" ] && [ ! -d /etc/openvpn/ca ]; then
 		wget -O /tmp/EasyRSA-unix-v${EASYRSA_VERSION}.tgz https://github.com/OpenVPN/easy-rsa/releases/download/v3.0.6/EasyRSA-unix-v${EASYRSA_VERSION}.tgz
 		cd /tmp
 		tar xzvf EasyRSA-unix-v${EASYRSA_VERSION}.tgz
 		cd /tmp/EasyRSA-v${EASYRSA_VERSION}
-		mkdir /etc/openvpn/ca
+		mkdir -p /etc/openvpn/ca
 		cp easyrsa /etc/openvpn/ca/
 		cp openssl-easyrsa.cnf /etc/openvpn/ca/
 		cp vars.example /etc/openvpn/ca/vars
@@ -570,7 +570,7 @@ fi
 echo 'Glorytun UDP'
 # Install Glorytun UDP
 if systemctl -q is-active glorytun-udp@tun0.service; then
-	systemctl -q stop glorytun-udp@tun0 > /dev/null 2>&1
+	systemctl -q stop glorytun-udp@* > /dev/null 2>&1
 fi
 rm -f /var/lib/dpkg/lock
 rm -f /var/lib/dpkg/lock-frontend
@@ -648,7 +648,7 @@ fi
 
 # Install Glorytun TCP
 if systemctl -q is-active glorytun-tcp@tun0.service; then
-	systemctl -q stop glorytun-tcp@tun0 > /dev/null 2>&1
+	systemctl -q stop glorytun-tcp@* > /dev/null 2>&1
 fi
 if [ "$ID" = "debian" ]; then
 	if [ "$VERSION_ID" = "9" ]; then
@@ -708,6 +708,7 @@ if systemctl -q is-active omr-6in4.service; then
 	systemctl -q stop omr-6in4 > /dev/null 2>&1
 	systemctl -q disable omr-6in4 > /dev/null 2>&1
 fi
+systemctl enable omr6in4@user0.service
 systemctl enable omr.service
 
 # Change SSH port to 65222
@@ -749,6 +750,7 @@ else
 	sed -i 's:10.0.0.2:$OMR_ADDR:g' /etc/shorewall/rules
 	wget -O /etc/shorewall6/params https://www.openmptcprouter.com/${VPSPATH}/shorewall6/params
 	wget -O /etc/shorewall6/params.net https://www.openmptcprouter.com/${VPSPATH}/shorewall6/params.net
+	wget -O /etc/shorewall6/params.vpn https://www.openmptcprouter.com/${VPSPATH}/shorewall6/params.vpn
 	wget -O /etc/shorewall6/interfaces https://www.openmptcprouter.com/${VPSPATH}/shorewall6/interfaces
 	wget -O /etc/shorewall6/stoppedrules https://www.openmptcprouter.com/${VPSPATH}/shorewall6/stoppedrules
 	wget -O /etc/shorewall6/snat https://www.openmptcprouter.com/${VPSPATH}/shorewall6/snat
@@ -904,18 +906,20 @@ else
 	echo 'done'
 	if [ "$MLVPN" = "yes" ]; then
 		echo 'Restarting mlvpn...'
-		systemctl -q start mlvpn@mlvpn0
+		systemctl -q restart mlvpn@mlvpn0
 		echo 'done'
 	fi
 	if [ "$DSVPN" = "yes" ]; then
 		echo 'Restarting dsvpn...'
-		systemctl -q start dsvpn-server@dsvpn0
+		systemctl -q restart dsvpn-server@* || true
 		echo 'done'
 	fi
-	echo 'Restarting glorytun and omr...'
-	systemctl -q start glorytun-tcp@tun0
-	systemctl -q start glorytun-udp@tun0
-	systemctl -q restart omr
+	echo 'Restarting glorytun...'
+	systemctl -q restart glorytun-tcp@* || true
+	systemctl -q restart glorytun-udp@* || true
+	echo 'done'
+	echo 'Restarting omr6in4...'
+	systemctl -q restart omr6in4@* || true
 	echo 'done'
 	if [ "$OPENVPN" = "yes" ]; then
 		echo 'Restarting OpenVPN'
@@ -952,6 +956,9 @@ else
 	echo 'done'
 	echo 'Apply latest sysctl...'
 	sysctl -p /etc/sysctl.d/90-shadowsocks.conf > /dev/null 2>&1
+	echo 'done'
+	echo 'Restarting omr...'
+	systemctl -q restart omr
 	echo 'done'
 	echo 'Restarting shadowsocks...'
 	systemctl -q restart shadowsocks-libev-manager@manager

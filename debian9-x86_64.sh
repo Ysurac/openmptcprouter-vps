@@ -901,6 +901,9 @@ else
 	echo 'Keys are not changed, shorewall rules files preserved'
 	echo 'You need OpenMPTCProuter >= 0.30'
 	echo '===================================================================================='
+	echo 'Restarting systemd daemon...'
+	systemctl -q restart daemon-reload
+	echo 'done'
 	echo 'Restarting systemd network...'
 	systemctl -q restart systemd-networkd
 	echo 'done'

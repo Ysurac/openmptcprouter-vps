@@ -13,7 +13,12 @@ _multipath() {
 	done
 }
 
+_glorytun_udp() {
+	[ -z "$(glorytun show dev gt-udp-tun0 2>/dev/null | grep server)" ] && systemctl -q restart glorytun-udp@*
+}
+
 while true; do
+	_glorytun_udp
 	_multipath
 	sleep 10
 done

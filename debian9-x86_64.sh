@@ -19,7 +19,7 @@ INTERFACE=${INTERFACE:-$(ip -o -4 route show to default | grep -m 1 -Po '(?<=dev
 KERNEL_VERSION="4.19.104"
 KERNEL_PACKAGE_VERSION="1.7+b864616"
 KERNEL_RELEASE="${KERNEL_VERSION}-mptcp_${KERNEL_PACKAGE_VERSION}"
-GLORYTUN_UDP_VERSION="a9408e799ddbb74b5476fba70a495770322cd327"
+GLORYTUN_UDP_VERSION="b9aaab661fb879e891d34a91b5d2e78088fd9d9d"
 #MLVPN_VERSION="8f9720978b28c1954f9f229525333547283316d2"
 MLVPN_VERSION="f45cec350a6879b8b020143a78134a022b5df2a7"
 OBFS_VERSION="486bebd9208539058e57e23a12f23103016e09b4"
@@ -902,7 +902,7 @@ else
 	echo 'You need OpenMPTCProuter >= 0.30'
 	echo '===================================================================================='
 	echo 'Restarting systemd daemon...'
-	systemctl -q restart daemon-reload
+	systemctl -q daemon-reload
 	echo 'done'
 	echo 'Restarting systemd network...'
 	systemctl -q restart systemd-networkd

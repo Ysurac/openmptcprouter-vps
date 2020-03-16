@@ -14,11 +14,22 @@ _multipath() {
 }
 
 _glorytun_udp() {
-	[ -z "$(glorytun show dev gt-udp-tun0 2>/dev/null | grep server)" ] && systemctl -q restart glorytun-udp@*
+	[ -z "$(glorytun show dev gt-udp-tun0 2>/dev/null | grep server)" ] && {
+		logger -t "OMR-Service" "Restart Glorytun-UDP"
+		systemctl -q restart glorytun-udp@*
+	}
+}
+
+_omr_api() {
+	[ -z "$(curl -s -k -m 1 https://127.0.0.1:65500/)" ] && {
+		logger -t "OMR-Service" "Restart OMR-Admin"
+		systemctl -q restart omr-admin
+	}
 }
 
 while true; do
 	_glorytun_udp
 	_multipath
+	_omr_api
 	sleep 10
 done

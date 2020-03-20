@@ -109,7 +109,7 @@ if [ "$ID" = "debian" ] && [ "$VERSION_ID" = "9" ] && [ "$UPDATE_DEBIAN" = "yes"
 	VERSION_ID="10"
 fi
 # Add OpenMPTCProuter repo
-echo 'deb https://repo.openmptcprouter.com stretch main' > /etc/apt/sources.list.d/openmptcprouter.list
+echo 'deb [arch=amd64] https://repo.openmptcprouter.com stretch main' > /etc/apt/sources.list.d/openmptcprouter.list
 cat <<EOF | tee /etc/apt/preferences.d/openmptcprouter.pref
 Explanation: Prefer OpenMPTCProuter provided packages over the Debian native ones
 Package: *

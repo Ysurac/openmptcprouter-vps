@@ -18,6 +18,15 @@ _glorytun_udp() {
 		logger -t "OMR-Service" "Restart Glorytun-UDP"
 		systemctl -q restart glorytun-udp@*
 	}
+	for intf in /etc/glorytun-udp/*; do
+		/etc/glorytun-udp/post.sh /etc/glorytun-udp/${intf}
+	done
+}
+
+_glorytun_tcp() {
+	for intf in /etc/glorytun-tcp/*; do
+		/etc/glorytun-tcp/post.sh /etc/glorytun-tcp/${intf}
+	done
 }
 
 _omr_api() {
@@ -29,6 +38,7 @@ _omr_api() {
 
 while true; do
 	_glorytun_udp
+	_glorytun_tcp
 	_multipath
 	_omr_api
 	sleep 10

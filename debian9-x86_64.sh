@@ -15,24 +15,25 @@ MLVPN=${MLVPN:-yes}
 MLVPN_PASS=${MLVPN_PASS:-$(head -c 32 /dev/urandom | base64 -w0)}
 OPENVPN=${OPENVPN:-yes}
 DSVPN=${DSVPN:-yes}
+NOINTERNET=${NOINTERNET:-no}
 INTERFACE=${INTERFACE:-$(ip -o -4 route show to default | grep -m 1 -Po '(?<=dev )(\S+)' | tr -d "\n")}
 KERNEL_VERSION="5.4.0"
 KERNEL_PACKAGE_VERSION="1.8+1efcfb3"
 KERNEL_RELEASE="${KERNEL_VERSION}-mptcp_${KERNEL_PACKAGE_VERSION}"
-GLORYTUN_UDP_VERSION="c113724eb0370ecd80d038192deeeb82a13ebed3"
+GLORYTUN_UDP_VERSION="3622f928caf03709c4031a34feec85c623bc5281"
 #MLVPN_VERSION="8f9720978b28c1954f9f229525333547283316d2"
 MLVPN_VERSION="f45cec350a6879b8b020143a78134a022b5df2a7"
 OBFS_VERSION="486bebd9208539058e57e23a12f23103016e09b4"
-OMR_ADMIN_VERSION="d14741092dfe0ff550f09eee8a03865726114427"
+OMR_ADMIN_VERSION="6e4a1e36ebdf8c7876573a4a4c3aafafe88cf5e9"
 DSVPN_VERSION="3b99d2ef6c02b2ef68b5784bec8adfdd55b29b1a"
 #V2RAY_VERSION="v1.1.0"
 V2RAY_VERSION="v1.2.0-8-g59b8f4f"
 EASYRSA_VERSION="3.0.6"
-SHADOWSOCKS_VERSION="3.3.3"
+SHADOWSOCKS_VERSION="3.3.4"
 VPS_DOMAIN=${VPS_DOMAIN:-$(wget -4 -qO- -T 2 http://hostname.openmptcprouter.com)}
 VPSPATH="server-test"
 
-OMR_VERSION="0.1015"
+OMR_VERSION="0.1016-test"
 
 set -e
 umask 0022
@@ -138,7 +139,7 @@ wget -O /tmp/linux-image-${KERNEL_RELEASE}_amd64.deb https://www.openmptcprouter
 wget -O /tmp/linux-headers-${KERNEL_RELEASE}_amd64.deb https://www.openmptcprouter.com/kernel/linux-headers-${KERNEL_RELEASE}_amd64.deb
 # Rename bzImage to vmlinuz, needed when custom kernel was used
 cd /boot
-apt-get -y install rename curl
+apt-get -y install rename curl libcurl4
 rename 's/^bzImage/vmlinuz/s' * >/dev/null 2>&1
 #apt-get -y install linux-mptcp
 #dpkg --remove --force-remove-reinstreq linux-image-${KERNEL_VERSION}-mptcp
@@ -345,6 +346,9 @@ if [ "$OMR_ADMIN" = "yes" ]; then
 	openssl req -new -newkey rsa:2048 -days 3650 -nodes -x509 -keyout key.pem -out cert.pem -subj "/C=US/ST=Oregon/L=Portland/O=OpenMPTCProuterVPS/OU=Org/CN=www.openmptcprouter.vps"
 	sed -i "s:AdminMySecretKey:$OMR_ADMIN_PASS_ADMIN:g" /etc/openmptcprouter-vps-admin/omr-admin-config.json
 	sed -i "s:MySecretKey:$OMR_ADMIN_PASS:g" /etc/openmptcprouter-vps-admin/omr-admin-config.json
+	[ "$NOINTERNET" = "yes" ] && {
+		sed -i 's/"port": 65500,/"port": 65500,\n    "internet": false,/' /etc/openmptcprouter-vps-admin/omr-admin-config.json
+	}
 	chmod u+x /usr/local/bin/omr-admin.py
 	systemctl enable omr-admin.service
 	rm -rf /tmp/tmp/openmptcprouter-vps-admin-${OMR_ADMIN_VERSION}
@@ -353,23 +357,30 @@ fi
 # Get shadowsocks optimization
 wget -O /etc/sysctl.d/90-shadowsocks.conf https://www.openmptcprouter.com/${VPSPATH}/shadowsocks.conf
 
-if [ "$update" != 0 ] && [ ! -f /etc/shadowsocks-libev/manager.json ]; then
-	SHADOWSOCKS_PASS=$(grep -Po '"'"key"'"\s*:\s*"\K([^"]*)' /etc/shadowsocks-libev/config.json | tr -d  "\n" | sed 's/-/+/g; s/_/\//g;')
+if [ "$update" != 0 ]; then
+	if [ ! -f /etc/shadowsocks-libev/manager.json ]; then
+		SHADOWSOCKS_PASS=$(grep -Po '"'"key"'"\s*:\s*"\K([^"]*)' /etc/shadowsocks-libev/config.json | tr -d  "\n" | sed 's/-/+/g; s/_/\//g;')
+	else
+		SHADOWSOCKS_PASS=$(grep -Po '"'"65101"'":\s*"\K([^"]*)' /etc/shadowsocks-libev/manager.json | tr -d  "\n" | sed 's/-/+/g; s/_/\//g;')
+	fi
 fi
-
 # Install shadowsocks config and add a shadowsocks by CPU
 if [ "$update" = "0" ] || [ ! -f /etc/shadowsocks-libev/manager.json ]; then
 	#wget -O /etc/shadowsocks-libev/config.json https://www.openmptcprouter.com/${VPSPATH}/config.json
 	wget -O /etc/shadowsocks-libev/manager.json https://www.openmptcprouter.com/${VPSPATH}/manager.json
 	SHADOWSOCKS_PASS_JSON=$(echo $SHADOWSOCKS_PASS | sed 's/+/-/g; s/\//_/g;')
-	if [ $NBCPU -gt 1 ]; then
-		for i in $NBCPU; do
+	if [ "$NBCPU" -gt "1" ]; then
+		for i in $(seq 2 NBCPU); do
 			sed -i '0,/65101/ s/        "65101.*/&\n&/' /etc/shadowsocks-libev/manager.json
 		done
 	fi
 	#sed -i "s:MySecretKey:$SHADOWSOCKS_PASS_JSON:g" /etc/shadowsocks-libev/config.json
 	sed -i "s:MySecretKey:$SHADOWSOCKS_PASS_JSON:g" /etc/shadowsocks-libev/manager.json
 	[ "$(ip -6 a)" = "" ] && sed -i '/"\[::0\]"/d' /etc/shadowsocks-libev/manager.json
+elif [ "$update" != "0" ] && [ -f /etc/shadowsocks-libev/manager.json ] && [ "$(grep -c '65101' /etc/shadowsocks-libev/manager.json | tr -d '\n')" != "$NBCPU" ]; then
+	for i in $(seq 2 $NBCPU); do
+		sed -i '0,/65101/ s/        "65101.*/&\n&/' /etc/shadowsocks-libev/manager.json
+	done
 fi
 [ ! -f /etc/shadowsocks-libev/local.acl ] && touch /etc/shadowsocks-libev/local.acl
 #sed -i 's:aes-256-cfb:chacha20:g' /etc/shadowsocks-libev/config.json
@@ -379,7 +390,7 @@ systemctl disable shadowsocks-libev
 [ -f /etc/shadowsocks-libev/config.json ] && systemctl disable shadowsocks-libev-server@config.service
 systemctl enable shadowsocks-libev-manager@manager.service
 if [ $NBCPU -gt 1 ]; then
-	for i in $NBCPU; do
+	for i in $(seq 1 $NBCPU); do
 		[ -f /etc/shadowsocks-libev/config$i.json ] && systemctl disable shadowsocks-libev-server@config$i.service
 	done
 fi
@@ -771,7 +782,7 @@ fi
 if [ "$TLS" = "yes" ]; then
 	VPS_CERT=0
 	apt-get -y install dnsutils socat
-	if [ "$VPS_DOMAIN" != "" ] && [ "$(dig +noall +answer $VPS_DOMAIN)" != "" ] && [ "$(ping -c 1 -w 1 $VPS_DOMAIN)" ]; then
+	if [ "$VPS_DOMAIN" != "" ] && [ "$(dig +noidnout +noall +answer $VPS_DOMAIN)" != "" ] && [ "$(ping -c 1 -w 1 $VPS_DOMAIN)" ]; then
 		if [ ! -f "/root/.acme.sh/$VPS_DOMAIN/$VPS_DOMAIN.cer" ]; then
 			echo "Generate certificate for V2Ray"
 			set +e

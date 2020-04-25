@@ -10,10 +10,10 @@ fi
 . "$(readlink -f "$1")"
 
 exec dsvpn \
-	${MODE:+server} \
+	${MODE} \
 	"$1".key \
 	auto \
-	${PORT:+65401} \
-	${DEV:+dsvpn0} \
-	${LOCALTUNIP:+10.255.251.1} \
-	${REMOTETUNIP:+10.255.251.1}
+	${PORT} \
+	${DEV} \
+	${LOCALTUNIP} \
+	${REMOTETUNIP}

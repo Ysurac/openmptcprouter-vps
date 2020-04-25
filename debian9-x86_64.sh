@@ -16,14 +16,14 @@ MLVPN_PASS=${MLVPN_PASS:-$(head -c 32 /dev/urandom | base64 -w0)}
 OPENVPN=${OPENVPN:-yes}
 DSVPN=${DSVPN:-yes}
 INTERFACE=${INTERFACE:-$(ip -o -4 route show to default | grep -m 1 -Po '(?<=dev )(\S+)' | tr -d "\n")}
-KERNEL_VERSION="4.19.104"
-KERNEL_PACKAGE_VERSION="1.7+b864616"
+KERNEL_VERSION="5.4.0"
+KERNEL_PACKAGE_VERSION="1.8+1efcfb3"
 KERNEL_RELEASE="${KERNEL_VERSION}-mptcp_${KERNEL_PACKAGE_VERSION}"
-GLORYTUN_UDP_VERSION="a9408e799ddbb74b5476fba70a495770322cd327"
+GLORYTUN_UDP_VERSION="c113724eb0370ecd80d038192deeeb82a13ebed3"
 #MLVPN_VERSION="8f9720978b28c1954f9f229525333547283316d2"
 MLVPN_VERSION="f45cec350a6879b8b020143a78134a022b5df2a7"
 OBFS_VERSION="486bebd9208539058e57e23a12f23103016e09b4"
-OMR_ADMIN_VERSION="0bee06d21605c9d9b4494a77e71043ce432aa5c2"
+OMR_ADMIN_VERSION="d14741092dfe0ff550f09eee8a03865726114427"
 DSVPN_VERSION="3b99d2ef6c02b2ef68b5784bec8adfdd55b29b1a"
 #V2RAY_VERSION="v1.1.0"
 V2RAY_VERSION="v1.2.0-8-g59b8f4f"
@@ -32,7 +32,7 @@ SHADOWSOCKS_VERSION="3.3.3"
 VPS_DOMAIN=${VPS_DOMAIN:-$(wget -4 -qO- -T 2 http://hostname.openmptcprouter.com)}
 VPSPATH="server-test"
 
-OMR_VERSION="0.1006-test1"
+OMR_VERSION="0.1015"
 
 set -e
 umask 0022
@@ -109,7 +109,7 @@ if [ "$ID" = "debian" ] && [ "$VERSION_ID" = "9" ] && [ "$UPDATE_DEBIAN" = "yes"
 	VERSION_ID="10"
 fi
 # Add OpenMPTCProuter repo
-echo 'deb https://repo.openmptcprouter.com stretch main' > /etc/apt/sources.list.d/openmptcprouter.list
+echo 'deb [arch=amd64] https://repo.openmptcprouter.com stretch main' > /etc/apt/sources.list.d/openmptcprouter.list
 cat <<EOF | tee /etc/apt/preferences.d/openmptcprouter.pref
 Explanation: Prefer OpenMPTCProuter provided packages over the Debian native ones
 Package: *
@@ -313,7 +313,7 @@ if [ "$OMR_ADMIN" = "yes" ]; then
 		apt-get -y remove python3-jwt
 		pip3 -q install pyjwt
 	else
-		apt-get -y install python3-passlib python3-jwt python3-netaddr
+		apt-get -y install python3-passlib python3-jwt python3-netaddr libuv1 python3-uvloop
 	fi
 	echo '-- pip3 install needed python modules'
 	#pip3 install pyjwt passlib uvicorn fastapi netjsonconfig python-multipart netaddr
@@ -901,6 +901,9 @@ else
 	echo 'Keys are not changed, shorewall rules files preserved'
 	echo 'You need OpenMPTCProuter >= 0.30'
 	echo '===================================================================================='
+	echo 'Restarting systemd daemon...'
+	systemctl -q daemon-reload
+	echo 'done'
 	echo 'Restarting systemd network...'
 	systemctl -q restart systemd-networkd
 	echo 'done'
@@ -911,14 +914,18 @@ else
 	fi
 	if [ "$DSVPN" = "yes" ]; then
 		echo 'Restarting dsvpn...'
+		systemctl -q start dsvpn-server@dsvpn0 || true
 		systemctl -q restart dsvpn-server@* || true
 		echo 'done'
 	fi
 	echo 'Restarting glorytun...'
+	systemctl -q start glorytun-tcp@tun0 || true
 	systemctl -q restart glorytun-tcp@* || true
+	systemctl -q start glorytun-udp@tun0 || true
 	systemctl -q restart glorytun-udp@* || true
 	echo 'done'
 	echo 'Restarting omr6in4...'
+	systemctl -q start omr6in4@user0 || true
 	systemctl -q restart omr6in4@* || true
 	echo 'done'
 	if [ "$OPENVPN" = "yes" ]; then

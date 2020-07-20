@@ -6,9 +6,9 @@ _multipath() {
 	source /etc/shorewall/params.net
 	for intf in `ls -1 /sys/class/net`; do
 		if [ "$intf" = "$NET_IFACE" ]; then
-			multipath $intf on
+			[ "$(multipath $intf | tr -d '\n')" != "$intf is in default mode" ] && multipath $intf on
 		else
-			multipath $intf off
+			[ "$(multipath $intf | tr -d '\n')" != "$intf is deactivated" ] && multipath $intf off
 		fi
 	done
 }
@@ -16,24 +16,38 @@ _multipath() {
 _glorytun_udp() {
 	[ -z "$(glorytun show dev gt-udp-tun0 2>/dev/null | grep server)" ] && {
 		logger -t "OMR-Service" "Restart Glorytun-UDP"
-		systemctl -q restart glorytun-udp@*
+		systemctl -q restart 'glorytun-udp@*'
 	}
-	for intf in /etc/glorytun-udp/*; do
-		/etc/glorytun-udp/post.sh /etc/glorytun-udp/${intf}
+	for intf in /etc/glorytun-udp/tun*; do
+		[ "$(echo $intf | grep key)" = "" ] && /etc/glorytun-udp/post.sh ${intf}
 	done
 }
 
 _glorytun_tcp() {
-	for intf in /etc/glorytun-tcp/*; do
-		/etc/glorytun-tcp/post.sh /etc/glorytun-tcp/${intf}
+	for intf in /etc/glorytun-tcp/tun*; do
+		[ "$(echo $intf | grep key)" = "" ] && /etc/glorytun-tcp/post.sh ${intf}
 	done
 }
 
 _omr_api() {
-	[ -z "$(curl -s -k -m 1 https://127.0.0.1:65500/)" ] && {
+	[ -z "$(curl -s -k -m 3 https://127.0.0.1:65500/)" ] && {
 		logger -t "OMR-Service" "Restart OMR-Admin"
 		systemctl -q restart omr-admin
 	}
+}
+
+_lan_route() {
+	cat /etc/openmptcprouter-vps-admin/omr-admin-config.json | jq -c '.users[0][]' |
+	while IFS=$"\n" read -r c; do
+		vpnremoteip=$(echo "$c" | jq -r '.vpnremoteip')
+		if [ -n "$vpnremoteip" ]; then
+			echo "$c" | jq -c '.lanips //empty' | 
+			while IFS=$"\n" read -r d; do
+				network=$(ipcalc -n $d | grep Network | awk '{print $2}')
+				[ -n "$network" ] && [ -z "$(ip r show $network via $vpnremoteip)" ] && ip r replace $network via $vpnremoteip 2>&1 >/dev/null
+			done
+		fi
+	done
 }
 
 while true; do
@@ -41,5 +55,6 @@ while true; do
 	_glorytun_tcp
 	_multipath
 	_omr_api
+	_lan_route
 	sleep 10
 done

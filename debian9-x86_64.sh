@@ -44,9 +44,9 @@ V2RAY_PLUGIN_VERSION="v1.2.0-8-g59b8f4f"
 EASYRSA_VERSION="3.0.6"
 SHADOWSOCKS_VERSION="38871da8baf5cfa400983dcdf918397e48655203"
 VPS_DOMAIN=${VPS_DOMAIN:-$(wget -4 -qO- -T 2 http://hostname.openmptcprouter.com)}
-VPSPATH="server-test"
+VPSPATH="server"
 
-OMR_VERSION="0.1016-test"
+OMR_VERSION="0.1017"
 
 DIR=$( pwd )
 #"

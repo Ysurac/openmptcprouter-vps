@@ -1,11 +1,20 @@
 #!/bin/sh
+#
+# Copyright (C) 2018-2020 Ycarus (Yannick Chabanois) <ycarus@zugaina.org> for OpenMPTCProuter
+#
+# This is free software, licensed under the GNU General Public License v3 or later.
+# See /LICENSE for more information.
+#
+
 SHADOWSOCKS_PASS=${SHADOWSOCKS_PASS:-$(head -c 32 /dev/urandom | base64 -w0)}
 GLORYTUN_PASS=${GLORYTUN_PASS:-$(od -vN "32" -An -tx1 /dev/urandom | tr '[:lower:]' '[:upper:]' | tr -d " \n")}
 DSVPN_PASS=${DSVPN_PASS:-$(od -vN "32" -An -tx1 /dev/urandom | tr '[:lower:]' '[:upper:]' | tr -d " \n")}
 #NBCPU=${NBCPU:-$(nproc --all | tr -d "\n")}
 NBCPU=${NBCPU:-$(grep -c '^processor' /proc/cpuinfo | tr -d "\n")}
 OBFS=${OBFS:-yes}
-V2RAY=${V2RAY:-yes}
+V2RAY_PLUGIN=${V2RAY_PLUGIN:-yes}
+V2RAY=${V2RAY:-no}
+V2RAY_UUID=${V2RAY_UUID:-$(cat /proc/sys/kernel/random/uuid | tr -d "\n")}
 UPDATE_OS=${UPDATE_OS:-yes}
 UPDATE=${UPDATE:-yes}
 TLS=${TLS:-yes}
@@ -18,10 +27,11 @@ OPENVPN=${OPENVPN:-yes}
 DSVPN=${DSVPN:-yes}
 SOURCES=${SOURCES:-yes}
 NOINTERNET=${NOINTERNET:-no}
+SPEEDTEST=${SPEEDTEST:-no}
 LOCALFILES=${LOCALFILES:-no}
 INTERFACE=${INTERFACE:-$(ip -o -4 route show to default | grep -m 1 -Po '(?<=dev )(\S+)' | tr -d "\n")}
 KERNEL_VERSION="5.4.52"
-KERNEL_PACKAGE_VERSION="1.10+206826e"
+KERNEL_PACKAGE_VERSION="1.11+206826e"
 KERNEL_RELEASE="${KERNEL_VERSION}-mptcp_${KERNEL_PACKAGE_VERSION}"
 GLORYTUN_UDP_VERSION="3622f928caf03709c4031a34feec85c623bc5281"
 #MLVPN_VERSION="8f9720978b28c1954f9f229525333547283316d2"
@@ -30,7 +40,7 @@ OBFS_VERSION="486bebd9208539058e57e23a12f23103016e09b4"
 OMR_ADMIN_VERSION="c64b8e332407b0c8c413330c36409955d9249512"
 DSVPN_VERSION="3b99d2ef6c02b2ef68b5784bec8adfdd55b29b1a"
 #V2RAY_VERSION="v1.1.0"
-V2RAY_VERSION="v1.2.0-8-g59b8f4f"
+V2RAY_PLUGIN_VERSION="v1.2.0-8-g59b8f4f"
 EASYRSA_VERSION="3.0.6"
 SHADOWSOCKS_VERSION="38871da8baf5cfa400983dcdf918397e48655203"
 VPS_DOMAIN=${VPS_DOMAIN:-$(wget -4 -qO- -T 2 http://hostname.openmptcprouter.com)}
@@ -168,7 +178,7 @@ rename 's/^bzImage/vmlinuz/s' * >/dev/null 2>&1
 #dpkg --remove --force-remove-reinstreq linux-headers-${KERNEL_VERSION}-mptcp
 if [ "$(dpkg -l | grep linux-image-${KERNEL_VERSION} | grep ${KERNEL_PACKAGE_VERSION})" = "" ]; then
 	echo "Install kernel linux-image-${KERNEL_RELEASE}"
-	echo "if kernel install fail run: dpkg --remove --force-remove-reinstreq linux-image-${KERNEL_VERSION}-mptcp"
+	echo "\033[1m !!! if kernel install fail run: dpkg --remove --force-remove-reinstreq linux-image-${KERNEL_VERSION}-mptcp !!! \033[0m"
 	dpkg --force-all -i -B /tmp/linux-image-${KERNEL_RELEASE}_amd64.deb
 	dpkg --force-all -i -B /tmp/linux-headers-${KERNEL_RELEASE}_amd64.deb
 fi
@@ -356,7 +366,7 @@ if [ "$OMR_ADMIN" = "yes" ]; then
 	else
 		apt-get -y install python3-passlib python3-jwt python3-netaddr libuv1 python3-uvloop
 	fi
-	apt-get -y install python3-uvicorn jq ipcalc python3-netifaces
+	apt-get -y install python3-uvicorn jq ipcalc python3-netifaces python3-aiofiles
 	echo '-- pip3 install needed python modules'
 	#pip3 install pyjwt passlib uvicorn fastapi netjsonconfig python-multipart netaddr
 	#pip3 -q install fastapi netjsonconfig python-multipart uvicorn -U
@@ -490,17 +500,17 @@ if [ "$OBFS" = "yes" ]; then
 fi
 
 # Install v2ray-plugin
-if [ "$V2RAY" = "yes" ]; then
+if [ "$V2RAY_PLUGIN" = "yes" ]; then
 	echo "Install v2ray plugin"
-	rm -rf /tmp/v2ray-plugin-linux-amd64-${V2RAY_VERSION}.tar.gz
-	#wget -O /tmp/v2ray-plugin-linux-amd64-${V2RAY_VERSION}.tar.gz https://github.com/shadowsocks/v2ray-plugin/releases/download/${V2RAY_VERSION}/v2ray-plugin-linux-amd64-${V2RAY_VERSION}.tar.gz
-	wget -O /tmp/v2ray-plugin-linux-amd64-${V2RAY_VERSION}.tar.gz https://www.openmptcprouter.com/${VPSPATH}/bin/v2ray-plugin-linux-amd64-${V2RAY_VERSION}.tar.gz
+	rm -rf /tmp/v2ray-plugin-linux-amd64-${V2RAY_PLUGIN_VERSION}.tar.gz
+	#wget -O /tmp/v2ray-plugin-linux-amd64-${V2RAY_PLUGIN_VERSION}.tar.gz https://github.com/shadowsocks/v2ray-plugin/releases/download/${V2RAY_PLUGIN_VERSION}/v2ray-plugin-linux-amd64-${V2RAY_PLUGIN_VERSION}.tar.gz
+	wget -O /tmp/v2ray-plugin-linux-amd64-${V2RAY_PLUGIN_VERSION}.tar.gz https://www.openmptcprouter.com/${VPSPATH}/bin/v2ray-plugin-linux-amd64-${V2RAY_PLUGIN_VERSION}.tar.gz
 	cd /tmp
-	tar xzvf v2ray-plugin-linux-amd64-${V2RAY_VERSION}.tar.gz
+	tar xzvf v2ray-plugin-linux-amd64-${V2RAY_PLUGIN_VERSION}.tar.gz
 	cp v2ray-plugin_linux_amd64 /usr/local/bin/v2ray-plugin
 	cd /tmp
 	rm -rf /tmp/v2ray-plugin_linux_amd64
-	rm -rf /tmp/v2ray-plugin-linux-amd64-${V2RAY_VERSION}.tar.gz
+	rm -rf /tmp/v2ray-plugin-linux-amd64-${V2RAY_PLUGIN_VERSION}.tar.gz
 	
 	#rm -rf /tmp/v2ray-plugin
 	#cd /tmp
@@ -508,7 +518,7 @@ if [ "$V2RAY" = "yes" ]; then
 	#apt-get install -y --no-install-recommends git ca-certificates golang-go
 	#git clone https://github.com/shadowsocks/v2ray-plugin.git /tmp/v2ray-plugin
 	#cd /tmp/v2ray-plugin
-	#git checkout ${V2RAY_VERSION}
+	#git checkout ${V2RAY_PLUGIN_VERSION}
 	#git submodule update --init --recursive
 	#CGO_ENABLED=0 go build -o v2ray-plugin
 	#cp v2ray-plugin /usr/local/bin/v2ray-plugin
@@ -516,8 +526,24 @@ if [ "$V2RAY" = "yes" ]; then
 	#rm -rf /tmp/simple-obfs
 fi
 
-if [ "$OBFS" = "no" ] && [ "$V2RAYPLUGIN" = "no" ]; then
+if [ "$OBFS" = "no" ] && [ "$V2RAY_PLUGIN" = "no" ]; then
 	sed -i -e '/plugin/d' -e 's/,,//' /etc/shadowsocks-libev/config.json
+fi
+
+if systemctl -q is-active v2ray.service; then
+	systemctl -q stop v2ray > /dev/null 2>&1
+	systemctl -q disable v2ray > /dev/null 2>&1
+fi
+
+if [ "$V2RAY" = "yes" ]; then
+	apt-get -y -o Dpkg::Options::="--force-overwrite" install v2ray
+	if [ ! -f /etc/v2ray/v2ray-server.json ]; then
+		wget -O /etc/v2ray/v2ray-server.json https://www.openmptcprouter.com/${VPSPATH}/v2ray-server.json
+		sed -i "s:V2RAY_UUID:$V2RAY_UUID:g" /etc/v2ray/v2ray-server.json
+		rm /etc/v2ray/config.json
+		ln -s /etc/v2ray/v2ray-server.json /etc/v2ray/config.json
+	fi
+	systemctl enable v2ray.service
 fi
 
 if systemctl -q is-active mlvpn@mlvpn0.service; then
@@ -951,7 +977,14 @@ if [ "$TLS" = "yes" ]; then
 	fi
 fi
 
-
+if [ "$SPEEDTEST" = "yes" ]; then
+	if [ ! -f /usr/share/omr-server/speedtest/test.img ]; then
+		echo "Generate speedtest image..."
+		mkdir -p /usr/share/omr-server/speedtest
+		dd if=/dev/urandom of=/usr/share/omr-server/speedtest/test.img count=1024 bs=1048576
+		echo "Done"
+	fi
+fi
 
 # Add OpenMPTCProuter VPS script version to /etc/motd
 if [ -f /etc/motd.head ]; then
@@ -976,7 +1009,7 @@ if [ "$update" = "0" ]; then
 	# Display important info
 	echo '===================================================================================='
 	echo "OpenMPTCProuter Server $OMR_VERSION is now installed !"
-	echo 'SSH port: 65222 (instead of port 22)'
+	echo '\033[4m\0331mSSH port: 65222 (instead of port 22)\033[0m'
 	if [ "$OMR_ADMIN" = "yes" ]; then
 		echo '===================================================================================='
 		echo '!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!'
@@ -1009,7 +1042,7 @@ if [ "$update" = "0" ]; then
 		echo "OpenMPTCProuter API Admin key (only for configuration via API, you don't need it): "
 		echo $OMR_ADMIN_PASS_ADMIN
 		echo 'OpenMPTCProuter Server key: '
-		echo $OMR_ADMIN_PASS
+		echo "\033[1m${OMR_ADMIN_PASS}\033[0m"
 		echo 'OpenMPTCProuter Server username: '
 		echo 'openmptcprouter'
 	fi
@@ -1020,7 +1053,7 @@ if [ "$update" = "0" ]; then
 	echo '===================================================================================='
 	echo 'Keys are also saved in /root/openmptcprouter_config.txt, you are free to remove them'
 	echo '===================================================================================='
-	echo '  /!\ You need to reboot to enable MPTCP, shadowsocks, glorytun and shorewall /!\'
+	echo '\033[1m  /!\ You need to reboot to enable MPTCP, shadowsocks, glorytun and shorewall /!\ \033[0m'
 	echo '------------------------------------------------------------------------------------'
 	echo ' After reboot, check with uname -a that the kernel name contain mptcp.'
 	echo ' Else, you may have to modify GRUB_DEFAULT in /etc/default/grub'
@@ -1070,6 +1103,11 @@ else
 	if [ "$MLVPN" = "yes" ]; then
 		echo 'Restarting mlvpn...'
 		systemctl -q restart mlvpn@mlvpn0
+		echo 'done'
+	fi
+	if [ "$V2RAY" = "yes" ]; then
+		echo 'Restarting v2ray...'
+		systemctl -q restart v2ray
 		echo 'done'
 	fi
 	if [ "$DSVPN" = "yes" ]; then

@@ -40,7 +40,7 @@ _lan_route() {
 	cat /etc/openmptcprouter-vps-admin/omr-admin-config.json | jq -c '.users[0][]' |
 	while IFS=$"\n" read -r c; do
 		vpnremoteip=$(echo "$c" | jq -r '.vpnremoteip')
-		if [ -n "$vpnremoteip" ]; then
+		if [ -n "$vpnremoteip" ] && [ "$vpnremoteip" != "null" ]; then
 			echo "$c" | jq -c '.lanips //empty' | 
 			while IFS=$"\n" read -r d; do
 				network=$(ipcalc -n $d | grep Network | awk '{print $2}')

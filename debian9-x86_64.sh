@@ -56,6 +56,8 @@ export LC_ALL=C
 export PATH=$PATH:/sbin
 export DEBIAN_FRONTEND=noninteractive 
 
+if [ "$(id -u)" -ne 0 ]; then echo 'Please run as root.' >&2; exit 1; fi
+
 # Check Linux version
 if test -f /etc/os-release ; then
 	. /etc/os-release
@@ -132,7 +134,7 @@ if [ "$ID" = "debian" ] && [ "$VERSION_ID" = "9" ] && [ "$UPDATE_OS" = "yes" ]; 
 	VERSION_ID="10"
 fi
 if [ "$ID" = "ubuntu" ] && [ "$VERSION_ID" = "18.04" ] && [ "$UPDATE_OS" = "yes" ]; then
-	echo "Update Ubutnu 18.04 to Ubuntu 20.04"
+	echo "Update Ubuntu 18.04 to Ubuntu 20.04"
 	apt-get -y -f --force-yes upgrade
 	apt-get -y -f --force-yes dist-upgrade
 	sed -i 's:bionic:focal:g' /etc/apt/sources.list

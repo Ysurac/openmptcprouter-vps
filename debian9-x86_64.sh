@@ -13,7 +13,7 @@ DSVPN_PASS=${DSVPN_PASS:-$(od -vN "32" -An -tx1 /dev/urandom | tr '[:lower:]' '[
 NBCPU=${NBCPU:-$(grep -c '^processor' /proc/cpuinfo | tr -d "\n")}
 OBFS=${OBFS:-yes}
 V2RAY_PLUGIN=${V2RAY_PLUGIN:-yes}
-V2RAY=${V2RAY:-no}
+V2RAY=${V2RAY:-yes}
 V2RAY_UUID=${V2RAY_UUID:-$(cat /proc/sys/kernel/random/uuid | tr -d "\n")}
 UPDATE_OS=${UPDATE_OS:-yes}
 UPDATE=${UPDATE:-yes}
@@ -44,9 +44,9 @@ V2RAY_PLUGIN_VERSION="v1.2.0-8-g59b8f4f"
 EASYRSA_VERSION="3.0.6"
 SHADOWSOCKS_VERSION="38871da8baf5cfa400983dcdf918397e48655203"
 VPS_DOMAIN=${VPS_DOMAIN:-$(wget -4 -qO- -T 2 http://hostname.openmptcprouter.com)}
-VPSPATH="server"
+VPSPATH="server-test"
 
-OMR_VERSION="0.1017"
+OMR_VERSION="0.1018-test"
 
 DIR=$( pwd )
 #"

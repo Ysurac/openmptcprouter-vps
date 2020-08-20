@@ -2,6 +2,7 @@
 Description=MLVPN connection to %i
 PartOf=mlvpn.service
 ReloadPropagatedFrom=mlvpn.service
+After=network.target network-online.target
 
 [Service]
 Type=notify

@@ -1,5 +1,6 @@
 [Unit]
 Description=Dead Simple VPN - Server on %I
+After=network.target network-online.target
 
 [Service]
 ExecStart=/usr/local/bin/dsvpn-run /etc/dsvpn/%i

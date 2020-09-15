@@ -12,3 +12,4 @@ done
 	ip link set dev ${INTF} up 2>&1 >/dev/null
 	ip addr add ${LOCALIP}/30 brd ${BROADCASTIP} dev ${INTF} 2>&1 >/dev/null
 }
+ip link set $INTF txqlen 100

@@ -100,7 +100,7 @@
 	"api": {
 		"tag": "api",
 		"services": [
-			"HandlserService",
+			"HandlerService",
 			"LoggerService",
 			"StatsService"
 		]
@@ -111,7 +111,7 @@
 				"uplinkOnly": 0,
 				"downlinkOnly": 0,
 				"bufferSize": 512,
-				"connIdle": 600,
+				"connIdle": 1200,
 				"statsUserUplink": true,
 				"statsUserDownlink": true
 			}

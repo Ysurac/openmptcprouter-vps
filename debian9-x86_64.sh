@@ -30,14 +30,14 @@ NOINTERNET=${NOINTERNET:-no}
 SPEEDTEST=${SPEEDTEST:-no}
 LOCALFILES=${LOCALFILES:-no}
 INTERFACE=${INTERFACE:-$(ip -o -4 route show to default | grep -m 1 -Po '(?<=dev )(\S+)' | tr -d "\n")}
-KERNEL_VERSION="5.4.52"
-KERNEL_PACKAGE_VERSION="1.11+206826e"
+KERNEL_VERSION="5.4.64"
+KERNEL_PACKAGE_VERSION="1.12+9d3f35b"
 KERNEL_RELEASE="${KERNEL_VERSION}-mptcp_${KERNEL_PACKAGE_VERSION}"
 GLORYTUN_UDP_VERSION="3622f928caf03709c4031a34feec85c623bc5281"
 #MLVPN_VERSION="8f9720978b28c1954f9f229525333547283316d2"
 MLVPN_VERSION="f45cec350a6879b8b020143a78134a022b5df2a7"
 OBFS_VERSION="486bebd9208539058e57e23a12f23103016e09b4"
-OMR_ADMIN_VERSION="c64b8e332407b0c8c413330c36409955d9249512"
+OMR_ADMIN_VERSION="2737c91e17731f82c96e579b4f963e0136e4df27"
 DSVPN_VERSION="3b99d2ef6c02b2ef68b5784bec8adfdd55b29b1a"
 #V2RAY_VERSION="v1.1.0"
 V2RAY_PLUGIN_VERSION="v1.2.0-8-g59b8f4f"
@@ -45,6 +45,7 @@ EASYRSA_VERSION="3.0.6"
 SHADOWSOCKS_VERSION="38871da8baf5cfa400983dcdf918397e48655203"
 VPS_DOMAIN=${VPS_DOMAIN:-$(wget -4 -qO- -T 2 http://hostname.openmptcprouter.com)}
 VPSPATH="server-test"
+VPSURL="https://www.openmptcprouter.com/"
 
 OMR_VERSION="0.1018-test"
 
@@ -169,8 +170,8 @@ elif [ "$ID" = "ubuntu" ]; then
 fi
 apt-get update
 sleep 2
-wget -O /tmp/linux-image-${KERNEL_RELEASE}_amd64.deb https://www.openmptcprouter.com/kernel/linux-image-${KERNEL_RELEASE}_amd64.deb
-wget -O /tmp/linux-headers-${KERNEL_RELEASE}_amd64.deb https://www.openmptcprouter.com/kernel/linux-headers-${KERNEL_RELEASE}_amd64.deb
+wget -O /tmp/linux-image-${KERNEL_RELEASE}_amd64.deb ${VPSURL}kernel/linux-image-${KERNEL_RELEASE}_amd64.deb
+wget -O /tmp/linux-headers-${KERNEL_RELEASE}_amd64.deb ${VPSURL}kernel/linux-headers-${KERNEL_RELEASE}_amd64.deb
 # Rename bzImage to vmlinuz, needed when custom kernel was used
 cd /boot
 apt-get -y install rename curl libcurl4 unzip git
@@ -188,7 +189,7 @@ fi
 # Check if mptcp kernel is grub default kernel
 echo "Set MPTCP kernel as grub default..."
 if [ "$LOCALFILES" = "no" ]; then
-	wget -O /tmp/update-grub.sh https://www.openmptcprouter.com/${VPSPATH}/update-grub.sh
+	wget -O /tmp/update-grub.sh ${VPSURL}${VPSPATH}/update-grub.sh
 	cd /tmp
 else
 	cd ${DIR}
@@ -368,7 +369,7 @@ if [ "$OMR_ADMIN" = "yes" ]; then
 	else
 		apt-get -y install python3-passlib python3-jwt python3-netaddr libuv1 python3-uvloop
 	fi
-	apt-get -y install python3-uvicorn jq ipcalc python3-netifaces python3-aiofiles
+	apt-get -y install python3-uvicorn jq ipcalc python3-netifaces python3-aiofiles python3-psutil
 	echo '-- pip3 install needed python modules'
 	#pip3 install pyjwt passlib uvicorn fastapi netjsonconfig python-multipart netaddr
 	#pip3 -q install fastapi netjsonconfig python-multipart uvicorn -U
@@ -377,7 +378,7 @@ if [ "$OMR_ADMIN" = "yes" ]; then
 	mkdir -p /etc/openmptcprouter-vps-admin/intf
 	mkdir -p /var/opt/openmptcprouter
 	if [ "$SOURCES" = "yes" ]; then
-		wget -O /lib/systemd/system/omr-admin.service https://www.openmptcprouter.com/${VPSPATH}/omr-admin.service.in
+		wget -O /lib/systemd/system/omr-admin.service ${VPSURL}${VPSPATH}/omr-admin.service.in
 		wget -O /tmp/openmptcprouter-vps-admin.zip https://github.com/Ysurac/openmptcprouter-vps-admin/archive/${OMR_ADMIN_VERSION}.zip
 		cd /tmp
 		unzip -q -o openmptcprouter-vps-admin.zip
@@ -416,7 +417,7 @@ fi
 
 # Get shadowsocks optimization
 if [ "$LOCALFILES" = "no" ]; then
-	wget -O /etc/sysctl.d/90-shadowsocks.conf https://www.openmptcprouter.com/${VPSPATH}/shadowsocks.conf
+	wget -O /etc/sysctl.d/90-shadowsocks.conf ${VPSURL}${VPSPATH}/shadowsocks.conf
 else
 	cp ${DIR}/shadowsocks.conf /etc/sysctl.d/90-shadowsocks.conf
 fi
@@ -431,7 +432,7 @@ fi
 # Install shadowsocks config and add a shadowsocks by CPU
 if [ "$update" = "0" ] || [ ! -f /etc/shadowsocks-libev/manager.json ]; then
 	if [ "$LOCALFILES" = "no" ]; then
-		wget -O /etc/shadowsocks-libev/manager.json https://www.openmptcprouter.com/${VPSPATH}/manager.json
+		wget -O /etc/shadowsocks-libev/manager.json ${VPSURL}${VPSPATH}/manager.json
 	else
 		cp ${DIR}/manager.json /etc/shadowsocks-libev/manager.json
 	fi
@@ -454,7 +455,7 @@ fi
 #sed -i 's:aes-256-cfb:chacha20:g' /etc/shadowsocks-libev/config.json
 #sed -i 's:json:json --no-delay:g' /lib/systemd/system/shadowsocks-libev-server@.service
 if [ "$LOCALFILES" = "no" ]; then
-	wget -O /lib/systemd/system/shadowsocks-libev-manager@.service https://www.openmptcprouter.com/${VPSPATH}/shadowsocks-libev-manager@.service.in
+	wget -O /lib/systemd/system/shadowsocks-libev-manager@.service ${VPSURL}${VPSPATH}/shadowsocks-libev-manager@.service.in
 else
 	cp ${DIR}/shadowsocks-libev-manager@.service.in /lib/systemd/system/shadowsocks-libev-manager@.service
 fi
@@ -506,7 +507,7 @@ if [ "$V2RAY_PLUGIN" = "yes" ]; then
 	echo "Install v2ray plugin"
 	rm -rf /tmp/v2ray-plugin-linux-amd64-${V2RAY_PLUGIN_VERSION}.tar.gz
 	#wget -O /tmp/v2ray-plugin-linux-amd64-${V2RAY_PLUGIN_VERSION}.tar.gz https://github.com/shadowsocks/v2ray-plugin/releases/download/${V2RAY_PLUGIN_VERSION}/v2ray-plugin-linux-amd64-${V2RAY_PLUGIN_VERSION}.tar.gz
-	wget -O /tmp/v2ray-plugin-linux-amd64-${V2RAY_PLUGIN_VERSION}.tar.gz https://www.openmptcprouter.com/${VPSPATH}/bin/v2ray-plugin-linux-amd64-${V2RAY_PLUGIN_VERSION}.tar.gz
+	wget -O /tmp/v2ray-plugin-linux-amd64-${V2RAY_PLUGIN_VERSION}.tar.gz ${VPSURL}${VPSPATH}/bin/v2ray-plugin-linux-amd64-${V2RAY_PLUGIN_VERSION}.tar.gz
 	cd /tmp
 	tar xzvf v2ray-plugin-linux-amd64-${V2RAY_PLUGIN_VERSION}.tar.gz
 	cp v2ray-plugin_linux_amd64 /usr/local/bin/v2ray-plugin
@@ -540,7 +541,7 @@ fi
 if [ "$V2RAY" = "yes" ]; then
 	apt-get -y -o Dpkg::Options::="--force-overwrite" install v2ray
 	if [ ! -f /etc/v2ray/v2ray-server.json ]; then
-		wget -O /etc/v2ray/v2ray-server.json https://www.openmptcprouter.com/${VPSPATH}/v2ray-server.json
+		wget -O /etc/v2ray/v2ray-server.json ${VPSURL}${VPSPATH}/v2ray-server.json
 		sed -i "s:V2RAY_UUID:$V2RAY_UUID:g" /etc/v2ray/v2ray-server.json
 		rm /etc/v2ray/config.json
 		ln -s /etc/v2ray/v2ray-server.json /etc/v2ray/config.json
@@ -581,8 +582,8 @@ if [ "$MLVPN" = "yes" ]; then
 		apt-get -y -o Dpkg::Options::="--force-overwrite" install mlvpn
 	fi
 	if [ "$LOCALFILES" = "no" ]; then
-		wget -O /lib/systemd/network/mlvpn.network https://www.openmptcprouter.com/${VPSPATH}/mlvpn.network
-		wget -O /lib/systemd/system/mlvpn@.service https://www.openmptcprouter.com/${VPSPATH}/mlvpn@.service.in
+		wget -O /lib/systemd/network/mlvpn.network ${VPSURL}${VPSPATH}/mlvpn.network
+		wget -O /lib/systemd/system/mlvpn@.service ${VPSURL}${VPSPATH}/mlvpn@.service.in
 	else
 		cp ${DIR}/mlvpn.network /lib/systemd/network/mlvpn.network
 		cp ${DIR}/mlvpn@.service.in /lib/systemd/system/mlvpn@.service
@@ -590,7 +591,7 @@ if [ "$MLVPN" = "yes" ]; then
 	mkdir -p /etc/mlvpn
 	if [ "$mlvpnupdate" = "0" ]; then
 		if [ "$LOCALFILES" = "no" ]; then
-			wget -O /etc/mlvpn/mlvpn0.conf https://www.openmptcprouter.com/${VPSPATH}/mlvpn0.conf
+			wget -O /etc/mlvpn/mlvpn0.conf ${VPSURL}${VPSPATH}/mlvpn0.conf
 		else
 			cp ${DIR}/mlvpn0.conf /etc/mlvpn/mlvpn0.conf
 		fi
@@ -614,10 +615,10 @@ if [ "$OPENVPN" = "yes" ]; then
 	rm -f /var/lib/dpkg/lock
 	rm -f /var/lib/dpkg/lock-frontend
 	apt-get -y install openvpn easy-rsa
-	#wget -O /lib/systemd/network/openvpn.network https://www.openmptcprouter.com/${VPSPATH}/openvpn.network
+	#wget -O /lib/systemd/network/openvpn.network ${VPSURL}${VPSPATH}/openvpn.network
 	rm -f /lib/systemd/network/openvpn.network
 	#if [ ! -f "/etc/openvpn/server/static.key" ]; then
-	#	wget -O /etc/openvpn/tun0.conf https://www.openmptcprouter.com/${VPSPATH}/openvpn-tun0.conf
+	#	wget -O /etc/openvpn/tun0.conf ${VPSURL}${VPSPATH}/openvpn-tun0.conf
 	#	cd /etc/openvpn/server
 	#	openvpn --genkey --secret static.key
 	#fi
@@ -679,8 +680,8 @@ if [ "$OPENVPN" = "yes" ]; then
 		openssl dhparam -out /etc/openvpn/server/dh2048.pem 2048
 	fi
 	if [ "$LOCALFILES" = "no" ]; then
-		wget -O /etc/openvpn/tun0.conf https://www.openmptcprouter.com/${VPSPATH}/openvpn-tun0.conf
-		wget -O /etc/openvpn/tun1.conf https://www.openmptcprouter.com/${VPSPATH}/openvpn-tun1.conf
+		wget -O /etc/openvpn/tun0.conf ${VPSURL}${VPSPATH}/openvpn-tun0.conf
+		wget -O /etc/openvpn/tun1.conf ${VPSURL}${VPSPATH}/openvpn-tun1.conf
 	else
 		cp ${DIR}/openvpn-tun0.conf /etc/openvpn/tun0.conf
 		cp ${DIR}/openvpn-tun1.conf /etc/openvpn/tun1.conf
@@ -711,22 +712,22 @@ if [ "$SOURCES" = "yes" ]; then
 	rm /lib/systemd/system/glorytun*
 	rm /lib/systemd/network/glorytun*
 	if [ "$LOCALFILES" = "no" ]; then
-		wget -O /usr/local/bin/glorytun-udp-run https://www.openmptcprouter.com/${VPSPATH}/glorytun-udp-run
+		wget -O /usr/local/bin/glorytun-udp-run ${VPSURL}${VPSPATH}/glorytun-udp-run
 	else
 		cp ${DIR}/glorytun-udp-run /usr/local/bin/glorytun-udp-run
 	fi
 	chmod 755 /usr/local/bin/glorytun-udp-run
 	if [ "$LOCALFILES" = "no" ]; then
-		wget -O /lib/systemd/system/glorytun-udp@.service https://www.openmptcprouter.com/${VPSPATH}/glorytun-udp%40.service.in
+		wget -O /lib/systemd/system/glorytun-udp@.service ${VPSURL}${VPSPATH}/glorytun-udp%40.service.in
 	else
 		cp ${DIR}/glorytun-udp@.service.in /lib/systemd/system/glorytun-udp@.service
 	fi
-	#wget -O /lib/systemd/network/glorytun-udp.network https://www.openmptcprouter.com/${VPSPATH}/glorytun-udp.network
+	#wget -O /lib/systemd/network/glorytun-udp.network ${VPSURL}${VPSPATH}/glorytun-udp.network
 	rm -f /lib/systemd/network/glorytun-udp.network
 	mkdir -p /etc/glorytun-udp
 	if [ "$LOCALFILES" = "no" ]; then
-		wget -O /etc/glorytun-udp/post.sh https://www.openmptcprouter.com/${VPSPATH}/glorytun-udp-post.sh
-		wget -O /etc/glorytun-udp/tun0 https://www.openmptcprouter.com/${VPSPATH}/tun0.glorytun-udp
+		wget -O /etc/glorytun-udp/post.sh ${VPSURL}${VPSPATH}/glorytun-udp-post.sh
+		wget -O /etc/glorytun-udp/tun0 ${VPSURL}${VPSPATH}/tun0.glorytun-udp
 	else
 		cp ${DIR}/glorytun-udp-post.sh /etc/glorytun-udp/post.sh
 		cp ${DIR}/tun0.glorytun-udp /etc/glorytun-udp/tun0
@@ -771,11 +772,11 @@ if [ "$DSVPN" = "yes" ]; then
 		make CFLAGS='-DNO_DEFAULT_ROUTES -DNO_DEFAULT_FIREWALL'
 		make install
 		rm -f /lib/systemd/system/dsvpn/*
-		wget -O /usr/local/bin/dsvpn-run https://www.openmptcprouter.com/${VPSPATH}/dsvpn-run
+		wget -O /usr/local/bin/dsvpn-run ${VPSURL}${VPSPATH}/dsvpn-run
 		chmod 755 /usr/local/bin/dsvpn-run
-		wget -O /lib/systemd/system/dsvpn-server@.service https://www.openmptcprouter.com/${VPSPATH}/dsvpn-server%40.service.in
+		wget -O /lib/systemd/system/dsvpn-server@.service ${VPSURL}${VPSPATH}/dsvpn-server%40.service.in
 		mkdir -p /etc/dsvpn
-		wget -O /etc/dsvpn/dsvpn0 https://www.openmptcprouter.com/${VPSPATH}/dsvpn0-config
+		wget -O /etc/dsvpn/dsvpn0 ${VPSURL}${VPSPATH}/dsvpn0-config
 		if [ -f /etc/dsvpn/dsvpn.key ]; then
 			mv /etc/dsvpn/dsvpn.key /etc/dsvpn/dsvpn0.key
 		fi
@@ -817,15 +818,15 @@ if [ "$SOURCES" = "yes" ]; then
 	./configure
 	make
 	cp glorytun /usr/local/bin/glorytun-tcp
-	wget -O /usr/local/bin/glorytun-tcp-run https://www.openmptcprouter.com/${VPSPATH}/glorytun-tcp-run
+	wget -O /usr/local/bin/glorytun-tcp-run ${VPSURL}${VPSPATH}/glorytun-tcp-run
 	chmod 755 /usr/local/bin/glorytun-tcp-run
-	wget -O /lib/systemd/system/glorytun-tcp@.service https://www.openmptcprouter.com/${VPSPATH}/glorytun-tcp%40.service.in
-	#wget -O /lib/systemd/network/glorytun-tcp.network https://www.openmptcprouter.com/${VPSPATH}/glorytun.network
+	wget -O /lib/systemd/system/glorytun-tcp@.service ${VPSURL}${VPSPATH}/glorytun-tcp%40.service.in
+	#wget -O /lib/systemd/network/glorytun-tcp.network ${VPSURL}${VPSPATH}/glorytun.network
 	rm -f /lib/systemd/network/glorytun-tcp.network
 	mkdir -p /etc/glorytun-tcp
-	wget -O /etc/glorytun-tcp/post.sh https://www.openmptcprouter.com/${VPSPATH}/glorytun-tcp-post.sh
+	wget -O /etc/glorytun-tcp/post.sh ${VPSURL}${VPSPATH}/glorytun-tcp-post.sh
 	chmod 755 /etc/glorytun-tcp/post.sh
-	wget -O /etc/glorytun-tcp/tun0 https://www.openmptcprouter.com/${VPSPATH}/tun0.glorytun
+	wget -O /etc/glorytun-tcp/tun0 ${VPSURL}${VPSPATH}/tun0.glorytun
 	if [ "$update" = "0" ]; then
 		echo "$GLORYTUN_PASS" > /etc/glorytun-tcp/tun0.key
 	fi
@@ -846,7 +847,7 @@ fi
 
 # Add multipath utility
 if [ "$LOCALFILES" = "no" ]; then
-	wget -O /usr/local/bin/multipath https://www.openmptcprouter.com/${VPSPATH}/multipath
+	wget -O /usr/local/bin/multipath ${VPSURL}${VPSPATH}/multipath
 else
 	cp ${DIR}/multipath /usr/local/bin/multipath
 fi
@@ -854,10 +855,10 @@ chmod 755 /usr/local/bin/multipath
 
 # Add OpenMPTCProuter service
 if [ "$LOCALFILES" = "no" ]; then
-	wget -O /usr/local/bin/omr-service https://www.openmptcprouter.com/${VPSPATH}/omr-service
-	wget -O /lib/systemd/system/omr.service https://www.openmptcprouter.com/${VPSPATH}/omr.service.in
-	wget -O /usr/local/bin/omr-6in4-run https://www.openmptcprouter.com/${VPSPATH}/omr-6in4-run
-	wget -O /lib/systemd/system/omr6in4@.service https://www.openmptcprouter.com/${VPSPATH}/omr6in4%40.service.in
+	wget -O /usr/local/bin/omr-service ${VPSURL}${VPSPATH}/omr-service
+	wget -O /lib/systemd/system/omr.service ${VPSURL}${VPSPATH}/omr.service.in
+	wget -O /usr/local/bin/omr-6in4-run ${VPSURL}${VPSPATH}/omr-6in4-run
+	wget -O /lib/systemd/system/omr6in4@.service ${VPSURL}${VPSPATH}/omr6in4%40.service.in
 else
 	cp ${DIR}/omr-service /usr/local/bin/omr-service
 	cp ${DIR}/omr.service.in /lib/systemd/system/omr.service
@@ -887,7 +888,7 @@ if [ "$update" = "0" ]; then
 	# Install and configure the firewall using shorewall
 	apt-get -y install shorewall shorewall6
 	if [ "$LOCALFILES" = "no" ]; then
-		wget -O /etc/shorewall/openmptcprouter-shorewall.tar.gz https://www.openmptcprouter.com/${VPSPATH}/openmptcprouter-shorewall.tar.gz
+		wget -O /etc/shorewall/openmptcprouter-shorewall.tar.gz ${VPSURL}${VPSPATH}/openmptcprouter-shorewall.tar.gz
 	else
 		cp ${DIR}/openmptcprouter-shorewall.tar.gz /etc/shorewall/openmptcprouter-shorewall.tar.gz
 	fi
@@ -896,7 +897,7 @@ if [ "$update" = "0" ]; then
 	sed -i "s:eth0:$INTERFACE:g" /etc/shorewall/*
 	systemctl enable shorewall
 	if [ "$LOCALFILES" = "no" ]; then
-		wget -O /etc/shorewall6/openmptcprouter-shorewall6.tar.gz https://www.openmptcprouter.com/${VPSPATH}/openmptcprouter-shorewall6.tar.gz
+		wget -O /etc/shorewall6/openmptcprouter-shorewall6.tar.gz ${VPSURL}${VPSPATH}/openmptcprouter-shorewall6.tar.gz
 	else
 		cp ${DIR}/openmptcprouter-shorewall6.tar.gz /etc/shorewall6/openmptcprouter-shorewall6.tar.gz
 	fi
@@ -907,21 +908,21 @@ if [ "$update" = "0" ]; then
 else
 	# Update only needed firewall files
 	if [ "$LOCALFILES" = "no" ]; then
-		wget -O /etc/shorewall/interfaces https://www.openmptcprouter.com/${VPSPATH}/shorewall4/interfaces
-		wget -O /etc/shorewall/snat https://www.openmptcprouter.com/${VPSPATH}/shorewall4/snat
-		wget -O /etc/shorewall/stoppedrules https://www.openmptcprouter.com/${VPSPATH}/shorewall4/stoppedrules
-		wget -O /etc/shorewall/tcinterfaces https://www.openmptcprouter.com/${VPSPATH}/shorewall4/tcinterfaces
-		wget -O /etc/shorewall/shorewall.conf https://www.openmptcprouter.com/${VPSPATH}/shorewall4/shorewall.conf
-		wget -O /etc/shorewall/policy https://www.openmptcprouter.com/${VPSPATH}/shorewall4/policy
-		wget -O /etc/shorewall/params https://www.openmptcprouter.com/${VPSPATH}/shorewall4/params
-		wget -O /etc/shorewall/params.vpn https://www.openmptcprouter.com/${VPSPATH}/shorewall4/params.vpn
-		wget -O /etc/shorewall/params.net https://www.openmptcprouter.com/${VPSPATH}/shorewall4/params.net
-		wget -O /etc/shorewall6/params https://www.openmptcprouter.com/${VPSPATH}/shorewall6/params
-		wget -O /etc/shorewall6/params.net https://www.openmptcprouter.com/${VPSPATH}/shorewall6/params.net
-		wget -O /etc/shorewall6/params.vpn https://www.openmptcprouter.com/${VPSPATH}/shorewall6/params.vpn
-		wget -O /etc/shorewall6/interfaces https://www.openmptcprouter.com/${VPSPATH}/shorewall6/interfaces
-		wget -O /etc/shorewall6/stoppedrules https://www.openmptcprouter.com/${VPSPATH}/shorewall6/stoppedrules
-		wget -O /etc/shorewall6/snat https://www.openmptcprouter.com/${VPSPATH}/shorewall6/snat
+		wget -O /etc/shorewall/interfaces ${VPSURL}${VPSPATH}/shorewall4/interfaces
+		wget -O /etc/shorewall/snat ${VPSURL}${VPSPATH}/shorewall4/snat
+		wget -O /etc/shorewall/stoppedrules ${VPSURL}${VPSPATH}/shorewall4/stoppedrules
+		wget -O /etc/shorewall/tcinterfaces ${VPSURL}${VPSPATH}/shorewall4/tcinterfaces
+		wget -O /etc/shorewall/shorewall.conf ${VPSURL}${VPSPATH}/shorewall4/shorewall.conf
+		wget -O /etc/shorewall/policy ${VPSURL}${VPSPATH}/shorewall4/policy
+		wget -O /etc/shorewall/params ${VPSURL}${VPSPATH}/shorewall4/params
+		wget -O /etc/shorewall/params.vpn ${VPSURL}${VPSPATH}/shorewall4/params.vpn
+		wget -O /etc/shorewall/params.net ${VPSURL}${VPSPATH}/shorewall4/params.net
+		wget -O /etc/shorewall6/params ${VPSURL}${VPSPATH}/shorewall6/params
+		wget -O /etc/shorewall6/params.net ${VPSURL}${VPSPATH}/shorewall6/params.net
+		wget -O /etc/shorewall6/params.vpn ${VPSURL}${VPSPATH}/shorewall6/params.vpn
+		wget -O /etc/shorewall6/interfaces ${VPSURL}${VPSPATH}/shorewall6/interfaces
+		wget -O /etc/shorewall6/stoppedrules ${VPSURL}${VPSPATH}/shorewall6/stoppedrules
+		wget -O /etc/shorewall6/snat ${VPSURL}${VPSPATH}/shorewall6/snat
 	else
 		cp ${DIR}/shorewall4/interfaces /etc/shorewall/interfaces
 		cp ${DIR}/shorewall4/snat /etc/shorewall/snat

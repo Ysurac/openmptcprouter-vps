@@ -16,6 +16,7 @@ if [ "$1" = "start" ]; then
         ip tunnel add ${DEV} mode sit remote ${REMOTEIP} local ${LOCALIP}
         ip -6 addr add ${LOCALIP6} dev ${DEV}
         ip link set ${DEV} up
+        [ -n "$ULA" ] && ip route replace ${ULA} via $(echo ${REMOTEIP6} | cut -d/ -f1) dev ${DEV}
 fi
 if [ "$1" = "stop" ]; then
         ip tunnel del ${DEV}

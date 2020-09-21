@@ -9,7 +9,7 @@
     ],
     "method": "chacha20-ietf-poly1305",
     "fast_open": true,
-    "timeout": 600,
+    "timeout": 1000,
     "port_key": {
         "65101": "MySecretKey",
     },

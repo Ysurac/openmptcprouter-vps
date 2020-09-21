@@ -6,7 +6,7 @@ After=network.target network-online.target glorytun-tcp@.service glorytun-udp@.s
 Type=simple
 Restart=always
 ExecStart=/usr/local/bin/omr-service
-ExecStop=/usr/local/bin/omr-service stop
+KillSignal=9
 CapabilityBoundingSet=CAP_NET_ADMIN CAP_NET_RAW
 
 [Install]

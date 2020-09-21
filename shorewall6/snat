@@ -18,4 +18,4 @@
 MASQUERADE		fe80::/10,\
 			fd00::/8		$NET_IFACE
 # SNAT from VPN server for all VPN clients
-SNAT(fe80::a00:1)		::/0		omr-6in4-user+
+#SNAT(fe80::a00:1)		::/0		omr-6in4-user+

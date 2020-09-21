@@ -8,7 +8,7 @@ CapabilityBoundingSet=CAP_NET_BIND_SERVICE
 AmbientCapabilities=CAP_NET_BIND_SERVICE
 LimitNOFILE=99999
 LimitNPROC=99999
-ExecStart=/usr/bin/ss-manager -c /etc/shadowsocks-libev/%i.json
+ExecStart=/usr/bin/ss-manager -c /etc/shadowsocks-libev/%i.json --manager-address 127.0.0.1:8839
 Restart=always
 
 [Install]

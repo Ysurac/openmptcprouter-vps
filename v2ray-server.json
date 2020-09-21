@@ -1,0 +1,124 @@
+{
+	"log": {
+		"loglevel": "debug",
+		"error": "/tmp/v2rayError.log"
+	},
+	"transport": {
+		"tcpSettings": {},
+		"wsSettings": {},
+		"kcpSettings": {
+			"mtu": 1460,
+			"tti": 10,
+			"uplinkCapacity": 100,
+			"downlinkCapacity": 100,
+			"congestion": false,
+			"readBufferSize": 8,
+			"writeBufferSize": 8
+		}
+	},
+	"inbounds": [
+		{
+			"tag": "Vmess-In1",
+			"port": 65228,
+			"protocol": "vless",
+			"settings": {
+				"disableInsecureEncryption": false,
+				"clients": [
+					{
+						"id": "V2RAY_UUID",
+						"level": 0,
+						"alterId": 0,
+						"email": "openmptcprouter"
+					}
+				]
+			},
+			"streamSettings": {
+				"sockopt": {
+					"mark": 0
+				},
+				"network": "tcp",
+				"security": "tls",
+				"tlsSettings": {
+					"certificates": [
+						{
+							"certificateFile": "/etc/openvpn/ca/pki/issued/server.crt",
+							"keyFile": "/etc/openvpn/ca/pki/private/server.key"
+						}
+					]
+				}
+			}
+		},
+		{
+			"listen": "127.0.0.1",
+			"port": 10085,
+			"protocol": "dokodemo-door",
+			"settings": {
+				"address": "127.0.0.1"
+			},
+			"tag": "api"
+		}
+	],
+	"outbounds": [
+		{
+			"protocol": "freedom",
+			"settings": {
+				"userLevel": 0
+			},
+			"tag": "direct"
+		}
+	],
+	"routing": {
+		"rules": [
+			{
+				"type": "field",
+				"inboundTag": [
+					"Vmess-In1"
+				],
+				"outboundTag": "WH-Lan1",
+				"domain": [
+					"full:WH-Lan1"
+				]
+			},
+			{
+				"inboundTag": [
+					"api"
+				],
+				"outboundTag": "api",
+				"type": "field"
+			}
+		]
+	},
+	"reverse": {
+		"portals": [
+			{
+				"tag": "WH-Lan1",
+				"domain": "WH-Lan1"
+			}
+		]
+	},
+	"stats": {},
+	"api": {
+		"tag": "api",
+		"services": [
+			"HandlerService",
+			"LoggerService",
+			"StatsService"
+		]
+	},
+	"policy": {
+		"levels": {
+			"0": {
+				"uplinkOnly": 0,
+				"downlinkOnly": 0,
+				"bufferSize": 512,
+				"connIdle": 1200,
+				"statsUserUplink": true,
+				"statsUserDownlink": true
+			}
+		},
+		"system": {
+			"statsInboundUplink": true,
+			"statsInboundDownlink": true
+		}
+	}
+}

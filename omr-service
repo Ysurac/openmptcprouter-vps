@@ -56,9 +56,9 @@ _gre_tunnels() {
 		if [ -f "$intf" ]; then
 			. "$(readlink -f "$intf")"
 			iface="$(basename $intf)"
-			if [ "$(ip tunnel show $iface 2>/dev/null | awk '{print $4}')" != "$OMR_ADDR" ]; then
+			if [ "$(ip tunnel show $iface 2>/dev/null | awk '{print $4}')" != "$REMOTEIP" ]; then
 				ip tunnel del $iface 2>&1 >/dev/null
-				ip tunnel add $iface mode gre local $INTFADDR remote $OMR_ADDR
+				ip tunnel add $iface mode gre local $INTFADDR remote $REMOTEIP
 				ip link set $iface up
 				ip addr add $LOCALIP dev $iface
 				ip route add $NETWORK dev $iface 2>&1 >/dev/null

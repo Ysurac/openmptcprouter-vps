@@ -22,7 +22,7 @@
 			"port": 65228,
 			"protocol": "vless",
 			"settings": {
-				"disableInsecureEncryption": false,
+				"decryption": "none",
 				"clients": [
 					{
 						"id": "V2RAY_UUID",

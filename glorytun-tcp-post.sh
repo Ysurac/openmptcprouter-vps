@@ -5,7 +5,7 @@
 INTF=gt-${DEV}
 [ -z "$LOCALIP" ] && LOCALIP="10.255.255.1"
 [ -z "$BROADCASTIP" ] && BROADCASTIP="10.255.255.3"
-while [ -z "$(ip link show $INTF)" ]; do
+while [ -z "$(ip link show $INTF 2>/dev/null)" ]; do
 	sleep 2
 done
 [ "$(ip addr show dev $INTF | grep -o 'inet [0-9]*\.[0-9]*\.[0-9]*\.[0-9]*' | grep -o '[0-9]*\.[0-9]*\.[0-9]*\.[0-9]*')" != "$LOCALIP" ] && {

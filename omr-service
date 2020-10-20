@@ -14,7 +14,7 @@ _multipath() {
 }
 
 _glorytun_udp() {
-	[ -z "$(glorytun show dev gt-udp-tun0 2>/dev/null | grep server)" ] && {
+	[ -z "$(glorytun show dev gt-udp-tun0 2>/dev/null | grep tunnel)" ] && {
 		logger -t "OMR-Service" "Restart Glorytun-UDP"
 		systemctl -q restart 'glorytun-udp@*'
 	}

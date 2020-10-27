@@ -30,7 +30,7 @@ _glorytun_tcp() {
 }
 
 _omr_api() {
-	[ -z "$(curl -s -k -m 3 https://127.0.0.1:65500/)" ] && {
+	[ -z "$(curl -s -k -m 30 https://127.0.0.1:65500/)" ] && {
 		logger -t "OMR-Service" "Restart OMR-Admin"
 		systemctl -q restart omr-admin
 	}

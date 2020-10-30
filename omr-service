@@ -27,6 +27,12 @@ _glorytun_tcp() {
 	for intf in /etc/glorytun-tcp/tun*; do
 		[ "$(echo $intf | grep key)" = "" ] && /etc/glorytun-tcp/post.sh ${intf}
 	done
+	if [ "$(cat /etc/openmptcprouter-vps-admin/current-vpn)" = "glorytun_tcp" ]; then
+		if [ "$(ping -c 5 -w 5 10.255.255.2 | grep '100%')" != "" ]; then
+			logger -t "OMR-Service" "No answer from VPN client end, restart Glorytun-TCP"
+			systemctl restart glorytun-tcp@tun0
+		fi
+	fi
 }
 
 _omr_api() {

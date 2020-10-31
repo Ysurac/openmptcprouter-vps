@@ -23,6 +23,8 @@ OMR_ADMIN_PASS=${OMR_ADMIN_PASS:-$(od -vN "32" -An -tx1 /dev/urandom | tr '[:low
 OMR_ADMIN_PASS_ADMIN=${OMR_ADMIN_PASS_ADMIN:-$(od -vN "32" -An -tx1 /dev/urandom | tr '[:lower:]' '[:upper:]' | tr -d " \n")}
 MLVPN=${MLVPN:-yes}
 MLVPN_PASS=${MLVPN_PASS:-$(head -c 32 /dev/urandom | base64 -w0)}
+UBOND=${UBOND:-no}
+UBOND_PASS=${UBOND_PASS:-$(head -c 32 /dev/urandom | base64 -w0)}
 OPENVPN=${OPENVPN:-yes}
 DSVPN=${DSVPN:-yes}
 SOURCES=${SOURCES:-yes}
@@ -30,17 +32,18 @@ NOINTERNET=${NOINTERNET:-no}
 SPEEDTEST=${SPEEDTEST:-no}
 LOCALFILES=${LOCALFILES:-no}
 INTERFACE=${INTERFACE:-$(ip -o -4 route show to default | grep -m 1 -Po '(?<=dev )(\S+)' | tr -d "\n")}
-KERNEL_VERSION="5.4.64"
-KERNEL_PACKAGE_VERSION="1.12+9d3f35b"
+KERNEL_VERSION="5.4.65"
+KERNEL_PACKAGE_VERSION="1.13+9d3f35b"
 KERNEL_RELEASE="${KERNEL_VERSION}-mptcp_${KERNEL_PACKAGE_VERSION}"
-GLORYTUN_UDP_VERSION="3622f928caf03709c4031a34feec85c623bc5281"
+GLORYTUN_UDP_VERSION="97607fdf5c6c33df512ed85190a1fd93b5f45e77"
 #MLVPN_VERSION="8f9720978b28c1954f9f229525333547283316d2"
 MLVPN_VERSION="f45cec350a6879b8b020143a78134a022b5df2a7"
+UBOND_VERSION="672100fb57913ffd29caad63517e145a5974b078"
 OBFS_VERSION="486bebd9208539058e57e23a12f23103016e09b4"
-OMR_ADMIN_VERSION="2737c91e17731f82c96e579b4f963e0136e4df27"
+OMR_ADMIN_VERSION="8d0706e8c234f9a0eaa88ace6d58c2d0f45156cf"
 DSVPN_VERSION="3b99d2ef6c02b2ef68b5784bec8adfdd55b29b1a"
 #V2RAY_VERSION="v1.1.0"
-V2RAY_PLUGIN_VERSION="v1.2.0-8-g59b8f4f"
+V2RAY_PLUGIN_VERSION="v1.4.3"
 EASYRSA_VERSION="3.0.6"
 SHADOWSOCKS_VERSION="38871da8baf5cfa400983dcdf918397e48655203"
 VPS_DOMAIN=${VPS_DOMAIN:-$(wget -4 -qO- -T 2 http://hostname.openmptcprouter.com)}
@@ -57,9 +60,11 @@ export LC_ALL=C
 export PATH=$PATH:/sbin
 export DEBIAN_FRONTEND=noninteractive 
 
+echo "Check user..."
 if [ "$(id -u)" -ne 0 ]; then echo 'Please run as root.' >&2; exit 1; fi
 
 # Check Linux version
+echo "Check Linux version..."
 if test -f /etc/os-release ; then
 	. /etc/os-release
 else
@@ -75,6 +80,8 @@ elif [ "$ID" != "debian" ] && [ "$ID" != "ubuntu" ]; then
 	echo "This script only work with Ubuntu 18.04, Ubuntu 19.04, Debian Stretch (9.x) or Debian Buster (10.x)"
 	exit 1
 fi
+
+echo "Check architecture..."
 ARCH=$(dpkg --print-architecture | tr -d "\n")
 if [ "$ARCH" != "amd64" ]; then
 	echo "Only x86_64 (amd64) is supported"
@@ -87,12 +94,12 @@ fi
 #	echo "E: dpkg database is locked. Check that an update is not running in background..."
 #	exit 1
 #fi
+echo "Check about broken packages..."
 apt-get check >/dev/null 2>&1
 if [ "$?" -ne 0 ]; then
 	echo "E: \`apt-get check\` failed, you may have broken packages. Aborting..."
 	exit 1
 fi
-
 
 # Fix old string...
 if [ -f /etc/motd ] && grep --quiet 'OpenMPCTProuter VPS' /etc/motd ; then
@@ -103,6 +110,7 @@ if [ -f /etc/motd.head ] && grep --quiet 'OpenMPCTProuter VPS' /etc/motd.head ; 
 fi
 
 # Check if OpenMPTCProuter VPS is already installed
+echo "Check if OpenMPTCProuter VPS is already installed..."
 update="0"
 if [ "$UPDATE" = "yes" ]; then
 	if [ -f /etc/motd ] && grep --quiet 'OpenMPTCProuter VPS' /etc/motd ; then
@@ -112,8 +120,10 @@ if [ "$UPDATE" = "yes" ]; then
 	elif [ -f /root/openmptcprouter_config.txt ]; then
 		update="1"
 	fi
+	echo "Update mode"
 fi
 
+echo "Remove lock and update packages list..."
 rm -f /var/lib/dpkg/lock
 rm -f /var/lib/dpkg/lock-frontend
 rm -f /var/cache/apt/archives/lock
@@ -121,7 +131,8 @@ apt-get update
 rm -f /var/lib/dpkg/lock
 rm -f /var/lib/dpkg/lock-frontend
 rm -f /var/cache/apt/archives/lock
-apt-get -y install apt-transport-https gnupg
+echo "Install apt-transport-https, gnupg and openssh-server..."
+apt-get -y install apt-transport-https gnupg openssh-server
 
 #if [ "$ID" = "debian" ] && [ "$VERSION_ID" = "9" ] && [ "$UPDATE_DEBIAN" = "yes" ] && [ "$update" = "0" ]; then
 if [ "$ID" = "debian" ] && [ "$VERSION_ID" = "9" ] && [ "$UPDATE_OS" = "yes" ]; then
@@ -145,6 +156,7 @@ if [ "$ID" = "ubuntu" ] && [ "$VERSION_ID" = "18.04" ] && [ "$UPDATE_OS" = "yes"
 	VERSION_ID="20.04"
 fi
 # Add OpenMPTCProuter repo
+echo "Add OpenMPTCProuter repo..."
 echo 'deb [arch=amd64] https://repo.openmptcprouter.com stretch main' > /etc/apt/sources.list.d/openmptcprouter.list
 cat <<EOF | tee /etc/apt/preferences.d/openmptcprouter.pref
 Explanation: Prefer OpenMPTCProuter provided packages over the Debian native ones
@@ -155,6 +167,7 @@ EOF
 wget -O - http://repo.openmptcprouter.com/openmptcprouter.gpg.key | apt-key add -
 
 # Install mptcp kernel and shadowsocks
+echo "Install mptcp kernel and shadowsocks..."
 apt-get update
 sleep 2
 apt-get -y install dirmngr patch
@@ -472,6 +485,11 @@ fi
 if ! grep -q 'DefaultLimitNOFILE=65536' /etc/systemd/system.conf ; then
 	echo 'DefaultLimitNOFILE=65536' >> /etc/systemd/system.conf
 fi
+
+if systemctl -q is-active shadowsocks-libev-manager@manager; then
+	systemctl -q stop shadowsocks-libev-manager@manager > /dev/null 2>&1
+fi
+
 # Install simple-obfs
 if [ "$OBFS" = "yes" ]; then
 	echo "Install OBFS"
@@ -507,10 +525,11 @@ if [ "$V2RAY_PLUGIN" = "yes" ]; then
 	echo "Install v2ray plugin"
 	rm -rf /tmp/v2ray-plugin-linux-amd64-${V2RAY_PLUGIN_VERSION}.tar.gz
 	#wget -O /tmp/v2ray-plugin-linux-amd64-${V2RAY_PLUGIN_VERSION}.tar.gz https://github.com/shadowsocks/v2ray-plugin/releases/download/${V2RAY_PLUGIN_VERSION}/v2ray-plugin-linux-amd64-${V2RAY_PLUGIN_VERSION}.tar.gz
-	wget -O /tmp/v2ray-plugin-linux-amd64-${V2RAY_PLUGIN_VERSION}.tar.gz ${VPSURL}${VPSPATH}/bin/v2ray-plugin-linux-amd64-${V2RAY_PLUGIN_VERSION}.tar.gz
+	#wget -O /tmp/v2ray-plugin-linux-amd64-${V2RAY_PLUGIN_VERSION}.tar.gz ${VPSURL}${VPSPATH}/bin/v2ray-plugin-linux-amd64-${V2RAY_PLUGIN_VERSION}.tar.gz
+	wget -O /tmp/v2ray-plugin-linux-amd64-${V2RAY_PLUGIN_VERSION}.tar.gz https://github.com/teddysun/v2ray-plugin/releases/download/v1.4.3/v2ray-plugin-linux-amd64-${V2RAY_PLUGIN_VERSION}.tar.gz
 	cd /tmp
 	tar xzvf v2ray-plugin-linux-amd64-${V2RAY_PLUGIN_VERSION}.tar.gz
-	cp v2ray-plugin_linux_amd64 /usr/local/bin/v2ray-plugin
+	cp -f v2ray-plugin_linux_amd64 /usr/local/bin/v2ray-plugin
 	cd /tmp
 	rm -rf /tmp/v2ray-plugin_linux_amd64
 	rm -rf /tmp/v2ray-plugin-linux-amd64-${V2RAY_PLUGIN_VERSION}.tar.gz
@@ -605,6 +624,65 @@ if [ "$MLVPN" = "yes" ]; then
 	systemctl enable mlvpn@mlvpn0.service
 	systemctl enable systemd-networkd.service
 	echo "install mlvpn done"
+fi
+if systemctl -q is-active openvpn-server@tun0.service; then
+	systemctl -q stop openvpn-server@tun0 > /dev/null 2>&1
+	systemctl -q disable openvpn-server@tun0 > /dev/null 2>&1
+fi
+if systemctl -q is-active ubond@ubond0.service; then
+	systemctl -q stop ubond@ubond0 > /dev/null 2>&1
+	systemctl -q disable ubond@ubond0 > /dev/null 2>&1
+fi
+echo "install ubond"
+# Install UBOND
+if [ "$UBOND" = "yes" ]; then
+	echo 'Install UBOND'
+	ubondupdate="0"
+	if [ -f /etc/ubond/ubond0.conf ]; then
+		ubondupdate="1"
+	fi
+#	if [ "$SOURCES" = "yes" ]; then
+		rm -f /var/lib/dpkg/lock
+		rm -f /var/lib/dpkg/lock-frontend
+		apt-get -y install build-essential pkg-config autoconf automake libpcap-dev unzip git
+		rm -rf /tmp/ubond
+		cd /tmp
+		git clone https://github.com/markfoodyburton/ubond.git /tmp/ubond
+		cd /tmp/ubond
+		git checkout ${UBOND_VERSION}
+		./autogen.sh
+		./configure --sysconfdir=/etc
+		make
+		make install
+		cd /tmp
+		rm -rf /tmp/ubond
+#	else
+#		apt-get -y -o Dpkg::Options::="--force-overwrite" install ubond
+#	fi
+	if [ "$LOCALFILES" = "no" ]; then
+		wget -O /lib/systemd/network/ubond.network ${VPSURL}${VPSPATH}/ubond.network
+		wget -O /lib/systemd/system/ubond@.service ${VPSURL}${VPSPATH}/ubond@.service.in
+	else
+		cp ${DIR}/ubond.network /lib/systemd/network/ubond.network
+		cp ${DIR}/ubond@.service.in /lib/systemd/system/ubond@.service
+	fi
+	mkdir -p /etc/ubond
+	if [ "$ubondupdate" = "0" ]; then
+		if [ "$LOCALFILES" = "no" ]; then
+			wget -O /etc/ubond/ubond0.conf ${VPSURL}${VPSPATH}/ubond0.conf
+		else
+			cp ${DIR}/ubond0.conf /etc/ubond/ubond0.conf
+		fi
+		sed -i "s:UBOND_PASS:$UBOND_PASS:" /etc/ubond/ubond0.conf
+	fi
+	chmod 0600 /etc/ubond/ubond0.conf
+	adduser --quiet --system --home /var/opt/ubond --shell /usr/sbin/nologin ubond
+	mkdir -p /var/opt/ubond
+	usermod -d /var/opt/ubond ubond
+	chown ubond /var/opt/ubond
+	systemctl enable ubond@ubond0.service
+	systemctl enable systemd-networkd.service
+	echo "install ubond done"
 fi
 if systemctl -q is-active openvpn-server@tun0.service; then
 	systemctl -q stop openvpn-server@tun0 > /dev/null 2>&1
@@ -1041,6 +1119,11 @@ if [ "$update" = "0" ]; then
 		echo 'Your MLVPN password: '
 		echo $MLVPN_PASS
 	fi
+	if [ "$UBOND" = "yes" ]; then
+		echo 'UBOND first port: 65251'
+		echo 'Your UBOND password: '
+		echo $UBOND_PASS
+	fi
 	if [ "$OMR_ADMIN" = "yes" ]; then
 		echo "OpenMPTCProuter API Admin key (only for configuration via API, you don't need it): "
 		echo $OMR_ADMIN_PASS_ADMIN
@@ -1084,6 +1167,12 @@ if [ "$update" = "0" ]; then
 		Your MLVPN password: $MLVPN_PASS
 		EOF
 	fi
+	if [ "$UBOND" = "yes" ]; then
+		cat >> /root/openmptcprouter_config.txt <<-EOF
+		UBOND first port: 65251'
+		Your UBOND password: $UBOND_PASS
+		EOF
+	fi
 	if [ "$OMR_ADMIN" = "yes" ]; then
 		cat >> /root/openmptcprouter_config.txt <<-EOF
 		Your OpenMPTCProuter ADMIN API Server key (only for configuration via API access, you don't need it): $OMR_ADMIN_PASS_ADMIN
@@ -1106,6 +1195,11 @@ else
 	if [ "$MLVPN" = "yes" ]; then
 		echo 'Restarting mlvpn...'
 		systemctl -q restart mlvpn@mlvpn0
+		echo 'done'
+	fi
+	if [ "$UBOND" = "yes" ]; then
+		echo 'Restarting ubond...'
+		systemctl -q restart ubond@ubond0
 		echo 'done'
 	fi
 	if [ "$V2RAY" = "yes" ]; then

@@ -14,7 +14,7 @@ _multipath() {
 }
 
 _glorytun_udp() {
-	[ -z "$(glorytun show dev gt-udp-tun0 2>/dev/null | grep server)" ] && {
+	[ -z "$(glorytun show dev gt-udp-tun0 2>/dev/null | grep tunnel)" ] && {
 		logger -t "OMR-Service" "Restart Glorytun-UDP"
 		systemctl -q restart 'glorytun-udp@*'
 	}
@@ -27,6 +27,12 @@ _glorytun_tcp() {
 	for intf in /etc/glorytun-tcp/tun*; do
 		[ "$(echo $intf | grep key)" = "" ] && /etc/glorytun-tcp/post.sh ${intf}
 	done
+	if [ "$(cat /etc/openmptcprouter-vps-admin/current-vpn)" = "glorytun_tcp" ]; then
+		if [ "$(ping -c 5 -w 5 10.255.255.2 | grep '100%')" != "" ]; then
+			logger -t "OMR-Service" "No answer from VPN client end, restart Glorytun-TCP"
+			systemctl restart glorytun-tcp@tun0
+		fi
+	fi
 }
 
 _omr_api() {
@@ -56,9 +62,9 @@ _gre_tunnels() {
 		if [ -f "$intf" ]; then
 			. "$(readlink -f "$intf")"
 			iface="$(basename $intf)"
-			if [ "$(ip tunnel show $iface 2>/dev/null | awk '{print $4}')" != "$OMR_ADDR" ]; then
+			if [ "$(ip tunnel show $iface 2>/dev/null | awk '{print $4}')" != "$REMOTEIP" ]; then
 				ip tunnel del $iface 2>&1 >/dev/null
-				ip tunnel add $iface mode gre local $INTFADDR remote $OMR_ADDR
+				ip tunnel add $iface mode gre local $INTFADDR remote $REMOTEIP
 				ip link set $iface up
 				ip addr add $LOCALIP dev $iface
 				ip route add $NETWORK dev $iface 2>&1 >/dev/null

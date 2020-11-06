@@ -50,7 +50,7 @@ VPS_DOMAIN=${VPS_DOMAIN:-$(wget -4 -qO- -T 2 http://hostname.openmptcprouter.com
 VPSPATH="server"
 VPSURL="https://www.openmptcprouter.com/"
 
-OMR_VERSION="0.1020"
+OMR_VERSION="0.1021"
 
 DIR=$( pwd )
 #"

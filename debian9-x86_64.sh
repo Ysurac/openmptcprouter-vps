@@ -32,8 +32,8 @@ NOINTERNET=${NOINTERNET:-no}
 SPEEDTEST=${SPEEDTEST:-no}
 LOCALFILES=${LOCALFILES:-no}
 INTERFACE=${INTERFACE:-$(ip -o -4 route show to default | grep -m 1 -Po '(?<=dev )(\S+)' | tr -d "\n")}
-KERNEL_VERSION="5.4.65"
-KERNEL_PACKAGE_VERSION="1.13+9d3f35b"
+KERNEL_VERSION="5.4.74"
+KERNEL_PACKAGE_VERSION="1.14+9d3f35b"
 KERNEL_RELEASE="${KERNEL_VERSION}-mptcp_${KERNEL_PACKAGE_VERSION}"
 GLORYTUN_UDP_VERSION="97607fdf5c6c33df512ed85190a1fd93b5f45e77"
 #MLVPN_VERSION="8f9720978b28c1954f9f229525333547283316d2"
@@ -195,8 +195,8 @@ rename 's/^bzImage/vmlinuz/s' * >/dev/null 2>&1
 if [ "$(dpkg -l | grep linux-image-${KERNEL_VERSION} | grep ${KERNEL_PACKAGE_VERSION})" = "" ]; then
 	echo "Install kernel linux-image-${KERNEL_RELEASE}"
 	echo "\033[1m !!! if kernel install fail run: dpkg --remove --force-remove-reinstreq linux-image-${KERNEL_VERSION}-mptcp !!! \033[0m"
-	dpkg --force-all -i -B /tmp/linux-image-${KERNEL_RELEASE}_amd64.deb
 	dpkg --force-all -i -B /tmp/linux-headers-${KERNEL_RELEASE}_amd64.deb
+	dpkg --force-all -i -B /tmp/linux-image-${KERNEL_RELEASE}_amd64.deb
 fi
 
 # Check if mptcp kernel is grub default kernel

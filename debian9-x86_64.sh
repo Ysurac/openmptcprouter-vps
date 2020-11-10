@@ -207,8 +207,10 @@ if [ "$LOCALFILES" = "no" ]; then
 else
 	cd ${DIR}
 fi
+rm -f /etc/grub.d/30_os-prober
 bash update-grub.sh ${KERNEL_VERSION}-mptcp
 bash update-grub.sh ${KERNEL_RELEASE}
+sed -i 's/default="1>0"/default="0"/' /boot/grub/grub.cfg 2>&1 >/dev/null
 
 echo "Install tracebox OpenMPTCProuter edition"
 apt-get -y -o Dpkg::Options::="--force-overwrite" install tracebox

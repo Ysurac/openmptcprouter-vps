@@ -35,7 +35,7 @@ INTERFACE=${INTERFACE:-$(ip -o -4 route show to default | grep -m 1 -Po '(?<=dev
 KERNEL_VERSION="5.4.74"
 KERNEL_PACKAGE_VERSION="1.14+9d3f35b"
 KERNEL_RELEASE="${KERNEL_VERSION}-mptcp_${KERNEL_PACKAGE_VERSION}"
-GLORYTUN_UDP_VERSION="97607fdf5c6c33df512ed85190a1fd93b5f45e77"
+GLORYTUN_UDP_VERSION="32267e86a6da05b285bb3bf2b136c105dc0af4bb"
 #MLVPN_VERSION="8f9720978b28c1954f9f229525333547283316d2"
 MLVPN_VERSION="f45cec350a6879b8b020143a78134a022b5df2a7"
 UBOND_VERSION="672100fb57913ffd29caad63517e145a5974b078"
@@ -46,6 +46,7 @@ DSVPN_VERSION="3b99d2ef6c02b2ef68b5784bec8adfdd55b29b1a"
 V2RAY_PLUGIN_VERSION="v1.4.3"
 EASYRSA_VERSION="3.0.6"
 SHADOWSOCKS_VERSION="38871da8baf5cfa400983dcdf918397e48655203"
+DEFAULT_USER="openmptcprouter"
 VPS_DOMAIN=${VPS_DOMAIN:-$(wget -4 -qO- -T 2 http://hostname.openmptcprouter.com)}
 VPSPATH="server-test"
 VPSURL="https://www.openmptcprouter.com/"
@@ -413,6 +414,7 @@ if [ "$OMR_ADMIN" = "yes" ]; then
 			cp /tmp/openmptcprouter-vps-admin-${OMR_ADMIN_VERSION}/omr-admin-config.json /etc/openmptcprouter-vps-admin/
 			cp /tmp/openmptcprouter-vps-admin-${OMR_ADMIN_VERSION}/omr-admin.py /usr/local/bin/
 			cd /etc/openmptcprouter-vps-admin
+			sed -i "s:openmptcptouter:${DEFAULT_USER}:g" /etc/openmptcprouter-vps-admin/omr-admin-config.json
 		fi
 		openssl req -new -newkey rsa:2048 -days 3650 -nodes -x509 -keyout key.pem -out cert.pem -subj "/C=US/ST=Oregon/L=Portland/O=OpenMPTCProuterVPS/OU=Org/CN=www.openmptcprouter.vps"
 		sed -i "s:AdminMySecretKey:$OMR_ADMIN_PASS_ADMIN:g" /etc/openmptcprouter-vps-admin/omr-admin-config.json

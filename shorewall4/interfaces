@@ -21,4 +21,4 @@ vpn	mlvpn+		nosmurfs,tcpflags
 vpn	tun+		nosmurfs,tcpflags
 vpn	dsvpn+		nosmurfs,tcpflags
 vpn	gre-user+	nosmurfs,tcpflags
-
+vpn	omr-bonding	nosmurfs,tcpflags

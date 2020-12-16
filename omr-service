@@ -62,9 +62,9 @@ _gre_tunnels() {
 		if [ -f "$intf" ]; then
 			. "$(readlink -f "$intf")"
 			iface="$(basename $intf)"
-			if [ "$(ip tunnel show $iface 2>/dev/null | awk '{print $4}')" != "$REMOTEIP" ]; then
+			if [ "$(ip tunnel show $iface 2>/dev/null | awk '{print $4}')" != "$OMR_ADDR" ]; then
 				ip tunnel del $iface 2>&1 >/dev/null
-				ip tunnel add $iface mode gre local $INTFADDR remote $REMOTEIP
+				ip tunnel add $iface mode gre local $INTFADDR remote $OMR_ADDR
 				ip link set $iface up
 				ip addr add $LOCALIP dev $iface
 				ip route add $NETWORK dev $iface 2>&1 >/dev/null
@@ -73,7 +73,20 @@ _gre_tunnels() {
 	done
 }
 
+_openvpn_bonding() {
+	if [ "$(ip link show ovpnbonding1)" != "" ] && [ "$(ip link show ovpnbonding1 | grep SLAVE)" = "" ]; then
+		ip link set opvpnbonding1 master omr-bonding 2>&1 >/dev/null
+		ip link set opvpnbonding2 master omr-bonding 2>&1 >/dev/null
+		ip link set opvpnbonding3 master omr-bonding 2>&1 >/dev/null
+		ip link set opvpnbonding4 master omr-bonding 2>&1 >/dev/null
+		ip link set opvpnbonding5 master omr-bonding 2>&1 >/dev/null
+		ip link set opvpnbonding6 master omr-bonding 2>&1 >/dev/null
+		ip link set opvpnbonding7 master omr-bonding 2>&1 >/dev/null
+		ip link set opvpnbonding8 master omr-bonding 2>&1 >/dev/null
+	fi
+}
 
+ip link add omr-bonding type bond 2>&1 >/dev/null
 while true; do
 	_glorytun_udp
 	_glorytun_tcp
@@ -81,5 +94,6 @@ while true; do
 	_omr_api
 	_lan_route
 	_gre_tunnels
+	_openvpn_bonding
 	sleep 10
 done

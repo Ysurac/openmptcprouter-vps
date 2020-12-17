@@ -74,18 +74,32 @@ _gre_tunnels() {
 }
 
 _openvpn_bonding() {
-	if [ "$(ip link show ovpnbonding1)" != "" ] && [ "$(ip link show ovpnbonding1 | grep SLAVE)" = "" ]; then
-		ip link set opvpnbonding1 master omr-bonding 2>&1 >/dev/null
-		ip link set opvpnbonding2 master omr-bonding 2>&1 >/dev/null
-		ip link set opvpnbonding3 master omr-bonding 2>&1 >/dev/null
-		ip link set opvpnbonding4 master omr-bonding 2>&1 >/dev/null
-		ip link set opvpnbonding5 master omr-bonding 2>&1 >/dev/null
-		ip link set opvpnbonding6 master omr-bonding 2>&1 >/dev/null
-		ip link set opvpnbonding7 master omr-bonding 2>&1 >/dev/null
-		ip link set opvpnbonding8 master omr-bonding 2>&1 >/dev/null
+	if [ "$(ip link show ovpnbonding1)" != "" ] && ([ "$(ip link show ovpnbonding1 | grep SLAVE)" = "" ] || [ "$(ip link show omr-bonding | grep DOWN)" != "" ] || [ "$(ip link show | grep ovpnbonding | grep -c SLAVE)" != "8" ]); then
+		echo 0 > /sys/class/net/omr-bonding/bonding/mode
+		ip link set ovpnbonding1 master omr-bonding 2>&1 >/dev/null
+		ip link set ovpnbonding1 up
+		ip link set ovpnbonding2 master omr-bonding 2>&1 >/dev/null
+		ip link set ovpnbonding2 up
+		ip link set ovpnbonding3 master omr-bonding 2>&1 >/dev/null
+		ip link set ovpnbonding3 up
+		ip link set ovpnbonding4 master omr-bonding 2>&1 >/dev/null
+		ip link set ovpnbonding4 up
+		ip link set ovpnbonding5 master omr-bonding 2>&1 >/dev/null
+		ip link set ovpnbonding5 up
+		ip link set ovpnbonding6 master omr-bonding 2>&1 >/dev/null
+		ip link set ovpnbonding6 up
+		ip link set ovpnbonding7 master omr-bonding 2>&1 >/dev/null
+		ip link set ovpnbonding7 up
+		ip link set ovpnbonding8 master omr-bonding 2>&1 >/dev/null
+		ip link set ovpnbonding8 up
+		ip link set omr-bonding up mtu 1440 2>&1 >/dev/null
+		ip a add 10.255.248.1 dev omr-bonding 2>&1 >/dev/null
+		ip r add 10.255.248.0/24 dev omr-bonding 2>&1 >/dev/null
+		ip r add 10.255.248.2 dev omr-bonding src 10.255.248.1 2>&1 >/dev/null
 	fi
 }
 
+modprobe bonding 2>&1 >/dev/null
 ip link add omr-bonding type bond 2>&1 >/dev/null
 while true; do
 	_glorytun_udp

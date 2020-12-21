@@ -40,7 +40,7 @@ GLORYTUN_UDP_VERSION="32267e86a6da05b285bb3bf2b136c105dc0af4bb"
 MLVPN_VERSION="f45cec350a6879b8b020143a78134a022b5df2a7"
 UBOND_VERSION="672100fb57913ffd29caad63517e145a5974b078"
 OBFS_VERSION="486bebd9208539058e57e23a12f23103016e09b4"
-OMR_ADMIN_VERSION="595b55f7309b8b940b6599bb49c824376750860e"
+OMR_ADMIN_VERSION="a3ffef1222177bb48d3de121c5be9159bdfaeb7a"
 DSVPN_VERSION="3b99d2ef6c02b2ef68b5784bec8adfdd55b29b1a"
 V2RAY_VERSION="4.31.0"
 V2RAY_PLUGIN_VERSION="v1.4.3"
@@ -318,6 +318,10 @@ fi
 # Load BBR Congestion module at boot time
 if ! grep -q bbr /etc/modules ; then
 	echo tcp_bbr >> /etc/modules
+fi
+# Load BBRv2 Congestion module at boot time
+if ! grep -q bbr2 /etc/modules ; then
+	echo tcp_bbr2 >> /etc/modules
 fi
 # Load mctcpdesync Congestion module at boot time
 if ! grep -q mctcp_desync /etc/modules ; then

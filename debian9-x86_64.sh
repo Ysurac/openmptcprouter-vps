@@ -568,6 +568,7 @@ fi
 
 if [ "$V2RAY" = "yes" ]; then
 	#apt-get -y -o Dpkg::Options::="--force-overwrite" install v2ray
+	rm -f /etc/systemd/system/v2ray.service
 	wget -O /tmp/v2ray-${V2RAY_VERSION}-amd64.deb ${VPSURL}/debian/v2ray-${V2RAY_VERSION}-amd64.deb
 	dpkg --force-all -i -B /tmp/v2ray-${V2RAY_VERSION}-amd64.deb
 	rm -f /tmp/v2ray-${V2RAY_VERSION}-amd64.deb
@@ -577,6 +578,7 @@ if [ "$V2RAY" = "yes" ]; then
 		rm /etc/v2ray/config.json
 		ln -s /etc/v2ray/v2ray-server.json /etc/v2ray/config.json
 	fi
+	systemctl daemon-reload
 	systemctl enable v2ray.service
 fi
 
@@ -1070,7 +1072,7 @@ if ([ "$ID" = "debian" ] && [ "$VERSION_ID" = "10" ]) || ([ "$ID" = "ubuntu" ] &
 	sed -i 's:DROP_DEFAULT=Drop:DROP_DEFAULT="Broadcast(DROP),Multicast(DROP)":g' /etc/shorewall6/shorewall6.conf
 	sed -i 's:REJECT_DEFAULT=Reject:REJECT_DEFAULT="Broadcast(DROP),Multicast(DROP)":g' /etc/shorewall6/shorewall6.conf
 fi
-if [ "$(ip r | awk '/default/&&/src/ {print $7}')" != "" ]; then
+if [ "$(ip r | awk '/default/&&/src/ {print $7}')" != "" ] && [ "$(ip r | awk '/default/&&/src/ {print $7}')" != "dhcp" ]; then
 	sed -i "s/MASQUERADE/SNAT($(ip r | awk '/default/&&/src/ {print $7}'))/" /etc/shorewall/snat
 fi
 

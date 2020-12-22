@@ -5,10 +5,12 @@ _multipath() {
 	# Force multipath status
 	source /etc/shorewall/params.net
 	for intf in `ls -1 /sys/class/net`; do
-		if [ "$intf" = "$NET_IFACE" ]; then
-			[ "$(multipath $intf | tr -d '\n')" != "$intf is in default mode" ] && multipath $intf on
-		else
-			[ "$(multipath $intf | tr -d '\n')" != "$intf is deactivated" ] && multipath $intf off
+		if [ "$intf" != "bonding_masters" ]; then
+			if [ "$intf" = "$NET_IFACE" ]; then
+				[ "$(multipath $intf | tr -d '\n')" != "$intf is in default mode" ] && multipath $intf on
+			else
+				[ "$(multipath $intf | tr -d '\n')" != "$intf is deactivated" ] && multipath $intf off
+			fi
 		fi
 	done
 }
@@ -74,7 +76,7 @@ _gre_tunnels() {
 }
 
 _openvpn_bonding() {
-	if [ "$(ip link show ovpnbonding1)" != "" ] && ([ "$(ip link show ovpnbonding1 | grep SLAVE)" = "" ] || [ "$(ip link show omr-bonding | grep DOWN)" != "" ] || [ "$(ip link show | grep ovpnbonding | grep -c SLAVE)" != "8" ]); then
+	if [ "$(ip link show ovpnbonding1)" != "" ] && ([ "$(ip link show ovpnbonding1 | grep SLAVE)" = "" ] || [ "$(ip link show omr-bonding | grep DOWN)" != "" ] || [ "$(ip link show | grep ovpnbonding | grep -c SLAVE | tr -d '\n')" != "8" ]); then
 		echo 0 > /sys/class/net/omr-bonding/bonding/mode
 		ip link set ovpnbonding1 master omr-bonding 2>&1 >/dev/null
 		ip link set ovpnbonding1 up

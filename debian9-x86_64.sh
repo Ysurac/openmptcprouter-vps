@@ -568,7 +568,6 @@ fi
 
 if [ "$V2RAY" = "yes" ]; then
 	#apt-get -y -o Dpkg::Options::="--force-overwrite" install v2ray
-	rm -f /etc/systemd/system/v2ray.service
 	wget -O /tmp/v2ray-${V2RAY_VERSION}-amd64.deb ${VPSURL}/debian/v2ray-${V2RAY_VERSION}-amd64.deb
 	dpkg --force-all -i -B /tmp/v2ray-${V2RAY_VERSION}-amd64.deb
 	rm -f /tmp/v2ray-${V2RAY_VERSION}-amd64.deb
@@ -577,6 +576,9 @@ if [ "$V2RAY" = "yes" ]; then
 		sed -i "s:V2RAY_UUID:$V2RAY_UUID:g" /etc/v2ray/v2ray-server.json
 		rm /etc/v2ray/config.json
 		ln -s /etc/v2ray/v2ray-server.json /etc/v2ray/config.json
+	fi
+	if [ -f /etc/systemd/system/v2ray.service.dpkg-dist ]; then
+		mv -f /etc/systemd/system/v2ray.service.dpkg-dist /etc/systemd/system/v2ray.service
 	fi
 	systemctl daemon-reload
 	systemctl enable v2ray.service

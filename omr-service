@@ -5,10 +5,12 @@ _multipath() {
 	# Force multipath status
 	source /etc/shorewall/params.net
 	for intf in `ls -1 /sys/class/net`; do
-		if [ "$intf" = "$NET_IFACE" ]; then
-			[ "$(multipath $intf | tr -d '\n')" != "$intf is in default mode" ] && multipath $intf on
-		else
-			[ "$(multipath $intf | tr -d '\n')" != "$intf is deactivated" ] && multipath $intf off
+		if [ "$intf" != "bonding_masters" ]; then
+			if [ "$intf" = "$NET_IFACE" ]; then
+				[ "$(multipath $intf | tr -d '\n')" != "$intf is in default mode" ] && multipath $intf on
+			else
+				[ "$(multipath $intf | tr -d '\n')" != "$intf is deactivated" ] && multipath $intf off
+			fi
 		fi
 	done
 }
@@ -28,7 +30,7 @@ _glorytun_tcp() {
 		[ "$(echo $intf | grep key)" = "" ] && /etc/glorytun-tcp/post.sh ${intf}
 	done
 	if [ -f /etc/openmptcprouter-vps-admin/current-vpn ] && [ "$(cat /etc/openmptcprouter-vps-admin/current-vpn)" = "glorytun_tcp" ]; then
-		if [ "$(ping -c 5 -w 5 10.255.255.2 | grep '100%')" != "" ]; then
+		if [ "$(ping -c 5 -w 5 10.255.255.2 | grep '100%')" != "" ] && [ "$(expr $(date +%s) - $(stat -c %Y /proc/$(pgrep glorytun-tcp)/exe ))" -gt "300" ]; then
 			logger -t "OMR-Service" "No answer from VPN client end, restart Glorytun-TCP"
 			systemctl restart glorytun-tcp@tun0
 		fi
@@ -62,9 +64,9 @@ _gre_tunnels() {
 		if [ -f "$intf" ]; then
 			. "$(readlink -f "$intf")"
 			iface="$(basename $intf)"
-			if [ "$(ip tunnel show $iface 2>/dev/null | awk '{print $4}')" != "$REMOTEIP" ]; then
+			if [ "$(ip tunnel show $iface 2>/dev/null | awk '{print $4}')" != "$OMR_ADDR" ]; then
 				ip tunnel del $iface 2>&1 >/dev/null
-				ip tunnel add $iface mode gre local $INTFADDR remote $REMOTEIP
+				ip tunnel add $iface mode gre local $INTFADDR remote $OMR_ADDR
 				ip link set $iface up
 				ip addr add $LOCALIP dev $iface
 				ip route add $NETWORK dev $iface 2>&1 >/dev/null
@@ -73,7 +75,34 @@ _gre_tunnels() {
 	done
 }
 
+_openvpn_bonding() {
+	if [ "$(ip link show ovpnbonding1)" != "" ] && ([ "$(ip link show ovpnbonding1 | grep SLAVE)" = "" ] || [ "$(ip link show omr-bonding | grep DOWN)" != "" ] || [ "$(ip link show | grep ovpnbonding | grep -c SLAVE | tr -d '\n')" != "8" ]); then
+		echo 0 > /sys/class/net/omr-bonding/bonding/mode
+		ip link set ovpnbonding1 master omr-bonding 2>&1 >/dev/null
+		ip link set ovpnbonding1 up
+		ip link set ovpnbonding2 master omr-bonding 2>&1 >/dev/null
+		ip link set ovpnbonding2 up
+		ip link set ovpnbonding3 master omr-bonding 2>&1 >/dev/null
+		ip link set ovpnbonding3 up
+		ip link set ovpnbonding4 master omr-bonding 2>&1 >/dev/null
+		ip link set ovpnbonding4 up
+		ip link set ovpnbonding5 master omr-bonding 2>&1 >/dev/null
+		ip link set ovpnbonding5 up
+		ip link set ovpnbonding6 master omr-bonding 2>&1 >/dev/null
+		ip link set ovpnbonding6 up
+		ip link set ovpnbonding7 master omr-bonding 2>&1 >/dev/null
+		ip link set ovpnbonding7 up
+		ip link set ovpnbonding8 master omr-bonding 2>&1 >/dev/null
+		ip link set ovpnbonding8 up
+		ip link set omr-bonding up mtu 1440 2>&1 >/dev/null
+		ip a add 10.255.248.1 dev omr-bonding 2>&1 >/dev/null
+		ip r add 10.255.248.0/24 dev omr-bonding 2>&1 >/dev/null
+		ip r add 10.255.248.2 dev omr-bonding src 10.255.248.1 2>&1 >/dev/null
+	fi
+}
 
+modprobe bonding 2>&1 >/dev/null
+ip link add omr-bonding type bond 2>&1 >/dev/null
 while true; do
 	_glorytun_udp
 	_glorytun_tcp
@@ -81,5 +110,6 @@ while true; do
 	_omr_api
 	_lan_route
 	_gre_tunnels
+	_openvpn_bonding
 	sleep 10
 done

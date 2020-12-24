@@ -15,7 +15,7 @@ OBFS=${OBFS:-yes}
 V2RAY_PLUGIN=${V2RAY_PLUGIN:-yes}
 V2RAY=${V2RAY:-yes}
 V2RAY_UUID=${V2RAY_UUID:-$(cat /proc/sys/kernel/random/uuid | tr -d "\n")}
-UPDATE_OS=${UPDATE_OS:-yes}
+UPDATE_O7S=${UPDATE_OS:-yes}
 UPDATE=${UPDATE:-yes}
 TLS=${TLS:-yes}
 OMR_ADMIN=${OMR_ADMIN:-yes}
@@ -32,25 +32,26 @@ NOINTERNET=${NOINTERNET:-no}
 SPEEDTEST=${SPEEDTEST:-no}
 LOCALFILES=${LOCALFILES:-no}
 INTERFACE=${INTERFACE:-$(ip -o -4 route show to default | grep -m 1 -Po '(?<=dev )(\S+)' | tr -d "\n")}
-KERNEL_VERSION="5.4.74"
-KERNEL_PACKAGE_VERSION="1.14+9d3f35b"
+KERNEL_VERSION="5.4.81"
+KERNEL_PACKAGE_VERSION="1.15+9d3f35b"
 KERNEL_RELEASE="${KERNEL_VERSION}-mptcp_${KERNEL_PACKAGE_VERSION}"
-GLORYTUN_UDP_VERSION="97607fdf5c6c33df512ed85190a1fd93b5f45e77"
+GLORYTUN_UDP_VERSION="32267e86a6da05b285bb3bf2b136c105dc0af4bb"
 #MLVPN_VERSION="8f9720978b28c1954f9f229525333547283316d2"
 MLVPN_VERSION="f45cec350a6879b8b020143a78134a022b5df2a7"
 UBOND_VERSION="672100fb57913ffd29caad63517e145a5974b078"
 OBFS_VERSION="486bebd9208539058e57e23a12f23103016e09b4"
-OMR_ADMIN_VERSION="774aceb357e989676ed9a06d411db41bdfa3bf03"
+OMR_ADMIN_VERSION="a3ffef1222177bb48d3de121c5be9159bdfaeb7a"
 DSVPN_VERSION="3b99d2ef6c02b2ef68b5784bec8adfdd55b29b1a"
-#V2RAY_VERSION="v1.1.0"
+V2RAY_VERSION="4.31.0"
 V2RAY_PLUGIN_VERSION="v1.4.3"
 EASYRSA_VERSION="3.0.6"
 SHADOWSOCKS_VERSION="38871da8baf5cfa400983dcdf918397e48655203"
+DEFAULT_USER="openmptcprouter"
 VPS_DOMAIN=${VPS_DOMAIN:-$(wget -4 -qO- -T 2 http://hostname.openmptcprouter.com)}
 VPSPATH="server-test"
 VPSURL="https://www.openmptcprouter.com/"
 
-OMR_VERSION="0.1018-test"
+OMR_VERSION="0.1023-test"
 
 DIR=$( pwd )
 #"
@@ -318,6 +319,10 @@ fi
 if ! grep -q bbr /etc/modules ; then
 	echo tcp_bbr >> /etc/modules
 fi
+# Load BBRv2 Congestion module at boot time
+if ! grep -q bbr2 /etc/modules ; then
+	echo tcp_bbr2 >> /etc/modules
+fi
 # Load mctcpdesync Congestion module at boot time
 if ! grep -q mctcp_desync /etc/modules ; then
 	echo mctcp_desync >> /etc/modules
@@ -388,7 +393,7 @@ if [ "$OMR_ADMIN" = "yes" ]; then
 	echo '-- pip3 install needed python modules'
 	#pip3 install pyjwt passlib uvicorn fastapi netjsonconfig python-multipart netaddr
 	#pip3 -q install fastapi netjsonconfig python-multipart uvicorn -U
-	pip3 -q install fastapi netjsonconfig python-multipart -U
+	pip3 -q install fastapi jsonschema netjsonconfig python-multipart jinja2 -U
 	mkdir -p /etc/openmptcprouter-vps-admin/omr-6in4
 	mkdir -p /etc/openmptcprouter-vps-admin/intf
 	[ ! -f "/etc/openmptcprouter-vps-admin/current-vpn" ] && echo "glorytun_tcp" > /etc/openmptcprouter-vps-admin/current-vpn
@@ -413,6 +418,7 @@ if [ "$OMR_ADMIN" = "yes" ]; then
 			cp /tmp/openmptcprouter-vps-admin-${OMR_ADMIN_VERSION}/omr-admin-config.json /etc/openmptcprouter-vps-admin/
 			cp /tmp/openmptcprouter-vps-admin-${OMR_ADMIN_VERSION}/omr-admin.py /usr/local/bin/
 			cd /etc/openmptcprouter-vps-admin
+			sed -i "s:openmptcptouter:${DEFAULT_USER}:g" /etc/openmptcprouter-vps-admin/omr-admin-config.json
 		fi
 		openssl req -new -newkey rsa:2048 -days 3650 -nodes -x509 -keyout key.pem -out cert.pem -subj "/C=US/ST=Oregon/L=Portland/O=OpenMPTCProuterVPS/OU=Org/CN=www.openmptcprouter.vps"
 		sed -i "s:AdminMySecretKey:$OMR_ADMIN_PASS_ADMIN:g" /etc/openmptcprouter-vps-admin/omr-admin-config.json
@@ -561,13 +567,18 @@ if systemctl -q is-active v2ray.service; then
 fi
 
 if [ "$V2RAY" = "yes" ]; then
-	apt-get -y -o Dpkg::Options::="--force-overwrite" install v2ray
+	#apt-get -y -o Dpkg::Options::="--force-overwrite" install v2ray
+	rm -f /etc/systemd/system/v2ray.service
+	wget -O /tmp/v2ray-${V2RAY_VERSION}-amd64.deb ${VPSURL}/debian/v2ray-${V2RAY_VERSION}-amd64.deb
+	dpkg --force-all -i -B /tmp/v2ray-${V2RAY_VERSION}-amd64.deb
+	rm -f /tmp/v2ray-${V2RAY_VERSION}-amd64.deb
 	if [ ! -f /etc/v2ray/v2ray-server.json ]; then
 		wget -O /etc/v2ray/v2ray-server.json ${VPSURL}${VPSPATH}/v2ray-server.json
 		sed -i "s:V2RAY_UUID:$V2RAY_UUID:g" /etc/v2ray/v2ray-server.json
 		rm /etc/v2ray/config.json
 		ln -s /etc/v2ray/v2ray-server.json /etc/v2ray/config.json
 	fi
+	systemctl daemon-reload
 	systemctl enable v2ray.service
 fi
 
@@ -763,13 +774,37 @@ if [ "$OPENVPN" = "yes" ]; then
 	if [ "$LOCALFILES" = "no" ]; then
 		wget -O /etc/openvpn/tun0.conf ${VPSURL}${VPSPATH}/openvpn-tun0.conf
 		wget -O /etc/openvpn/tun1.conf ${VPSURL}${VPSPATH}/openvpn-tun1.conf
+		wget -O /etc/openvpn/bonding1.conf ${VPSURL}${VPSPATH}/openvpn-bonding1.conf
+		wget -O /etc/openvpn/bonding2.conf ${VPSURL}${VPSPATH}/openvpn-bonding2.conf
+		wget -O /etc/openvpn/bonding3.conf ${VPSURL}${VPSPATH}/openvpn-bonding3.conf
+		wget -O /etc/openvpn/bonding4.conf ${VPSURL}${VPSPATH}/openvpn-bonding4.conf
+		wget -O /etc/openvpn/bonding5.conf ${VPSURL}${VPSPATH}/openvpn-bonding5.conf
+		wget -O /etc/openvpn/bonding6.conf ${VPSURL}${VPSPATH}/openvpn-bonding6.conf
+		wget -O /etc/openvpn/bonding7.conf ${VPSURL}${VPSPATH}/openvpn-bonding7.conf
+		wget -O /etc/openvpn/bonding8.conf ${VPSURL}${VPSPATH}/openvpn-bonding8.conf
 	else
 		cp ${DIR}/openvpn-tun0.conf /etc/openvpn/tun0.conf
 		cp ${DIR}/openvpn-tun1.conf /etc/openvpn/tun1.conf
+		cp ${DIR}/openvpn-bonding1.conf /etc/openvpn/bonding1.conf
+		cp ${DIR}/openvpn-bonding2.conf /etc/openvpn/bonding2.conf
+		cp ${DIR}/openvpn-bonding3.conf /etc/openvpn/bonding3.conf
+		cp ${DIR}/openvpn-bonding4.conf /etc/openvpn/bonding4.conf
+		cp ${DIR}/openvpn-bonding5.conf /etc/openvpn/bonding5.conf
+		cp ${DIR}/openvpn-bonding6.conf /etc/openvpn/bonding6.conf
+		cp ${DIR}/openvpn-bonding7.conf /etc/openvpn/bonding7.conf
+		cp ${DIR}/openvpn-bonding8.conf /etc/openvpn/bonding8.conf
 	fi
 	mkdir -p /etc/openvpn/ccd
 	systemctl enable openvpn@tun0.service
 	systemctl enable openvpn@tun1.service
+	systemctl enable openvpn@bonding1.service
+	systemctl enable openvpn@bonding2.service
+	systemctl enable openvpn@bonding3.service
+	systemctl enable openvpn@bonding4.service
+	systemctl enable openvpn@bonding5.service
+	systemctl enable openvpn@bonding6.service
+	systemctl enable openvpn@bonding7.service
+	systemctl enable openvpn@bonding8.service
 fi
 
 echo 'Glorytun UDP'
@@ -1037,6 +1072,10 @@ if ([ "$ID" = "debian" ] && [ "$VERSION_ID" = "10" ]) || ([ "$ID" = "ubuntu" ] &
 	sed -i 's:DROP_DEFAULT=Drop:DROP_DEFAULT="Broadcast(DROP),Multicast(DROP)":g' /etc/shorewall6/shorewall6.conf
 	sed -i 's:REJECT_DEFAULT=Reject:REJECT_DEFAULT="Broadcast(DROP),Multicast(DROP)":g' /etc/shorewall6/shorewall6.conf
 fi
+if [ "$(ip r | awk '/default/&&/src/ {print $7}')" != "" ] && [ "$(ip r | awk '/default/&&/src/ {print $7}')" != "dhcp" ]; then
+	sed -i "s/MASQUERADE/SNAT($(ip r | awk '/default/&&/src/ {print $7}'))/" /etc/shorewall/snat
+fi
+
 
 if [ "$TLS" = "yes" ]; then
 	VPS_CERT=0

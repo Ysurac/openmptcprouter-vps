@@ -48,10 +48,10 @@ EASYRSA_VERSION="3.0.6"
 SHADOWSOCKS_VERSION="38871da8baf5cfa400983dcdf918397e48655203"
 DEFAULT_USER="openmptcprouter"
 VPS_DOMAIN=${VPS_DOMAIN:-$(wget -4 -qO- -T 2 http://hostname.openmptcprouter.com)}
-VPSPATH="server-test"
+VPSPATH="server"
 VPSURL="https://www.openmptcprouter.com/"
 
-OMR_VERSION="0.1023-test"
+OMR_VERSION="0.1023"
 
 DIR=$( pwd )
 #"

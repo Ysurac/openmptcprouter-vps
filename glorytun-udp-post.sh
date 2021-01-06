@@ -14,3 +14,4 @@ done
 }
 tc qdisc replace dev $INTF root cake
 ip link set $INTF txqlen 100
+glorytun set dev gt-udp-tun0 kxtimeout 7d 2>&1 >/dev/null

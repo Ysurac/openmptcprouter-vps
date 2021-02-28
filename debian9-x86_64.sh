@@ -15,7 +15,7 @@ OBFS=${OBFS:-yes}
 V2RAY_PLUGIN=${V2RAY_PLUGIN:-yes}
 V2RAY=${V2RAY:-yes}
 V2RAY_UUID=${V2RAY_UUID:-$(cat /proc/sys/kernel/random/uuid | tr -d "\n")}
-UPDATE_O7S=${UPDATE_OS:-yes}
+UPDATE_OS=${UPDATE_OS:-yes}
 UPDATE=${UPDATE:-yes}
 TLS=${TLS:-yes}
 OMR_ADMIN=${OMR_ADMIN:-yes}
@@ -32,15 +32,15 @@ NOINTERNET=${NOINTERNET:-no}
 SPEEDTEST=${SPEEDTEST:-no}
 LOCALFILES=${LOCALFILES:-no}
 INTERFACE=${INTERFACE:-$(ip -o -4 route show to default | grep -m 1 -Po '(?<=dev )(\S+)' | tr -d "\n")}
-KERNEL_VERSION="5.4.81"
-KERNEL_PACKAGE_VERSION="1.15+9d3f35b"
+KERNEL_VERSION="5.4.86"
+KERNEL_PACKAGE_VERSION="1.16+9d3f35b"
 KERNEL_RELEASE="${KERNEL_VERSION}-mptcp_${KERNEL_PACKAGE_VERSION}"
 GLORYTUN_UDP_VERSION="32267e86a6da05b285bb3bf2b136c105dc0af4bb"
 #MLVPN_VERSION="8f9720978b28c1954f9f229525333547283316d2"
 MLVPN_VERSION="f45cec350a6879b8b020143a78134a022b5df2a7"
 UBOND_VERSION="672100fb57913ffd29caad63517e145a5974b078"
 OBFS_VERSION="486bebd9208539058e57e23a12f23103016e09b4"
-OMR_ADMIN_VERSION="a3ffef1222177bb48d3de121c5be9159bdfaeb7a"
+OMR_ADMIN_VERSION="f52acee888a39cc812ba6848aec5eeb1a82ab7ba"
 DSVPN_VERSION="3b99d2ef6c02b2ef68b5784bec8adfdd55b29b1a"
 V2RAY_VERSION="4.31.0"
 V2RAY_PLUGIN_VERSION="v1.4.3"
@@ -48,10 +48,10 @@ EASYRSA_VERSION="3.0.6"
 SHADOWSOCKS_VERSION="38871da8baf5cfa400983dcdf918397e48655203"
 DEFAULT_USER="openmptcprouter"
 VPS_DOMAIN=${VPS_DOMAIN:-$(wget -4 -qO- -T 2 http://hostname.openmptcprouter.com)}
-VPSPATH="server-test"
+VPSPATH="server"
 VPSURL="https://www.openmptcprouter.com/"
 
-OMR_VERSION="0.1023-test"
+OMR_VERSION="0.1025-test"
 
 DIR=$( pwd )
 #"
@@ -568,8 +568,10 @@ fi
 
 if [ "$V2RAY" = "yes" ]; then
 	#apt-get -y -o Dpkg::Options::="--force-overwrite" install v2ray
-	rm -f /etc/systemd/system/v2ray.service
 	wget -O /tmp/v2ray-${V2RAY_VERSION}-amd64.deb ${VPSURL}/debian/v2ray-${V2RAY_VERSION}-amd64.deb
+	if [ -f /etc/v2ray/v2ray-server.conf ] && [ ! -f /etc/systemd/system/v2ray.service ]; then
+		wget -O /etc/systemd/system/v2ray.service ${VPSURL}${VPSPATH}/old-v2ray.service
+	fi
 	dpkg --force-all -i -B /tmp/v2ray-${V2RAY_VERSION}-amd64.deb
 	rm -f /tmp/v2ray-${V2RAY_VERSION}-amd64.deb
 	if [ ! -f /etc/v2ray/v2ray-server.json ]; then
@@ -577,6 +579,9 @@ if [ "$V2RAY" = "yes" ]; then
 		sed -i "s:V2RAY_UUID:$V2RAY_UUID:g" /etc/v2ray/v2ray-server.json
 		rm /etc/v2ray/config.json
 		ln -s /etc/v2ray/v2ray-server.json /etc/v2ray/config.json
+	fi
+	if [ -f /etc/systemd/system/v2ray.service.dpkg-dist ]; then
+		mv -f /etc/systemd/system/v2ray.service.dpkg-dist /etc/systemd/system/v2ray.service
 	fi
 	systemctl daemon-reload
 	systemctl enable v2ray.service

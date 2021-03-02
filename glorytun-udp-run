@@ -9,11 +9,10 @@ fi
 
 . "$(readlink -f "$1")"
 
-DEV="gt${HOST:+c}-udp-$(basename "$1")"
+DEV="gt-udp-$(basename "$1")"
 
 exec glorytun \
-	bind from addr $BIND port $BIND_PORT \
+	bind to addr ${HOST:-::} port ${PORT:-5000} from addr $BIND port $BIND_PORT \
 	keyfile "$1".key \
 	${DEV:+dev "$DEV"} \
-	${HOST:+to addr "$HOST" port "$PORT"} \
 	${OPTIONS:+$OPTIONS}

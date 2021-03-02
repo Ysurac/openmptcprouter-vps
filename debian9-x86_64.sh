@@ -32,23 +32,23 @@ NOINTERNET=${NOINTERNET:-no}
 SPEEDTEST=${SPEEDTEST:-no}
 LOCALFILES=${LOCALFILES:-no}
 INTERFACE=${INTERFACE:-$(ip -o -4 route show to default | grep -m 1 -Po '(?<=dev )(\S+)' | tr -d "\n")}
-KERNEL_VERSION="5.4.86"
-KERNEL_PACKAGE_VERSION="1.16+9d3f35b"
+KERNEL_VERSION="5.4.100"
+KERNEL_PACKAGE_VERSION="1.18+9d3f35b"
 KERNEL_RELEASE="${KERNEL_VERSION}-mptcp_${KERNEL_PACKAGE_VERSION}"
 GLORYTUN_UDP_VERSION="32267e86a6da05b285bb3bf2b136c105dc0af4bb"
 #MLVPN_VERSION="8f9720978b28c1954f9f229525333547283316d2"
 MLVPN_VERSION="f45cec350a6879b8b020143a78134a022b5df2a7"
 UBOND_VERSION="672100fb57913ffd29caad63517e145a5974b078"
 OBFS_VERSION="486bebd9208539058e57e23a12f23103016e09b4"
-OMR_ADMIN_VERSION="f52acee888a39cc812ba6848aec5eeb1a82ab7ba"
+OMR_ADMIN_VERSION="376322a61dc53e671e7e3c7eaaf6645c0537a9d3"
 DSVPN_VERSION="3b99d2ef6c02b2ef68b5784bec8adfdd55b29b1a"
-V2RAY_VERSION="4.31.0"
+V2RAY_VERSION="4.34.0"
 V2RAY_PLUGIN_VERSION="v1.4.3"
 EASYRSA_VERSION="3.0.6"
 SHADOWSOCKS_VERSION="38871da8baf5cfa400983dcdf918397e48655203"
 DEFAULT_USER="openmptcprouter"
 VPS_DOMAIN=${VPS_DOMAIN:-$(wget -4 -qO- -T 2 http://hostname.openmptcprouter.com)}
-VPSPATH="server"
+VPSPATH="server-test"
 VPSURL="https://www.openmptcprouter.com/"
 
 OMR_VERSION="0.1025-test"
@@ -167,11 +167,9 @@ Pin-Priority: 1001
 EOF
 wget -O - http://repo.openmptcprouter.com/openmptcprouter.gpg.key | apt-key add -
 
-# Install mptcp kernel and shadowsocks
-echo "Install mptcp kernel and shadowsocks..."
-apt-get update
-sleep 2
-apt-get -y install dirmngr patch
+# Add buster-backports repo
+echo 'deb http://deb.debian.org/debian buster-backports main' >> /etc/apt/sources.list.d/buster-backports.list
+
 #apt-key adv --keyserver hkp://keys.gnupg.net --recv-keys 379CE192D401AB61
 if [ "$ID" = "debian" ]; then
 	if [ "$VERSION_ID" = "9" ]; then
@@ -182,8 +180,12 @@ elif [ "$ID" = "ubuntu" ]; then
 	echo 'deb http://archive.ubuntu.com/ubuntu bionic-backports main' > /etc/apt/sources.list.d/bionic-backports.list
 	echo 'deb http://archive.ubuntu.com/ubuntu bionic universe' > /etc/apt/sources.list.d/bionic-universe.list
 fi
+# Install mptcp kernel and shadowsocks
+echo "Install mptcp kernel and shadowsocks..."
 apt-get update
 sleep 2
+apt-get -y install dirmngr patch
+
 wget -O /tmp/linux-image-${KERNEL_RELEASE}_amd64.deb ${VPSURL}kernel/linux-image-${KERNEL_RELEASE}_amd64.deb
 wget -O /tmp/linux-headers-${KERNEL_RELEASE}_amd64.deb ${VPSURL}kernel/linux-headers-${KERNEL_RELEASE}_amd64.deb
 # Rename bzImage to vmlinuz, needed when custom kernel was used
@@ -400,6 +402,7 @@ if [ "$OMR_ADMIN" = "yes" ]; then
 	mkdir -p /var/opt/openmptcprouter
 	if [ "$SOURCES" = "yes" ]; then
 		wget -O /lib/systemd/system/omr-admin.service ${VPSURL}${VPSPATH}/omr-admin.service.in
+		wget -O /lib/systemd/system/omr-admin-ipv6.service ${VPSURL}${VPSPATH}/omr-admin-ipv6.service.in
 		wget -O /tmp/openmptcprouter-vps-admin.zip https://github.com/Ysurac/openmptcprouter-vps-admin/archive/${OMR_ADMIN_VERSION}.zip
 		cd /tmp
 		unzip -q -o openmptcprouter-vps-admin.zip
@@ -427,6 +430,10 @@ if [ "$OMR_ADMIN" = "yes" ]; then
 			sed -i 's/"port": 65500,/"port": 65500,\n    "internet": false,/' /etc/openmptcprouter-vps-admin/omr-admin-config.json
 		}
 		chmod u+x /usr/local/bin/omr-admin.py
+		#[ "$(ip -6 a)" != "" ] && sed -i 's/0.0.0.0/::/g' /usr/local/bin/omr-admin.py
+		[ "$(ip -6 a)" != "" ] && {
+			systemctl enable omr-admin-ipv6.service
+		}
 		systemctl enable omr-admin.service
 		rm -rf /tmp/tmp/openmptcprouter-vps-admin-${OMR_ADMIN_VERSION}
 	else
@@ -580,6 +587,8 @@ if [ "$V2RAY" = "yes" ]; then
 		rm /etc/v2ray/config.json
 		ln -s /etc/v2ray/v2ray-server.json /etc/v2ray/config.json
 	fi
+	sed -i 's:debug:warning:' /etc/v2ray/v2ray-server.json
+	rm -f /tmp/v2rayError.log
 	if [ -f /etc/systemd/system/v2ray.service.dpkg-dist ]; then
 		mv -f /etc/systemd/system/v2ray.service.dpkg-dist /etc/systemd/system/v2ray.service
 	fi
@@ -644,10 +653,6 @@ if [ "$MLVPN" = "yes" ]; then
 	systemctl enable systemd-networkd.service
 	echo "install mlvpn done"
 fi
-if systemctl -q is-active openvpn-server@tun0.service; then
-	systemctl -q stop openvpn-server@tun0 > /dev/null 2>&1
-	systemctl -q disable openvpn-server@tun0 > /dev/null 2>&1
-fi
 if systemctl -q is-active ubond@ubond0.service; then
 	systemctl -q stop ubond@ubond0 > /dev/null 2>&1
 	systemctl -q disable ubond@ubond0 > /dev/null 2>&1
@@ -703,6 +708,32 @@ if [ "$UBOND" = "yes" ]; then
 	systemctl enable systemd-networkd.service
 	echo "install ubond done"
 fi
+
+if systemctl -q is-active wg-quick@wg0.service; then
+	systemctl -q stop wg-quick@wg0 > /dev/null 2>&1
+	systemctl -q disable wg-quick@wg0 > /dev/null 2>&1
+fi
+
+if [ "$WIREGUARD" = "yes" ]; then
+	echo "Install WireGuard"
+	rm -f /var/lib/dpkg/lock
+	rm -f /var/lib/dpkg/lock-frontend
+	apt-get --no-install-recommends -y wireguard-tools
+	if [ ! -f /etc/wireguard/wg0.conf ]; then
+		cd /etc/wireguard
+		umask 077; wg genkey | tee vpn-server-private.key | wg pubkey > vpn-server-public.key
+		cat > /etc/wireguard/wg0.conf <<-EOF
+		[Interface]
+		PrivateKey = $(cat /etc/wireguard/vpn-server-private.key | tr -d "\n")
+		ListenPort = 65311
+		Address = 10.255.247.1/24
+		SaveConfig = true
+		EOF
+	fi
+	systemctl enable wg-quick@wg0
+	echo "Install wireguard done"
+fi
+
 if systemctl -q is-active openvpn-server@tun0.service; then
 	systemctl -q stop openvpn-server@tun0 > /dev/null 2>&1
 	systemctl -q disable openvpn-server@tun0 > /dev/null 2>&1
@@ -974,6 +1005,14 @@ else
 fi
 chmod 755 /usr/local/bin/multipath
 
+# Add omr-test-speed utility
+if [ "$LOCALFILES" = "no" ]; then
+	wget -O /usr/local/bin/omr-test-speed ${VPSURL}${VPSPATH}/omr-test-speed
+else
+	cp ${DIR}/omr-test-speed /usr/local/bin/omr-test-speed
+fi
+chmod 755 /usr/local/bin/omr-test-speed
+
 # Add OpenMPTCProuter service
 if [ "$LOCALFILES" = "no" ]; then
 	wget -O /usr/local/bin/omr-service ${VPSURL}${VPSPATH}/omr-service
@@ -1094,6 +1133,12 @@ if [ "$TLS" = "yes" ]; then
 			systemctl -q restart shorewall
 			~/.acme.sh/acme.sh --force --alpn --issue -d $VPS_DOMAIN --pre-hook 'shorewall open all all tcp 443 2>&1 >/dev/null' --post-hook 'shorewall close all all tcp 443 2>&1 >/dev/null' 2>&1 >/dev/null
 			set -e
+			if [ -f /root/.acme.sh/$VPS_DOMAIN/$VPS_DOMAIN.cer ]; then
+				rm -f /etc/openmptcprouter-vps-admin/cert.pem
+				ln -s /root/.acme.sh/$VPS_DOMAIN/$VPS_DOMAIN.cer /etc/openmptcprouter-vps-admin/cert.pem
+				rm -f /etc/openmptcprouter-vps-admin/key.pem
+				ln -s /root/.acme.sh/$VPS_DOMAIN/$VPS_DOMAIN.key /etc/openmptcprouter-vps-admin/key.pem
+			fi
 #			mkdir -p /etc/ssl/v2ray
 #			ln -f -s /root/.acme.sh/$reverse/$reverse.key /etc/ssl/v2ray/omr.key
 #			ln -f -s /root/.acme.sh/$reverse/fullchain.cer /etc/ssl/v2ray/omr.cer
@@ -1227,6 +1272,7 @@ if [ "$update" = "0" ]; then
 		Your OpenMPTCProuter Server username: openmptcprouter
 		EOF
 	fi
+	systemctl -q restart sshd
 else
 	echo '===================================================================================='
 	echo "OpenMPTCProuter Server is now updated to version $OMR_VERSION !"
@@ -1276,6 +1322,11 @@ else
 		systemctl -q restart openvpn@tun1
 		echo 'done'
 	fi
+	if [ "$WIREGUARD" = "yes" ]; then
+		echo 'Restarting WireGuard'
+		systemctl -q restart wg-quick@wg0
+		echo 'done'
+	fi
 	if [ "$OMR_ADMIN" = "yes" ]; then
 		echo 'Restarting OpenMPTCProuter VPS admin'
 		systemctl -q restart omr-admin
@@ -1293,16 +1344,14 @@ else
 			echo 'openmptcprouter'
 			echo '!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!'
 			echo '===================================================================================='
+		else
+			echo '!!! Keys are in /root/openmptcprouter_config.txt !!!'
 		fi
 	fi
 	if [ "$VPS_CERT" = "0" ]; then
 		echo 'No working domain detected, not able to generate certificate for v2ray.'
 		echo 'You can set VPS_DOMAIN to a working domain if you want a certificate.'
 	fi
-	echo 'Restarting shorewall...'
-	systemctl -q restart shorewall
-	systemctl -q restart shorewall6
-	echo 'done'
 	echo 'Apply latest sysctl...'
 	sysctl -p /etc/sysctl.d/90-shadowsocks.conf > /dev/null 2>&1
 	echo 'done'
@@ -1317,4 +1366,11 @@ else
 #		done
 #	fi
 	echo 'done'
+	echo 'Restarting shorewall...'
+	systemctl -q restart shorewall
+	systemctl -q restart shorewall6
+	echo 'done'
+	echo '===================================================================================='
+	echo '\033[1m  /!\ You need to reboot to use latest MPTCP kernel /!\ \033[0m'
+	echo '===================================================================================='
 fi

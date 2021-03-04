@@ -8,6 +8,9 @@ export DEB_BUILD_MAINT_OPTIONS = hardening=+all
 	dh $@
 
 override_dh_auto_install:
-	mkdir -p /usr/share/omr-server/shorewall4
-	mkdir -p /usr/share/omr-server/shorewall6
+	mkdir -p $(CURDIR)/debian/omr-server/usr/share/omr-server
+	find . -type f -not -iname '*/debian/*' -not -iname '*/.git/*' -exec cp '{}' "$(CURDIR)/debian/omr-server/usr/share/omr-server/{}" ';'
+	cp -r ./shorewall4 $(CURDIR)/debian/omr-server/usr/share/omr-server/
+	cp -r ./shorewall6 $(CURDIR)/debian/omr-server/usr/share/omr-server/
+	cp -r ./bin $(CURDIR)/debian/omr-server/usr/share/omr-server/
 

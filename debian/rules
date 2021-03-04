@@ -1,0 +1,13 @@
+#!/usr/bin/make -f
+#export DH_VERBOSE = 1
+
+# Security Hardening
+export DEB_BUILD_MAINT_OPTIONS = hardening=+all
+
+%:
+	dh $@
+
+override_dh_auto_install:
+	mkdir -p /usr/share/omr-server/shorewall4
+	mkdir -p /usr/share/omr-server/shorewall6
+

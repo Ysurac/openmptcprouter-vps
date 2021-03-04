@@ -1,0 +1,15 @@
+#!/bin/sh -e
+
+test $DEBIAN_SCRIPT_DEBUG && set -v -x
+
+# use debconf
+. /usr/share/debconf/confmodule
+
+cd /usr/share/omr-server
+LOCALFILES=no SOURCES=no sh build.sh
+
+db_stop
+
+#DEBHELPER#
+exit 0
+# vim:set ai et sts=2 sw=2 tw=0:

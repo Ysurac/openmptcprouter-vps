@@ -1,0 +1,14 @@
+Source: omr-server
+Section: net
+Priority: optional
+Maintainer: OpenMPTCProuter <contact@openmptcprouter.com>
+Build-Depends: debhelper (>= 10)
+X-Python-Version: >= 3.2
+Standards-Version: 0.0.1
+Homepage: https://github.com/ysurac/openmptcprouter-vps
+
+Package: omr-server
+Architecture: all
+Multi-Arch: foreign
+Depends: ${misc:Depends}
+Description: OpenMPTCProuter Server script

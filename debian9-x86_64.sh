@@ -45,7 +45,7 @@ MLVPN_BINARY_VERSION="3.0.0+20201216.git.2263bab"
 UBOND_VERSION="672100fb57913ffd29caad63517e145a5974b078"
 OBFS_VERSION="486bebd9208539058e57e23a12f23103016e09b4"
 OBFS_BINARY_VERSION="0.0.5-1"
-OMR_ADMIN_VERSION="6404f52ef4e285ae5760c363bc9d6f682f6d9099"
+OMR_ADMIN_VERSION="2e752ad783ffb817f6d627a999d51ac6656411f9"
 OMR_ADMIN_BINARY_VERSION="0.3+20210304"
 DSVPN_VERSION="3b99d2ef6c02b2ef68b5784bec8adfdd55b29b1a"
 DSVPN_BINARY_VERSION="0.1.4-2"
@@ -174,7 +174,7 @@ Package: *
 Pin: origin ${REPO}
 Pin-Priority: 1001
 EOF
-wget -O - http://${REPO}/openmptcprouter.gpg.key | apt-key add -
+wget -O - https://${REPO}/openmptcprouter.gpg.key | apt-key add -
 
 #apt-key adv --keyserver hkp://keys.gnupg.net --recv-keys 379CE192D401AB61
 if [ "$ID" = "debian" ]; then

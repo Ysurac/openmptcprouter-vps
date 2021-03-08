@@ -41,7 +41,7 @@ GLORYTUN_UDP_BINARY_VERSION="0.3.4-4"
 GLORYTUN_TCP_BINARY_VERSION="0.0.35-3"
 #MLVPN_VERSION="8f9720978b28c1954f9f229525333547283316d2"
 MLVPN_VERSION="f45cec350a6879b8b020143a78134a022b5df2a7"
-MLVPN_BINARY_VERSION="3.0.0+20180903.git.8f97209"
+MLVPN_BINARY_VERSION="3.0.0+20201216.git.2263bab"
 UBOND_VERSION="672100fb57913ffd29caad63517e145a5974b078"
 OBFS_VERSION="486bebd9208539058e57e23a12f23103016e09b4"
 OBFS_BINARY_VERSION="0.0.5-1"
@@ -167,7 +167,7 @@ if [ "$ID" = "ubuntu" ] && [ "$VERSION_ID" = "18.04" ] && [ "$UPDATE_OS" = "yes"
 fi
 # Add OpenMPTCProuter repo
 echo "Add OpenMPTCProuter repo..."
-echo "deb [arch=amd64] https://${REPO} stretch main" > /etc/apt/sources.list.d/openmptcprouter.list
+echo "deb [arch=amd64] https://${REPO} buster main" > /etc/apt/sources.list.d/openmptcprouter.list
 cat <<EOF | tee /etc/apt/preferences.d/openmptcprouter.pref
 Explanation: Prefer OpenMPTCProuter provided packages over the Debian native ones
 Package: *
@@ -431,8 +431,19 @@ if [ "$OMR_ADMIN" = "yes" ]; then
 			cd /etc/openmptcprouter-vps-admin
 		fi
 		rm -rf /tmp/tmp/openmptcprouter-vps-admin-${OMR_ADMIN_VERSION}
+		chmod u+x /usr/local/bin/omr-admin.py
 	else
+		if [ -f /etc/openmptcprouter-vps-admin/omr-admin-config.json ]; then
+			OMR_ADMIN_PASS2=$(grep -Po '"'"pass"'"\s*:\s*"\K([^"]*)' /etc/openmptcprouter-vps-admin/omr-admin-config.json | tr -d  "\n")
+			[ -z "$OMR_ADMIN_PASS2" ] && OMR_ADMIN_PASS2=$(cat /etc/openmptcprouter-vps-admin/omr-admin-config.json | jq -r .users[0].openmptcprouter.user_password | tr -d "\n")
+			[ -n "$OMR_ADMIN_PASS2" ] && OMR_ADMIN_PASS=$OMR_ADMIN_PASS2
+			OMR_ADMIN_PASS_ADMIN2=$(cat /etc/openmptcprouter-vps-admin/omr-admin-config.json | jq -r .users[0].admin.user_password | tr -d "\n")
+			[ -n "$OMR_ADMIN_PASS_ADMIN2" ] && OMR_ADMIN_PASS_ADMIN=$OMR_ADMIN_PASS_ADMIN2
+		fi
 		apt-get -y install omr-vps-admin=${OMR_ADMIN_BINARY_VERSION}
+		if [ ! -f /etc/openmptcprouter-vps-admin/omr-admin-config.json ]; then
+			cp /usr/share/omr-admin/omr-admin-config.json /etc/openmptcprouter-vps-admin/
+		fi
 		#OMR_ADMIN_PASS=$(cat /etc/openmptcprouter-vps-admin/omr-admin-config.json | jq -r .users[0].openmptcprouter.user_password | tr -d "\n")
 		#OMR_ADMIN_PASS_ADMIN=$(cat /etc/openmptcprouter-vps-admin/omr-admin-config.json | jq -r .users[0].admin.user_password | tr -d "\n")
 	fi
@@ -445,7 +456,6 @@ if [ "$OMR_ADMIN" = "yes" ]; then
 	[ "$NOINTERNET" = "yes" ] && {
 		sed -i 's/"port": 65500,/"port": 65500,\n    "internet": false,/' /etc/openmptcprouter-vps-admin/omr-admin-config.json
 	}
-	chmod u+x /usr/local/bin/omr-admin.py
 	#[ "$(ip -6 a)" != "" ] && sed -i 's/0.0.0.0/::/g' /usr/local/bin/omr-admin.py
 	[ "$(ip -6 a)" != "" ] && {
 		systemctl enable omr-admin-ipv6.service
@@ -634,23 +644,25 @@ if [ "$MLVPN" = "yes" ]; then
 		make install
 		cd /tmp
 		rm -rf /tmp/mlvpn
+		if [ "$LOCALFILES" = "no" ]; then
+			wget -O /lib/systemd/network/mlvpn.network ${VPSURL}${VPSPATH}/mlvpn.network
+			wget -O /lib/systemd/system/mlvpn@.service ${VPSURL}${VPSPATH}/mlvpn@.service.in
+		else
+			cp ${DIR}/mlvpn.network /lib/systemd/network/mlvpn.network
+			cp ${DIR}/mlvpn@.service.in /lib/systemd/system/mlvpn@.service
+		fi
+		if [ "$mlvpnupdate" = "0" ]; then
+			if [ "$LOCALFILES" = "no" ]; then
+				wget -O /etc/mlvpn/mlvpn0.conf ${VPSURL}${VPSPATH}/mlvpn0.conf
+			else
+				cp ${DIR}/mlvpn0.conf /etc/mlvpn/mlvpn0.conf
+			fi
+		fi
 	else
-		apt-get -y -o Dpkg::Options::="--force-overwrite" install mlvpn=${MLVPN_BINARY_VERSION}
-	fi
-	if [ "$LOCALFILES" = "no" ]; then
-		wget -O /lib/systemd/network/mlvpn.network ${VPSURL}${VPSPATH}/mlvpn.network
-		wget -O /lib/systemd/system/mlvpn@.service ${VPSURL}${VPSPATH}/mlvpn@.service.in
-	else
-		cp ${DIR}/mlvpn.network /lib/systemd/network/mlvpn.network
-		cp ${DIR}/mlvpn@.service.in /lib/systemd/system/mlvpn@.service
+		apt-get -y -o Dpkg::Options::="--force-overwrite" install omr-mlvpn=${MLVPN_BINARY_VERSION}
 	fi
 	mkdir -p /etc/mlvpn
 	if [ "$mlvpnupdate" = "0" ]; then
-		if [ "$LOCALFILES" = "no" ]; then
-			wget -O /etc/mlvpn/mlvpn0.conf ${VPSURL}${VPSPATH}/mlvpn0.conf
-		else
-			cp ${DIR}/mlvpn0.conf /etc/mlvpn/mlvpn0.conf
-		fi
 		sed -i "s:MLVPN_PASS:$MLVPN_PASS:" /etc/mlvpn/mlvpn0.conf
 	fi
 	chmod 0600 /etc/mlvpn/mlvpn0.conf

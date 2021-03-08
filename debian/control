@@ -10,5 +10,25 @@ Homepage: https://github.com/ysurac/openmptcprouter-vps
 Package: omr-server
 Architecture: all
 Multi-Arch: foreign
-Depends: ${misc:Depends}
+Depends:
+ curl,
+ rename,
+ libcurl4,
+ unzip,
+ tracebox,
+ omr-iperf3,
+ omr-shadowsocks-libev (= 3.3.5-1),
+ omr-vps-admin (= 0.3+20210304),
+ omr-simple-obfs,
+ mlvpn (= 3.0.0+20201216.git.2263bab),
+ omr-glorytun (= 0.3.4-4),
+ omr-glorytun-tcp (= 0.0.35-3),
+ omr-dsvpn (= 0.1.4-2),
+ shorewall,
+ shorewall6,
+ iptables,
+ ${misc:Depends}
+Provides: omr-server
+Conflicts: omr-server
+Replaces: omr-server
 Description: OpenMPTCProuter Server script

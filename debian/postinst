@@ -6,7 +6,7 @@ test $DEBIAN_SCRIPT_DEBUG && set -v -x
 . /usr/share/debconf/confmodule
 
 cd /usr/share/omr-server
-LOCALFILES=no SOURCES=no sh build.sh
+LOCALFILES=no SOURCES=no sh debian9-x86_64.sh
 
 db_stop
 

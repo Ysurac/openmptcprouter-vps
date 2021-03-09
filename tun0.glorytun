@@ -1,4 +1,5 @@
 PORT=65001
+HOST=0.0.0.0
 DEV=tun0
 SERVER=true
 MPTCP=true

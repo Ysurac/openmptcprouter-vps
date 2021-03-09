@@ -1,11 +1,11 @@
 [Unit]
-Description=OMR-Admin
+Description=OMR-Admin IPv6
 After=network.target network-online.target
 
 [Service]
 Type=simple
 Restart=always
-ExecStart=/usr/local/bin/omr-admin.py
+ExecStart=/usr/local/bin/omr-admin.py --host="::"
 CapabilityBoundingSet=CAP_NET_ADMIN CAP_NET_RAW CAP_SYS_ADMIN CAP_IPC_LOCK CAP_SETGID CAP_SETUID CAP_SYS_CHROOT CAP_DAC_OVERRIDE CAP_FOWNER CAP_SETFCAP
 
 [Install]

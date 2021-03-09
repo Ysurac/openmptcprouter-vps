@@ -12,7 +12,7 @@ fi
 exec dsvpn \
 	${MODE} \
 	"$1".key \
-	auto \
+	${HOST:-auto} \
 	${PORT} \
 	${DEV} \
 	${LOCALTUNIP} \

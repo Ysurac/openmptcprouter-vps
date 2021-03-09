@@ -1,4 +1,6 @@
 BIND=0.0.0.0
 BIND_PORT=65001
+HOST=0.0.0.0
+PORT=5000
 DEV=tun0
 OPTIONS="chacha persist"

@@ -199,14 +199,14 @@ fi
 echo "Install mptcp kernel and shadowsocks..."
 apt-get update
 sleep 2
-apt-get -y install dirmngr patch
+apt-get -y install dirmngr patch rename curl libcurl4 unzip
 
 if [ "$SOURCES" = "yes" ]; then
 	wget -O /tmp/linux-image-${KERNEL_RELEASE}_amd64.deb ${VPSURL}kernel/linux-image-${KERNEL_RELEASE}_amd64.deb
 	wget -O /tmp/linux-headers-${KERNEL_RELEASE}_amd64.deb ${VPSURL}kernel/linux-headers-${KERNEL_RELEASE}_amd64.deb
 	# Rename bzImage to vmlinuz, needed when custom kernel was used
 	cd /boot
-	apt-get -y install rename curl libcurl4 unzip git
+	apt-get -y install git
 	rename 's/^bzImage/vmlinuz/s' * >/dev/null 2>&1
 	#apt-get -y install linux-mptcp
 	#dpkg --remove --force-remove-reinstreq linux-image-${KERNEL_VERSION}-mptcp
@@ -220,9 +220,11 @@ if [ "$SOURCES" = "yes" ]; then
 else
 	cd /boot
 	rename 's/^bzImage/vmlinuz/s' * >/dev/null 2>&1
-	echo "Install kernel linux-image-${KERNEL_RELEASE}"
-	echo "\033[1m !!! if kernel install fail run: dpkg --remove --force-remove-reinstreq linux-image-${KERNEL_VERSION}-mptcp !!! \033[0m"
-	apt-get -y install linux-image-${KERNEL_VERSION}-mptcp=${KERNEL_PACKAGE_VERSION} linux-headers-${KERNEL_VERSION}-mptcp=${KERNEL_PACKAGE_VERSION}
+	if [ "$(dpkg -l | grep linux-image-${KERNEL_VERSION} | grep ${KERNEL_PACKAGE_VERSION})" = "" ]; then
+		echo "Install kernel linux-image-${KERNEL_RELEASE}"
+		echo "\033[1m !!! if kernel install fail run: dpkg --remove --force-remove-reinstreq linux-image-${KERNEL_VERSION}-mptcp !!! \033[0m"
+		apt-get -y install linux-image-${KERNEL_VERSION}-mptcp=${KERNEL_PACKAGE_VERSION} linux-headers-${KERNEL_VERSION}-mptcp=${KERNEL_PACKAGE_VERSION}
+	fi
 fi
 # Check if mptcp kernel is grub default kernel
 echo "Set MPTCP kernel as grub default..."

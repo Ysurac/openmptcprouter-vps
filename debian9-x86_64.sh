@@ -610,14 +610,14 @@ if [ "$V2RAY" = "yes" ]; then
 	#apt-get -y -o Dpkg::Options::="--force-overwrite" install v2ray
 	if [ "$SOURCES" = "yes" ]; then
 		wget -O /tmp/v2ray-${V2RAY_VERSION}-amd64.deb ${VPSURL}/debian/v2ray-${V2RAY_VERSION}-amd64.deb
+		dpkg --force-all -i -B /tmp/v2ray-${V2RAY_VERSION}-amd64.deb
+		rm -f /tmp/v2ray-${V2RAY_VERSION}-amd64.deb
 	else
 		apt-get -y install v2ray=${V2RAY_VERSION}
 	fi
 	if [ -f /etc/v2ray/v2ray-server.conf ] && [ ! -f /etc/systemd/system/v2ray.service ]; then
 		wget -O /etc/systemd/system/v2ray.service ${VPSURL}${VPSPATH}/old-v2ray.service
 	fi
-	dpkg --force-all -i -B /tmp/v2ray-${V2RAY_VERSION}-amd64.deb
-	rm -f /tmp/v2ray-${V2RAY_VERSION}-amd64.deb
 	if [ ! -f /etc/v2ray/v2ray-server.json ]; then
 		wget -O /etc/v2ray/v2ray-server.json ${VPSURL}${VPSPATH}/v2ray-server.json
 		sed -i "s:V2RAY_UUID:$V2RAY_UUID:g" /etc/v2ray/v2ray-server.json

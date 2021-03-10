@@ -50,8 +50,8 @@ OMR_ADMIN_VERSION="2e752ad783ffb817f6d627a999d51ac6656411f9"
 OMR_ADMIN_BINARY_VERSION="0.3+20210304"
 DSVPN_VERSION="3b99d2ef6c02b2ef68b5784bec8adfdd55b29b1a"
 DSVPN_BINARY_VERSION="0.1.4-2"
-V2RAY_VERSION="4.34.0"
-V2RAY_PLUGIN_VERSION="v1.4.3"
+V2RAY_VERSION="4.35.1"
+V2RAY_PLUGIN_VERSION="4.35.1"
 EASYRSA_VERSION="3.0.6"
 SHADOWSOCKS_VERSION="cadf278d476d0e5679c3e67390b271276a8dc54a"
 SHADOWSOCKS_BINARY_VERSION="3.3.5-1"
@@ -574,29 +574,33 @@ fi
 # Install v2ray-plugin
 if [ "$V2RAY_PLUGIN" = "yes" ]; then
 	echo "Install v2ray plugin"
-	rm -rf /tmp/v2ray-plugin-linux-amd64-${V2RAY_PLUGIN_VERSION}.tar.gz
-	#wget -O /tmp/v2ray-plugin-linux-amd64-${V2RAY_PLUGIN_VERSION}.tar.gz https://github.com/shadowsocks/v2ray-plugin/releases/download/${V2RAY_PLUGIN_VERSION}/v2ray-plugin-linux-amd64-${V2RAY_PLUGIN_VERSION}.tar.gz
-	#wget -O /tmp/v2ray-plugin-linux-amd64-${V2RAY_PLUGIN_VERSION}.tar.gz ${VPSURL}${VPSPATH}/bin/v2ray-plugin-linux-amd64-${V2RAY_PLUGIN_VERSION}.tar.gz
-	wget -O /tmp/v2ray-plugin-linux-amd64-${V2RAY_PLUGIN_VERSION}.tar.gz https://github.com/teddysun/v2ray-plugin/releases/download/v1.4.3/v2ray-plugin-linux-amd64-${V2RAY_PLUGIN_VERSION}.tar.gz
-	cd /tmp
-	tar xzvf v2ray-plugin-linux-amd64-${V2RAY_PLUGIN_VERSION}.tar.gz
-	cp -f v2ray-plugin_linux_amd64 /usr/local/bin/v2ray-plugin
-	cd /tmp
-	rm -rf /tmp/v2ray-plugin_linux_amd64
-	rm -rf /tmp/v2ray-plugin-linux-amd64-${V2RAY_PLUGIN_VERSION}.tar.gz
+	if [ "$SOURCES" = "yes" ]; then
+		rm -rf /tmp/v2ray-plugin-linux-amd64-${V2RAY_PLUGIN_VERSION}.tar.gz
+		#wget -O /tmp/v2ray-plugin-linux-amd64-v${V2RAY_PLUGIN_VERSION}.tar.gz https://github.com/shadowsocks/v2ray-plugin/releases/download/${V2RAY_PLUGIN_VERSION}/v2ray-plugin-linux-amd64-v${V2RAY_PLUGIN_VERSION}.tar.gz
+		#wget -O /tmp/v2ray-plugin-linux-amd64-v${V2RAY_PLUGIN_VERSION}.tar.gz ${VPSURL}${VPSPATH}/bin/v2ray-plugin-linux-amd64-v${V2RAY_PLUGIN_VERSION}.tar.gz
+		wget -O /tmp/v2ray-plugin-linux-amd64-v${V2RAY_PLUGIN_VERSION}.tar.gz https://github.com/teddysun/v2ray-plugin/releases/download/v1.4.3/v2ray-plugin-linux-amd64-v${V2RAY_PLUGIN_VERSION}.tar.gz
+		cd /tmp
+		tar xzvf v2ray-plugin-linux-amd64-v${V2RAY_PLUGIN_VERSION}.tar.gz
+		cp -f v2ray-plugin_linux_amd64 /usr/local/bin/v2ray-plugin
+		cd /tmp
+		rm -rf /tmp/v2ray-plugin_linux_amd64
+		rm -rf /tmp/v2ray-plugin-linux-amd64-${V2RAY_PLUGIN_VERSION}.tar.gz
 	
-	#rm -rf /tmp/v2ray-plugin
-	#cd /tmp
-	#rm -f /var/lib/dpkg/lock
-	#apt-get install -y --no-install-recommends git ca-certificates golang-go
-	#git clone https://github.com/shadowsocks/v2ray-plugin.git /tmp/v2ray-plugin
-	#cd /tmp/v2ray-plugin
-	#git checkout ${V2RAY_PLUGIN_VERSION}
-	#git submodule update --init --recursive
-	#CGO_ENABLED=0 go build -o v2ray-plugin
-	#cp v2ray-plugin /usr/local/bin/v2ray-plugin
-	#cd /tmp
-	#rm -rf /tmp/simple-obfs
+		#rm -rf /tmp/v2ray-plugin
+		#cd /tmp
+		#rm -f /var/lib/dpkg/lock
+		#apt-get install -y --no-install-recommends git ca-certificates golang-go
+		#git clone https://github.com/shadowsocks/v2ray-plugin.git /tmp/v2ray-plugin
+		#cd /tmp/v2ray-plugin
+		#git checkout ${V2RAY_PLUGIN_VERSION}
+		#git submodule update --init --recursive
+		#CGO_ENABLED=0 go build -o v2ray-plugin
+		#cp v2ray-plugin /usr/local/bin/v2ray-plugin
+		#cd /tmp
+		#rm -rf /tmp/simple-obfs
+	else
+		apt-get -y install v2ray-plugin=${V2RAY_PLUGIN_VERSION}
+	fi
 fi
 
 if [ "$OBFS" = "no" ] && [ "$V2RAY_PLUGIN" = "no" ]; then

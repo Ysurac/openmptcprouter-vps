@@ -27,7 +27,8 @@ Depends:
  shorewall,
  shorewall6,
  iptables,
- v2ray-plugin,
+ v2ray-plugin (= 4.35.1),
+ v2ray (=4.35.1),
  linux-image-5.4.100-mptcp (= 1.18+9d3f35b),
  ${misc:Depends}
 Provides: omr-server

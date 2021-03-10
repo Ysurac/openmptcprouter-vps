@@ -194,22 +194,29 @@ apt-get update
 sleep 2
 apt-get -y install dirmngr patch
 
-wget -O /tmp/linux-image-${KERNEL_RELEASE}_amd64.deb ${VPSURL}kernel/linux-image-${KERNEL_RELEASE}_amd64.deb
-wget -O /tmp/linux-headers-${KERNEL_RELEASE}_amd64.deb ${VPSURL}kernel/linux-headers-${KERNEL_RELEASE}_amd64.deb
-# Rename bzImage to vmlinuz, needed when custom kernel was used
-cd /boot
-apt-get -y install rename curl libcurl4 unzip git
-rename 's/^bzImage/vmlinuz/s' * >/dev/null 2>&1
-#apt-get -y install linux-mptcp
-#dpkg --remove --force-remove-reinstreq linux-image-${KERNEL_VERSION}-mptcp
-#dpkg --remove --force-remove-reinstreq linux-headers-${KERNEL_VERSION}-mptcp
-if [ "$(dpkg -l | grep linux-image-${KERNEL_VERSION} | grep ${KERNEL_PACKAGE_VERSION})" = "" ]; then
+if [ "$SOURCES" = "yes" ]; then
+	wget -O /tmp/linux-image-${KERNEL_RELEASE}_amd64.deb ${VPSURL}kernel/linux-image-${KERNEL_RELEASE}_amd64.deb
+	wget -O /tmp/linux-headers-${KERNEL_RELEASE}_amd64.deb ${VPSURL}kernel/linux-headers-${KERNEL_RELEASE}_amd64.deb
+	# Rename bzImage to vmlinuz, needed when custom kernel was used
+	cd /boot
+	apt-get -y install rename curl libcurl4 unzip git
+	rename 's/^bzImage/vmlinuz/s' * >/dev/null 2>&1
+	#apt-get -y install linux-mptcp
+	#dpkg --remove --force-remove-reinstreq linux-image-${KERNEL_VERSION}-mptcp
+	#dpkg --remove --force-remove-reinstreq linux-headers-${KERNEL_VERSION}-mptcp
+	if [ "$(dpkg -l | grep linux-image-${KERNEL_VERSION} | grep ${KERNEL_PACKAGE_VERSION})" = "" ]; then
+		echo "Install kernel linux-image-${KERNEL_RELEASE}"
+		echo "\033[1m !!! if kernel install fail run: dpkg --remove --force-remove-reinstreq linux-image-${KERNEL_VERSION}-mptcp !!! \033[0m"
+		dpkg --force-all -i -B /tmp/linux-headers-${KERNEL_RELEASE}_amd64.deb
+		dpkg --force-all -i -B /tmp/linux-image-${KERNEL_RELEASE}_amd64.deb
+	fi
+else
+	cd /boot
+	rename 's/^bzImage/vmlinuz/s' * >/dev/null 2>&1
 	echo "Install kernel linux-image-${KERNEL_RELEASE}"
 	echo "\033[1m !!! if kernel install fail run: dpkg --remove --force-remove-reinstreq linux-image-${KERNEL_VERSION}-mptcp !!! \033[0m"
-	dpkg --force-all -i -B /tmp/linux-headers-${KERNEL_RELEASE}_amd64.deb
-	dpkg --force-all -i -B /tmp/linux-image-${KERNEL_RELEASE}_amd64.deb
+	apt-get -y install linux-image=${KERNEL_RELEASE} linux-headers=${KERNEL_RELEASE}
 fi
-
 # Check if mptcp kernel is grub default kernel
 echo "Set MPTCP kernel as grub default..."
 if [ "$LOCALFILES" = "no" ]; then
@@ -594,7 +601,11 @@ fi
 
 if [ "$V2RAY" = "yes" ]; then
 	#apt-get -y -o Dpkg::Options::="--force-overwrite" install v2ray
-	wget -O /tmp/v2ray-${V2RAY_VERSION}-amd64.deb ${VPSURL}/debian/v2ray-${V2RAY_VERSION}-amd64.deb
+	if [ "$SOURCES" = "yes" ]; then
+		wget -O /tmp/v2ray-${V2RAY_VERSION}-amd64.deb ${VPSURL}/debian/v2ray-${V2RAY_VERSION}-amd64.deb
+	else
+		apt-get -y install v2ray=${V2RAY_VERSION}
+	fi
 	if [ -f /etc/v2ray/v2ray-server.conf ] && [ ! -f /etc/systemd/system/v2ray.service ]; then
 		wget -O /etc/systemd/system/v2ray.service ${VPSURL}${VPSPATH}/old-v2ray.service
 	fi

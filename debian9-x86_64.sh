@@ -1222,7 +1222,7 @@ else
 fi
 
 if [ "$SOURCES" != "yes" ]; then
-	apt-get -y install omr-server=${OMR_VERSION}
+	apt-get -y install omr-server=${OMR_VERSION} 2>&1 >/dev/null || true
 fi
 
 if [ "$update" = "0" ]; then

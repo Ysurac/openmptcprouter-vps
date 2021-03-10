@@ -1219,6 +1219,10 @@ else
 	echo "< OpenMPTCProuter VPS $OMR_VERSION >" > /etc/motd
 fi
 
+if [ "$SOURCES" != "yes" ]; then
+	apt-get -y install omr-server=${OMR_VERSION}
+fi
+
 if [ "$update" = "0" ]; then
 	# Display important info
 	echo '===================================================================================='

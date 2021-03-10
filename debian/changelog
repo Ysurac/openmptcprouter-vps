@@ -1,4 +1,4 @@
-omr-server (0.1025) unstable; urgency=medium
+omr-server (0.1025-test) unstable; urgency=medium
 
     * Wireguard support and fixed
 

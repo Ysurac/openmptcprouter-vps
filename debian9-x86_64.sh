@@ -222,7 +222,7 @@ else
 	rename 's/^bzImage/vmlinuz/s' * >/dev/null 2>&1
 	echo "Install kernel linux-image-${KERNEL_RELEASE}"
 	echo "\033[1m !!! if kernel install fail run: dpkg --remove --force-remove-reinstreq linux-image-${KERNEL_VERSION}-mptcp !!! \033[0m"
-	apt-get -y install linux-image=${KERNEL_RELEASE} linux-headers=${KERNEL_RELEASE}
+	apt-get -y install linux-image-${KERNEL_VERSION}-mptcp=${KERNEL_PACKAGE_VERSION} linux-headers-${KERNEL_VERSION}-mptcp=${KERNEL_PACKAGE_VERSION}
 fi
 # Check if mptcp kernel is grub default kernel
 echo "Set MPTCP kernel as grub default..."

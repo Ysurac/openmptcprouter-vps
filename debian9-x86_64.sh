@@ -30,6 +30,7 @@ DSVPN=${DSVPN:-yes}
 WIREGUARD=${WIREGUARD:-yes}
 SOURCES=${SOURCES:-yes}
 NOINTERNET=${NOINTERNET:-no}
+REINSTALL=${REINSTALL:-yes}
 SPEEDTEST=${SPEEDTEST:-no}
 LOCALFILES=${LOCALFILES:-no}
 INTERFACE=${INTERFACE:-$(ip -o -4 route show to default | grep -m 1 -Po '(?<=dev )(\S+)' | tr -d "\n")}
@@ -132,6 +133,12 @@ if [ "$UPDATE" = "yes" ]; then
 	fi
 	echo "Update mode"
 fi
+
+CURRENT_OMR="$(grep -s 'OpenMPTCProuter VPS' /etc/* | awk '{print $4}')"
+if [ "$REINSTALL" = "no" ] && [ "$CURRENT_OMR" = "$OMR_VERSION" ]; then
+	exit 1
+fi
+
 
 echo "Remove lock and update packages list..."
 rm -f /var/lib/dpkg/lock

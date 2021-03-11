@@ -630,6 +630,7 @@ if [ "$V2RAY" = "yes" ]; then
 		rm /etc/v2ray/config.json
 		ln -s /etc/v2ray/v2ray-server.json /etc/v2ray/config.json
 	fi
+	ln -sf /etc/v2ray/v2ray-server.json /etc/v2ray/config.json
 	sed -i 's:debug:warning:' /etc/v2ray/v2ray-server.json
 	rm -f /tmp/v2rayError.log
 	if [ -f /etc/systemd/system/v2ray.service.dpkg-dist ]; then

@@ -464,6 +464,7 @@ if [ "$OMR_ADMIN" = "yes" ]; then
 		#OMR_ADMIN_PASS_ADMIN=$(cat /etc/openmptcprouter-vps-admin/omr-admin-config.json | jq -r .users[0].admin.user_password | tr -d "\n")
 	fi
 	if [ ! -f /etc/openmptcprouter-vps-admin/key.pem ]; then
+		cd /etc/openmptcprouter-vps-admin
 		openssl req -new -newkey rsa:2048 -days 3650 -nodes -x509 -keyout key.pem -out cert.pem -subj "/C=US/ST=Oregon/L=Portland/O=OpenMPTCProuterVPS/OU=Org/CN=www.openmptcprouter.vps"
 	fi
 	sed -i "s:openmptcptouter:${DEFAULT_USER}:g" /etc/openmptcprouter-vps-admin/omr-admin-config.json

@@ -139,6 +139,10 @@ if [ "$REINSTALL" = "no" ] && [ "$CURRENT_OMR" = "$OMR_VERSION" ]; then
 	exit 1
 fi
 
+[ -f /etc/apt/sources.list.d/openmptcprouter.list ] && {
+	echo "Update ${REPO} key"
+	wget -O - https://${REPO}/openmptcprouter.gpg.key | apt-key add -
+}
 
 echo "Remove lock and update packages list..."
 rm -f /var/lib/dpkg/lock

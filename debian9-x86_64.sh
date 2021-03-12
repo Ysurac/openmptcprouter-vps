@@ -28,7 +28,7 @@ UBOND_PASS=${UBOND_PASS:-$(head -c 32 /dev/urandom | base64 -w0)}
 OPENVPN=${OPENVPN:-yes}
 DSVPN=${DSVPN:-yes}
 WIREGUARD=${WIREGUARD:-yes}
-SOURCES=${SOURCES:-yes}
+SOURCES=${SOURCES:-no}
 NOINTERNET=${NOINTERNET:-no}
 REINSTALL=${REINSTALL:-yes}
 SPEEDTEST=${SPEEDTEST:-no}
@@ -657,6 +657,7 @@ if [ "$MLVPN" = "yes" ]; then
 	if [ -f /etc/mlvpn/mlvpn0.conf ]; then
 		mlvpnupdate="1"
 	fi
+	mkdir -p /etc/mlvpn
 	if [ "$SOURCES" = "yes" ]; then
 		rm -f /var/lib/dpkg/lock
 		rm -f /var/lib/dpkg/lock-frontend
@@ -691,7 +692,6 @@ if [ "$MLVPN" = "yes" ]; then
 	else
 		apt-get -y -o Dpkg::Options::="--force-overwrite" install omr-mlvpn=${MLVPN_BINARY_VERSION}
 	fi
-	mkdir -p /etc/mlvpn
 	if [ "$mlvpnupdate" = "0" ]; then
 		sed -i "s:MLVPN_PASS:$MLVPN_PASS:" /etc/mlvpn/mlvpn0.conf
 	fi

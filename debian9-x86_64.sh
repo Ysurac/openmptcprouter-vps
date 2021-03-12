@@ -330,7 +330,7 @@ if [ "$SOURCES" = "yes" ]; then
 	#rm -rf /tmp/shadowsocks-libev-${SHADOWSOCKS_VERSION}
 	rm -rf /tmp/shadowsocks-libev
 else
-	apt-get -y -o Dpkg::Options::="--force-overwrite" install omr-shadowsocks-libev=${SHADOWSOCKS_BINARY_VERSION}
+	apt-get -y -o Dpkg::Options::="--force-confold" -o Dpkg::Options::="--force-confdef" -o Dpkg::Options::="--force-overwrite" install omr-shadowsocks-libev=${SHADOWSOCKS_BINARY_VERSION}
 fi
 
 # Load OLIA Congestion module at boot time
@@ -460,7 +460,7 @@ if [ "$OMR_ADMIN" = "yes" ]; then
 			OMR_ADMIN_PASS_ADMIN2=$(cat /etc/openmptcprouter-vps-admin/omr-admin-config.json | jq -r .users[0].admin.user_password | tr -d "\n")
 			[ -n "$OMR_ADMIN_PASS_ADMIN2" ] && [ "$OMR_ADMIN_PASS_ADMIN2" != "AdminMySecretKey" ] && OMR_ADMIN_PASS_ADMIN=$OMR_ADMIN_PASS_ADMIN2
 		fi
-		apt-get -y install omr-vps-admin=${OMR_ADMIN_BINARY_VERSION}
+		apt-get -o Dpkg::Options::="--force-confold" -o Dpkg::Options::="--force-confdef" -o Dpkg::Options::="--force-overwrite" -y install omr-vps-admin=${OMR_ADMIN_BINARY_VERSION}
 		if [ ! -f /etc/openmptcprouter-vps-admin/omr-admin-config.json ]; then
 			cp /usr/share/omr-admin/omr-admin-config.json /etc/openmptcprouter-vps-admin/
 		fi
@@ -624,7 +624,7 @@ if [ "$V2RAY" = "yes" ]; then
 		dpkg --force-all -i -B /tmp/v2ray-${V2RAY_VERSION}-amd64.deb
 		rm -f /tmp/v2ray-${V2RAY_VERSION}-amd64.deb
 	else
-		apt-get -y install v2ray=${V2RAY_VERSION}
+		apt-get -o Dpkg::Options::="--force-confold" -o Dpkg::Options::="--force-confdef" -o Dpkg::Options::="--force-overwrite" -y install v2ray=${V2RAY_VERSION}
 	fi
 	if [ -f /etc/v2ray/v2ray-server.conf ] && [ ! -f /etc/systemd/system/v2ray.service ]; then
 		wget -O /etc/systemd/system/v2ray.service ${VPSURL}${VPSPATH}/old-v2ray.service
@@ -690,7 +690,7 @@ if [ "$MLVPN" = "yes" ]; then
 			fi
 		fi
 	else
-		apt-get -y -o Dpkg::Options::="--force-overwrite" install omr-mlvpn=${MLVPN_BINARY_VERSION}
+		apt-get -y -o Dpkg::Options::="--force-confold" -o Dpkg::Options::="--force-confdef" install omr-mlvpn=${MLVPN_BINARY_VERSION}
 	fi
 	if [ "$mlvpnupdate" = "0" ]; then
 		sed -i "s:MLVPN_PASS:$MLVPN_PASS:" /etc/mlvpn/mlvpn0.conf

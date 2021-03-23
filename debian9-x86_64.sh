@@ -209,6 +209,7 @@ if [ "$CHINA" = "yes" ]; then
 	else
 		git checkout master
 	fi
+	LOCALFILES="yes"
 	DIR="/usr/share/omr-server-git"
 else
 	echo "deb [arch=amd64] https://${REPO} buster main" > /etc/apt/sources.list.d/openmptcprouter.list

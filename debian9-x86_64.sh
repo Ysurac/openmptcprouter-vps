@@ -192,7 +192,7 @@ if [ "$CHINA" = "yes" ]; then
 	fi
 	cd /var/lib/openmptcprouter-vps-debian
 	git pull
-#	if [ "$VPS_PATH" = "server-test" ]; then
+#	if [ "$VPSPATH" = "server-test" ]; then
 #		git checkout develop
 #	else
 #		git checkout main
@@ -204,7 +204,7 @@ if [ "$CHINA" = "yes" ]; then
 	fi
 	cd /usr/share/omr-server-git
 	git pull
-	if [ "$VPS_PATH" = "server-test" ]; then
+	if [ "$VPSPATH" = "server-test" ]; then
 		git checkout develop
 	else
 		git checkout master

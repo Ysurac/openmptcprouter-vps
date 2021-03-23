@@ -60,6 +60,7 @@ VPS_DOMAIN=${VPS_DOMAIN:-$(wget -4 -qO- -T 2 http://hostname.openmptcprouter.com
 VPSPATH="server-test"
 VPSURL="https://www.openmptcprouter.com/"
 REPO="repo.openmptcprouter.com"
+CHINA=${CHINA:-no}
 
 OMR_VERSION="0.1025-test"
 
@@ -176,16 +177,45 @@ if [ "$ID" = "ubuntu" ] && [ "$VERSION_ID" = "18.04" ] && [ "$UPDATE_OS" = "yes"
 	apt-get -y -o Dpkg::Options::="--force-confdef" -o Dpkg::Options::="--force-confnew" dist-upgrade
 	VERSION_ID="20.04"
 fi
+
 # Add OpenMPTCProuter repo
 echo "Add OpenMPTCProuter repo..."
-echo "deb [arch=amd64] https://${REPO} buster main" > /etc/apt/sources.list.d/openmptcprouter.list
-cat <<EOF | tee /etc/apt/preferences.d/openmptcprouter.pref
-Explanation: Prefer OpenMPTCProuter provided packages over the Debian native ones
-Package: *
-Pin: origin ${REPO}
-Pin-Priority: 1001
-EOF
-wget -O - https://${REPO}/openmptcprouter.gpg.key | apt-key add -
+if [ "$CHINA" = "yes" ]; then
+	echo "Install git..."
+	apt-get -y install git
+	if [ ! -d /var/lib/openmptcprouter-vps-debian ]; then
+		git clone https://gitee.com/ysurac/openmptcprouter-vps-debian.git /var/lib/openmptcprouter-vps-debian
+	fi
+	cd /var/lib/openmptcprouter-vps-debian
+	git pull
+#	if [ "$VPS_PATH" = "server-test" ]; then
+#		git checkout develop
+#	else
+#		git checkout main
+#	fi
+	echo "deb [arch=amd64] file:/var/lib/openmptcprouter-vps-debian ./" > /etc/apt/sources.list.d/openmptcprouter.list
+	cat /var/lib/openmptcprouter-vps-debian | apt-key add -
+	if [ ! -d /usr/share/omr-server ]; then
+	git clone https://gitee.com/ysurac/openmptcprouter-vps.git /usr/share/omr-server
+	fi
+	cd /usr/share/omr-server
+	git pull
+	if [ "$VPS_PATH" = "server-test" ]; then
+		git checkout develop
+	else
+		git checkout master
+	fi
+	DIR="/usr/share/omr-server"
+else
+	echo "deb [arch=amd64] https://${REPO} buster main" > /etc/apt/sources.list.d/openmptcprouter.list
+	cat <<-EOF | tee /etc/apt/preferences.d/openmptcprouter.pref
+		Explanation: Prefer OpenMPTCProuter provided packages over the Debian native ones
+		Package: *
+		Pin: origin ${REPO}
+		Pin-Priority: 1001
+	EOF
+	wget -O - https://${REPO}/openmptcprouter.gpg.key | apt-key add -
+fi
 
 #apt-key adv --keyserver hkp://keys.gnupg.net --recv-keys 379CE192D401AB61
 if [ "$ID" = "debian" ]; then

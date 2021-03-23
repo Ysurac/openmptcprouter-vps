@@ -194,7 +194,7 @@ if [ "$CHINA" = "yes" ]; then
 #		git checkout main
 #	fi
 	echo "deb [arch=amd64] file:/var/lib/openmptcprouter-vps-debian ./" > /etc/apt/sources.list.d/openmptcprouter.list
-	cat /var/lib/openmptcprouter-vps-debian | apt-key add -
+	cat /var/lib/openmptcprouter-vps-debian/openmptcprouter.gpg.key | apt-key add -
 	if [ ! -d /usr/share/omr-server ]; then
 	git clone https://gitee.com/ysurac/openmptcprouter-vps.git /usr/share/omr-server
 	fi

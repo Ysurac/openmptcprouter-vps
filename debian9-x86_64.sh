@@ -142,7 +142,11 @@ fi
 
 [ -f /etc/apt/sources.list.d/openmptcprouter.list ] && {
 	echo "Update ${REPO} key"
-	wget -O - https://${REPO}/openmptcprouter.gpg.key | apt-key add -
+	if [ "$CHINA" = "yes" ]; then
+		wget -O - https://gitee.com/ysurac/openmptcprouter-vps-debian/raw/main/openmptcprouter.gpg.key | apt-key add -
+	else
+		wget -O - https://${REPO}/openmptcprouter.gpg.key | apt-key add -
+	fi
 }
 
 echo "Remove lock and update packages list..."
@@ -195,17 +199,17 @@ if [ "$CHINA" = "yes" ]; then
 #	fi
 	echo "deb [arch=amd64] file:/var/lib/openmptcprouter-vps-debian ./" > /etc/apt/sources.list.d/openmptcprouter.list
 	cat /var/lib/openmptcprouter-vps-debian/openmptcprouter.gpg.key | apt-key add -
-	if [ ! -d /usr/share/omr-server ]; then
-	git clone https://gitee.com/ysurac/openmptcprouter-vps.git /usr/share/omr-server
+	if [ ! -d /usr/share/omr-server-git ]; then
+	git clone https://gitee.com/ysurac/openmptcprouter-vps.git /usr/share/omr-server-git
 	fi
-	cd /usr/share/omr-server
+	cd /usr/share/omr-server-git
 	git pull
 	if [ "$VPS_PATH" = "server-test" ]; then
 		git checkout develop
 	else
 		git checkout master
 	fi
-	DIR="/usr/share/omr-server"
+	DIR="/usr/share/omr-server-git"
 else
 	echo "deb [arch=amd64] https://${REPO} buster main" > /etc/apt/sources.list.d/openmptcprouter.list
 	cat <<-EOF | tee /etc/apt/preferences.d/openmptcprouter.pref

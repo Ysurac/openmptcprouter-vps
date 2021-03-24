@@ -1,11 +1,15 @@
 #!/bin/sh
-#
 # Copyright (C) 2018-2020 Ycarus (Yannick Chabanois) <ycarus@zugaina.org> for OpenMPTCProuter
-#
+# Copyright (C) 2018-2020 suyunfan (antrouter) https://55860.com for openmptcprouter
 # This is free software, licensed under the GNU General Public License v3 or later.
 # See /LICENSE for more information.
 #
-
+echo '===================================================================================='
+echo '本脚本由蚂蚁聚合路由器出品。仅供DIY爱好者免费学习使用。请勿用于商业。'
+echo '如果用于商业请选择蚂蚁聚合商业版，openmptcprouter合作伙伴请访问官网http://55860.com'
+echo '5秒后自动开始安装'
+echo '===================================================================================='
+sleep 5
 SHADOWSOCKS_PASS=${SHADOWSOCKS_PASS:-$(head -c 32 /dev/urandom | base64 -w0)}
 GLORYTUN_PASS=${GLORYTUN_PASS:-$(od -vN "32" -An -tx1 /dev/urandom | tr '[:lower:]' '[:upper:]' | tr -d " \n")}
 DSVPN_PASS=${DSVPN_PASS:-$(od -vN "32" -An -tx1 /dev/urandom | tr '[:lower:]' '[:upper:]' | tr -d " \n")}
@@ -28,39 +32,40 @@ UBOND_PASS=${UBOND_PASS:-$(head -c 32 /dev/urandom | base64 -w0)}
 OPENVPN=${OPENVPN:-yes}
 DSVPN=${DSVPN:-yes}
 WIREGUARD=${WIREGUARD:-yes}
-SOURCES=${SOURCES:-yes}
+SOURCES=${SOURCES:-no}
 NOINTERNET=${NOINTERNET:-no}
+REINSTALL=${REINSTALL:-yes}
 SPEEDTEST=${SPEEDTEST:-no}
 LOCALFILES=${LOCALFILES:-no}
 INTERFACE=${INTERFACE:-$(ip -o -4 route show to default | grep -m 1 -Po '(?<=dev )(\S+)' | tr -d "\n")}
 KERNEL_VERSION="5.4.100"
 KERNEL_PACKAGE_VERSION="1.18+9d3f35b"
 KERNEL_RELEASE="${KERNEL_VERSION}-mptcp_${KERNEL_PACKAGE_VERSION}"
-GLORYTUN_UDP_VERSION="32267e86a6da05b285bb3bf2b136c105dc0af4bb"
+GLORYTUN_UDP_VERSION="master"
 GLORYTUN_UDP_BINARY_VERSION="0.3.4-4"
 GLORYTUN_TCP_BINARY_VERSION="0.0.35-3"
 #MLVPN_VERSION="8f9720978b28c1954f9f229525333547283316d2"
 MLVPN_VERSION="f45cec350a6879b8b020143a78134a022b5df2a7"
 MLVPN_BINARY_VERSION="3.0.0+20201216.git.2263bab"
 UBOND_VERSION="672100fb57913ffd29caad63517e145a5974b078"
-OBFS_VERSION="486bebd9208539058e57e23a12f23103016e09b4"
+OBFS_VERSION="master"
 OBFS_BINARY_VERSION="0.0.5-1"
-OMR_ADMIN_VERSION="2e752ad783ffb817f6d627a999d51ac6656411f9"
-OMR_ADMIN_BINARY_VERSION="0.3+20210304"
+OMR_ADMIN_VERSION="db77dc0508bf14089a185cbf3b2c1aee5333b2d7"
+OMR_ADMIN_BINARY_VERSION="0.3+20210315"
 DSVPN_VERSION="3b99d2ef6c02b2ef68b5784bec8adfdd55b29b1a"
 DSVPN_BINARY_VERSION="0.1.4-2"
-V2RAY_VERSION="4.34.0"
-V2RAY_PLUGIN_VERSION="v1.4.3"
+V2RAY_VERSION="4.35.1"
+V2RAY_PLUGIN_VERSION="4.35.1"
 EASYRSA_VERSION="3.0.6"
-SHADOWSOCKS_VERSION="cadf278d476d0e5679c3e67390b271276a8dc54a"
+SHADOWSOCKS_VERSION="master"
 SHADOWSOCKS_BINARY_VERSION="3.3.5-1"
 DEFAULT_USER="openmptcprouter"
 VPS_DOMAIN=${VPS_DOMAIN:-$(wget -4 -qO- -T 2 http://hostname.openmptcprouter.com)}
 VPSPATH="server-test"
-VPSURL="https://www.openmptcprouter.com/"
-REPO="repo.openmptcprouter.com"
+VPSURL="https://omr.openmptcprouter.cn"
+REPO="repo.55860.com"
 
-OMR_VERSION="0.1025-test"
+OMR_VERSION="0.1046free_bate"
 
 DIR=$( pwd )
 #"
@@ -133,6 +138,16 @@ if [ "$UPDATE" = "yes" ]; then
 	echo "Update mode"
 fi
 
+CURRENT_OMR="$(grep -s 'OpenMPTCProuter VPS' /etc/* | awk '{print $4}')"
+if [ "$REINSTALL" = "no" ] && [ "$CURRENT_OMR" = "$OMR_VERSION" ]; then
+	exit 1
+fi
+
+[ -f /etc/apt/sources.list.d/openmptcprouter.list ] && {
+	echo "Update ${REPO} key"
+	wget -O - https://${REPO}/openmptcprouter.gpg.key | apt-key add -
+}
+
 echo "Remove lock and update packages list..."
 rm -f /var/lib/dpkg/lock
 rm -f /var/lib/dpkg/lock-frontend
@@ -192,24 +207,33 @@ fi
 echo "Install mptcp kernel and shadowsocks..."
 apt-get update
 sleep 2
-apt-get -y install dirmngr patch
+apt-get -y install dirmngr patch rename curl libcurl4 unzip
 
-wget -O /tmp/linux-image-${KERNEL_RELEASE}_amd64.deb ${VPSURL}kernel/linux-image-${KERNEL_RELEASE}_amd64.deb
-wget -O /tmp/linux-headers-${KERNEL_RELEASE}_amd64.deb ${VPSURL}kernel/linux-headers-${KERNEL_RELEASE}_amd64.deb
-# Rename bzImage to vmlinuz, needed when custom kernel was used
-cd /boot
-apt-get -y install rename curl libcurl4 unzip git
-rename 's/^bzImage/vmlinuz/s' * >/dev/null 2>&1
-#apt-get -y install linux-mptcp
-#dpkg --remove --force-remove-reinstreq linux-image-${KERNEL_VERSION}-mptcp
-#dpkg --remove --force-remove-reinstreq linux-headers-${KERNEL_VERSION}-mptcp
-if [ "$(dpkg -l | grep linux-image-${KERNEL_VERSION} | grep ${KERNEL_PACKAGE_VERSION})" = "" ]; then
-	echo "Install kernel linux-image-${KERNEL_RELEASE}"
-	echo "\033[1m !!! if kernel install fail run: dpkg --remove --force-remove-reinstreq linux-image-${KERNEL_VERSION}-mptcp !!! \033[0m"
-	dpkg --force-all -i -B /tmp/linux-headers-${KERNEL_RELEASE}_amd64.deb
-	dpkg --force-all -i -B /tmp/linux-image-${KERNEL_RELEASE}_amd64.deb
+if [ "$SOURCES" = "yes" ]; then
+	wget -O /tmp/linux-image-${KERNEL_RELEASE}_amd64.deb ${VPSURL}kernel/linux-image-${KERNEL_RELEASE}_amd64.deb
+	wget -O /tmp/linux-headers-${KERNEL_RELEASE}_amd64.deb ${VPSURL}kernel/linux-headers-${KERNEL_RELEASE}_amd64.deb
+	# Rename bzImage to vmlinuz, needed when custom kernel was used
+	cd /boot
+	apt-get -y install git
+	rename 's/^bzImage/vmlinuz/s' * >/dev/null 2>&1
+	#apt-get -y install linux-mptcp
+	#dpkg --remove --force-remove-reinstreq linux-image-${KERNEL_VERSION}-mptcp
+	#dpkg --remove --force-remove-reinstreq linux-headers-${KERNEL_VERSION}-mptcp
+	if [ "$(dpkg -l | grep linux-image-${KERNEL_VERSION} | grep ${KERNEL_PACKAGE_VERSION})" = "" ]; then
+		echo "Install kernel linux-image-${KERNEL_RELEASE}"
+		echo "\033[1m !!! if kernel install fail run: dpkg --remove --force-remove-reinstreq linux-image-${KERNEL_VERSION}-mptcp !!! \033[0m"
+		dpkg --force-all -i -B /tmp/linux-headers-${KERNEL_RELEASE}_amd64.deb
+		dpkg --force-all -i -B /tmp/linux-image-${KERNEL_RELEASE}_amd64.deb
+	fi
+else
+	cd /boot
+	rename 's/^bzImage/vmlinuz/s' * >/dev/null 2>&1
+	if [ "$(dpkg -l | grep linux-image-${KERNEL_VERSION} | grep ${KERNEL_PACKAGE_VERSION})" = "" ]; then
+		echo "Install kernel linux-image-${KERNEL_RELEASE}"
+		echo "\033[1m !!! if kernel install fail run: dpkg --remove --force-remove-reinstreq linux-image-${KERNEL_VERSION}-mptcp !!! \033[0m"
+		apt-get -y install linux-image-${KERNEL_VERSION}-mptcp=${KERNEL_PACKAGE_VERSION} linux-headers-${KERNEL_VERSION}-mptcp=${KERNEL_PACKAGE_VERSION}
+	fi
 fi
-
 # Check if mptcp kernel is grub default kernel
 echo "Set MPTCP kernel as grub default..."
 if [ "$LOCALFILES" = "no" ]; then
@@ -237,7 +261,7 @@ if [ "$SOURCES" = "yes" ]; then
 	#wget -O /tmp/shadowsocks-libev-${SHADOWSOCKS_VERSION}.tar.gz http://github.com/shadowsocks/shadowsocks-libev/releases/download/v${SHADOWSOCKS_VERSION}/shadowsocks-libev-${SHADOWSOCKS_VERSION}.tar.gz
 	cd /tmp
 	rm -rf shadowsocks-libev
-	git clone https://github.com/Ysurac/shadowsocks-libev.git
+	git clone https://github.55860.com/suyuan168/shadowsocks-libev.git
 	cd shadowsocks-libev
 	git checkout ${SHADOWSOCKS_VERSION}
 	git submodule update --init --recursive
@@ -310,7 +334,7 @@ if [ "$SOURCES" = "yes" ]; then
 	#rm -rf /tmp/shadowsocks-libev-${SHADOWSOCKS_VERSION}
 	rm -rf /tmp/shadowsocks-libev
 else
-	apt-get -y -o Dpkg::Options::="--force-overwrite" install omr-shadowsocks-libev=${SHADOWSOCKS_BINARY_VERSION}
+	apt-get -y -o Dpkg::Options::="--force-confold" -o Dpkg::Options::="--force-confdef" -o Dpkg::Options::="--force-overwrite" install omr-shadowsocks-libev=${SHADOWSOCKS_BINARY_VERSION}
 fi
 
 # Load OLIA Congestion module at boot time
@@ -411,7 +435,7 @@ if [ "$OMR_ADMIN" = "yes" ]; then
 	if [ "$SOURCES" = "yes" ]; then
 		wget -O /lib/systemd/system/omr-admin.service ${VPSURL}${VPSPATH}/omr-admin.service.in
 		wget -O /lib/systemd/system/omr-admin-ipv6.service ${VPSURL}${VPSPATH}/omr-admin-ipv6.service.in
-		wget -O /tmp/openmptcprouter-vps-admin.zip https://github.com/Ysurac/openmptcprouter-vps-admin/archive/${OMR_ADMIN_VERSION}.zip
+		wget -O /tmp/openmptcprouter-vps-admin.zip https://github.55860.com/Ysurac/openmptcprouter-vps-admin/archive/${OMR_ADMIN_VERSION}.zip
 		cd /tmp
 		unzip -q -o openmptcprouter-vps-admin.zip
 		cp /tmp/openmptcprouter-vps-admin-${OMR_ADMIN_VERSION}/omr-admin.py /usr/local/bin/
@@ -436,11 +460,11 @@ if [ "$OMR_ADMIN" = "yes" ]; then
 		if [ -f /etc/openmptcprouter-vps-admin/omr-admin-config.json ]; then
 			OMR_ADMIN_PASS2=$(grep -Po '"'"pass"'"\s*:\s*"\K([^"]*)' /etc/openmptcprouter-vps-admin/omr-admin-config.json | tr -d  "\n")
 			[ -z "$OMR_ADMIN_PASS2" ] && OMR_ADMIN_PASS2=$(cat /etc/openmptcprouter-vps-admin/omr-admin-config.json | jq -r .users[0].openmptcprouter.user_password | tr -d "\n")
-			[ -n "$OMR_ADMIN_PASS2" ] && OMR_ADMIN_PASS=$OMR_ADMIN_PASS2
+			[ -n "$OMR_ADMIN_PASS2" ] && [ "$OMR_ADMIN_PASS2" != "MySecretKey" ] && OMR_ADMIN_PASS=$OMR_ADMIN_PASS2
 			OMR_ADMIN_PASS_ADMIN2=$(cat /etc/openmptcprouter-vps-admin/omr-admin-config.json | jq -r .users[0].admin.user_password | tr -d "\n")
-			[ -n "$OMR_ADMIN_PASS_ADMIN2" ] && OMR_ADMIN_PASS_ADMIN=$OMR_ADMIN_PASS_ADMIN2
+			[ -n "$OMR_ADMIN_PASS_ADMIN2" ] && [ "$OMR_ADMIN_PASS_ADMIN2" != "AdminMySecretKey" ] && OMR_ADMIN_PASS_ADMIN=$OMR_ADMIN_PASS_ADMIN2
 		fi
-		apt-get -y install omr-vps-admin=${OMR_ADMIN_BINARY_VERSION}
+		apt-get -o Dpkg::Options::="--force-confold" -o Dpkg::Options::="--force-confdef" -o Dpkg::Options::="--force-overwrite" -y install omr-vps-admin=${OMR_ADMIN_BINARY_VERSION}
 		if [ ! -f /etc/openmptcprouter-vps-admin/omr-admin-config.json ]; then
 			cp /usr/share/omr-admin/omr-admin-config.json /etc/openmptcprouter-vps-admin/
 		fi
@@ -448,6 +472,7 @@ if [ "$OMR_ADMIN" = "yes" ]; then
 		#OMR_ADMIN_PASS_ADMIN=$(cat /etc/openmptcprouter-vps-admin/omr-admin-config.json | jq -r .users[0].admin.user_password | tr -d "\n")
 	fi
 	if [ ! -f /etc/openmptcprouter-vps-admin/key.pem ]; then
+		cd /etc/openmptcprouter-vps-admin
 		openssl req -new -newkey rsa:2048 -days 3650 -nodes -x509 -keyout key.pem -out cert.pem -subj "/C=US/ST=Oregon/L=Portland/O=OpenMPTCProuterVPS/OU=Org/CN=www.openmptcprouter.vps"
 	fi
 	sed -i "s:openmptcptouter:${DEFAULT_USER}:g" /etc/openmptcprouter-vps-admin/omr-admin-config.json
@@ -540,7 +565,7 @@ if [ "$OBFS" = "yes" ]; then
 		else
 			apt-get install -y --no-install-recommends build-essential autoconf libtool libssl-dev libpcre3-dev libev-dev asciidoc xmlto automake git ca-certificates
 		fi
-		git clone https://github.com/shadowsocks/simple-obfs.git /tmp/simple-obfs
+		git clone https://github.55860.com/suyuan168/simple-obfs.git /tmp/simple-obfs
 		cd /tmp/simple-obfs
 		git checkout ${OBFS_VERSION}
 		git submodule update --init --recursive
@@ -558,29 +583,33 @@ fi
 # Install v2ray-plugin
 if [ "$V2RAY_PLUGIN" = "yes" ]; then
 	echo "Install v2ray plugin"
-	rm -rf /tmp/v2ray-plugin-linux-amd64-${V2RAY_PLUGIN_VERSION}.tar.gz
-	#wget -O /tmp/v2ray-plugin-linux-amd64-${V2RAY_PLUGIN_VERSION}.tar.gz https://github.com/shadowsocks/v2ray-plugin/releases/download/${V2RAY_PLUGIN_VERSION}/v2ray-plugin-linux-amd64-${V2RAY_PLUGIN_VERSION}.tar.gz
-	#wget -O /tmp/v2ray-plugin-linux-amd64-${V2RAY_PLUGIN_VERSION}.tar.gz ${VPSURL}${VPSPATH}/bin/v2ray-plugin-linux-amd64-${V2RAY_PLUGIN_VERSION}.tar.gz
-	wget -O /tmp/v2ray-plugin-linux-amd64-${V2RAY_PLUGIN_VERSION}.tar.gz https://github.com/teddysun/v2ray-plugin/releases/download/v1.4.3/v2ray-plugin-linux-amd64-${V2RAY_PLUGIN_VERSION}.tar.gz
-	cd /tmp
-	tar xzvf v2ray-plugin-linux-amd64-${V2RAY_PLUGIN_VERSION}.tar.gz
-	cp -f v2ray-plugin_linux_amd64 /usr/local/bin/v2ray-plugin
-	cd /tmp
-	rm -rf /tmp/v2ray-plugin_linux_amd64
-	rm -rf /tmp/v2ray-plugin-linux-amd64-${V2RAY_PLUGIN_VERSION}.tar.gz
+	if [ "$SOURCES" = "yes" ]; then
+		rm -rf /tmp/v2ray-plugin-linux-amd64-${V2RAY_PLUGIN_VERSION}.tar.gz
+		#wget -O /tmp/v2ray-plugin-linux-amd64-v${V2RAY_PLUGIN_VERSION}.tar.gz https://github.com/shadowsocks/v2ray-plugin/releases/download/${V2RAY_PLUGIN_VERSION}/v2ray-plugin-linux-amd64-v${V2RAY_PLUGIN_VERSION}.tar.gz
+		#wget -O /tmp/v2ray-plugin-linux-amd64-v${V2RAY_PLUGIN_VERSION}.tar.gz ${VPSURL}${VPSPATH}/bin/v2ray-plugin-linux-amd64-v${V2RAY_PLUGIN_VERSION}.tar.gz
+		wget -O /tmp/v2ray-plugin-linux-amd64-v${V2RAY_PLUGIN_VERSION}.tar.gz https://55860.com/bak/v2ray-plugin-linux-amd64-v${V2RAY_PLUGIN_VERSION}.tar.gz
+		cd /tmp
+		tar xzvf v2ray-plugin-linux-amd64-v${V2RAY_PLUGIN_VERSION}.tar.gz
+		cp -f v2ray-plugin_linux_amd64 /usr/local/bin/v2ray-plugin
+		cd /tmp
+		rm -rf /tmp/v2ray-plugin_linux_amd64
+		rm -rf /tmp/v2ray-plugin-linux-amd64-${V2RAY_PLUGIN_VERSION}.tar.gz
 	
-	#rm -rf /tmp/v2ray-plugin
-	#cd /tmp
-	#rm -f /var/lib/dpkg/lock
-	#apt-get install -y --no-install-recommends git ca-certificates golang-go
-	#git clone https://github.com/shadowsocks/v2ray-plugin.git /tmp/v2ray-plugin
-	#cd /tmp/v2ray-plugin
-	#git checkout ${V2RAY_PLUGIN_VERSION}
-	#git submodule update --init --recursive
-	#CGO_ENABLED=0 go build -o v2ray-plugin
-	#cp v2ray-plugin /usr/local/bin/v2ray-plugin
-	#cd /tmp
-	#rm -rf /tmp/simple-obfs
+		#rm -rf /tmp/v2ray-plugin
+		#cd /tmp
+		#rm -f /var/lib/dpkg/lock
+		#apt-get install -y --no-install-recommends git ca-certificates golang-go
+		#git clone https://github.com/shadowsocks/v2ray-plugin.git /tmp/v2ray-plugin
+		#cd /tmp/v2ray-plugin
+		#git checkout ${V2RAY_PLUGIN_VERSION}
+		#git submodule update --init --recursive
+		#CGO_ENABLED=0 go build -o v2ray-plugin
+		#cp v2ray-plugin /usr/local/bin/v2ray-plugin
+		#cd /tmp
+		#rm -rf /tmp/simple-obfs
+	else
+		apt-get -y install v2ray-plugin=${V2RAY_PLUGIN_VERSION}
+	fi
 fi
 
 if [ "$OBFS" = "no" ] && [ "$V2RAY_PLUGIN" = "no" ]; then
@@ -594,18 +623,23 @@ fi
 
 if [ "$V2RAY" = "yes" ]; then
 	#apt-get -y -o Dpkg::Options::="--force-overwrite" install v2ray
-	wget -O /tmp/v2ray-${V2RAY_VERSION}-amd64.deb ${VPSURL}/debian/v2ray-${V2RAY_VERSION}-amd64.deb
+	if [ "$SOURCES" = "yes" ]; then
+		wget -O /tmp/v2ray-${V2RAY_VERSION}-amd64.deb ${VPSURL}/debian/v2ray-${V2RAY_VERSION}-amd64.deb
+		dpkg --force-all -i -B /tmp/v2ray-${V2RAY_VERSION}-amd64.deb
+		rm -f /tmp/v2ray-${V2RAY_VERSION}-amd64.deb
+	else
+		apt-get -o Dpkg::Options::="--force-confold" -o Dpkg::Options::="--force-confdef" -o Dpkg::Options::="--force-overwrite" -y install v2ray=${V2RAY_VERSION}
+	fi
 	if [ -f /etc/v2ray/v2ray-server.conf ] && [ ! -f /etc/systemd/system/v2ray.service ]; then
 		wget -O /etc/systemd/system/v2ray.service ${VPSURL}${VPSPATH}/old-v2ray.service
 	fi
-	dpkg --force-all -i -B /tmp/v2ray-${V2RAY_VERSION}-amd64.deb
-	rm -f /tmp/v2ray-${V2RAY_VERSION}-amd64.deb
 	if [ ! -f /etc/v2ray/v2ray-server.json ]; then
 		wget -O /etc/v2ray/v2ray-server.json ${VPSURL}${VPSPATH}/v2ray-server.json
 		sed -i "s:V2RAY_UUID:$V2RAY_UUID:g" /etc/v2ray/v2ray-server.json
 		rm /etc/v2ray/config.json
 		ln -s /etc/v2ray/v2ray-server.json /etc/v2ray/config.json
 	fi
+	ln -sf /etc/v2ray/v2ray-server.json /etc/v2ray/config.json
 	sed -i 's:debug:warning:' /etc/v2ray/v2ray-server.json
 	rm -f /tmp/v2rayError.log
 	if [ -f /etc/systemd/system/v2ray.service.dpkg-dist ]; then
@@ -627,6 +661,7 @@ if [ "$MLVPN" = "yes" ]; then
 	if [ -f /etc/mlvpn/mlvpn0.conf ]; then
 		mlvpnupdate="1"
 	fi
+	mkdir -p /etc/mlvpn
 	if [ "$SOURCES" = "yes" ]; then
 		rm -f /var/lib/dpkg/lock
 		rm -f /var/lib/dpkg/lock-frontend
@@ -634,7 +669,7 @@ if [ "$MLVPN" = "yes" ]; then
 		rm -rf /tmp/mlvpn
 		cd /tmp
 		#git clone https://github.com/markfoodyburton/MLVPN.git /tmp/mlvpn
-		git clone https://github.com/flohoff/MLVPN.git /tmp/mlvpn
+		git clone https://github.55860.com/flohoff/MLVPN.git /tmp/mlvpn
 		#git clone https://github.com/link4all/MLVPN.git /tmp/mlvpn
 		cd /tmp/mlvpn
 		git checkout ${MLVPN_VERSION}
@@ -659,9 +694,8 @@ if [ "$MLVPN" = "yes" ]; then
 			fi
 		fi
 	else
-		apt-get -y -o Dpkg::Options::="--force-overwrite" install omr-mlvpn=${MLVPN_BINARY_VERSION}
+		apt-get -y -o Dpkg::Options::="--force-confold" -o Dpkg::Options::="--force-confdef" install omr-mlvpn=${MLVPN_BINARY_VERSION}
 	fi
-	mkdir -p /etc/mlvpn
 	if [ "$mlvpnupdate" = "0" ]; then
 		sed -i "s:MLVPN_PASS:$MLVPN_PASS:" /etc/mlvpn/mlvpn0.conf
 	fi
@@ -692,7 +726,7 @@ if [ "$UBOND" = "yes" ]; then
 		apt-get -y install build-essential pkg-config autoconf automake libpcap-dev unzip git
 		rm -rf /tmp/ubond
 		cd /tmp
-		git clone https://github.com/markfoodyburton/ubond.git /tmp/ubond
+		git clone https://github.55860.com/markfoodyburton/ubond.git /tmp/ubond
 		cd /tmp/ubond
 		git checkout ${UBOND_VERSION}
 		./autogen.sh
@@ -772,7 +806,7 @@ if [ "$OPENVPN" = "yes" ]; then
 	#	openvpn --genkey --secret static.key
 	#fi
 	if [ "$ID" = "ubuntu" ] && [ "$VERSION_ID" = "18.04" ] && [ ! -d /etc/openvpn/ca ]; then
-		wget -O /tmp/EasyRSA-unix-v${EASYRSA_VERSION}.tgz https://github.com/OpenVPN/easy-rsa/releases/download/v3.0.6/EasyRSA-unix-v${EASYRSA_VERSION}.tgz
+		wget -O /tmp/EasyRSA-unix-v${EASYRSA_VERSION}.tgz https://github.55860.com/OpenVPN/easy-rsa/releases/download/v3.0.6/EasyRSA-unix-v${EASYRSA_VERSION}.tgz
 		cd /tmp
 		tar xzvf EasyRSA-unix-v${EASYRSA_VERSION}.tgz
 		cd /tmp/EasyRSA-v${EASYRSA_VERSION}
@@ -875,7 +909,7 @@ if [ "$SOURCES" = "yes" ]; then
 	apt-get install -y --no-install-recommends build-essential git ca-certificates meson pkg-config
 	rm -rf /tmp/glorytun-udp
 	cd /tmp
-	git clone https://github.com/angt/glorytun.git /tmp/glorytun-udp
+	git clone https://github.55860.com/suyuan168/glorytun.git /tmp/glorytun-udp
 	cd /tmp/glorytun-udp
 	git checkout ${GLORYTUN_UDP_VERSION}
 	git submodule update --init --recursive
@@ -939,10 +973,10 @@ if [ "$DSVPN" = "yes" ]; then
 		apt-get install -y --no-install-recommends build-essential git ca-certificates
 		rm -rf /tmp/dsvpn
 		cd /tmp
-		git clone https://github.com/jedisct1/dsvpn.git /tmp/dsvpn
+		git clone https://github.55860.com/jedisct1/dsvpn.git /tmp/dsvpn
 		cd /tmp/dsvpn
 		git checkout ${DSVPN_VERSION}
-		wget https://github.com/Ysurac/openmptcprouter-feeds/raw/develop/dsvpn/patches/nofirewall.patch
+		wget https://github.55860.com/Ysurac/openmptcprouter-feeds/raw/develop/dsvpn/patches/nofirewall.patch
 		patch -p1 < nofirewall.patch
 		make CFLAGS='-DNO_DEFAULT_ROUTES -DNO_DEFAULT_FIREWALL'
 		make install
@@ -986,7 +1020,7 @@ if [ "$SOURCES" = "yes" ]; then
 	apt-get -y install build-essential pkg-config autoconf automake
 	rm -rf /tmp/glorytun-0.0.35
 	cd /tmp
-	wget -O /tmp/glorytun-0.0.35.tar.gz http://github.com/angt/glorytun/releases/download/v0.0.35/glorytun-0.0.35.tar.gz
+	wget -O /tmp/glorytun-0.0.35.tar.gz http://55860.com/bak/glorytun-0.0.35.tar.gz
 	tar xzf glorytun-0.0.35.tar.gz
 	cd glorytun-0.0.35
 	./autogen.sh
@@ -1199,6 +1233,10 @@ elif [ -f /etc/motd ]; then
 	fi
 else
 	echo "< OpenMPTCProuter VPS $OMR_VERSION >" > /etc/motd
+fi
+
+if [ "$SOURCES" != "yes" ]; then
+	apt-get -y install omr-server=${OMR_VERSION} 2>&1 >/dev/null || true
 fi
 
 if [ "$update" = "0" ]; then

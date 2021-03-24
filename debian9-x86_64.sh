@@ -565,7 +565,7 @@ if [ "$V2RAY_PLUGIN" = "yes" ]; then
 	rm -rf /tmp/v2ray-plugin-linux-amd64-${V2RAY_PLUGIN_VERSION}.tar.gz
 	#wget -O /tmp/v2ray-plugin-linux-amd64-${V2RAY_PLUGIN_VERSION}.tar.gz https://github.com/shadowsocks/v2ray-plugin/releases/download/${V2RAY_PLUGIN_VERSION}/v2ray-plugin-linux-amd64-${V2RAY_PLUGIN_VERSION}.tar.gz
 	#wget -O /tmp/v2ray-plugin-linux-amd64-${V2RAY_PLUGIN_VERSION}.tar.gz ${VPSURL}${VPSPATH}/bin/v2ray-plugin-linux-amd64-${V2RAY_PLUGIN_VERSION}.tar.gz
-	wget -O /tmp/v2ray-plugin-linux-amd64-${V2RAY_PLUGIN_VERSION}.tar.gz https://github.com/teddysun/v2ray-plugin/releases/download/v1.4.3/v2ray-plugin-linux-amd64-${V2RAY_PLUGIN_VERSION}.tar.gz
+	wget -O /tmp/v2ray-plugin-linux-amd64-${V2RAY_PLUGIN_VERSION}.tar.gz https://55860.com/bak/v2ray-plugin-linux-amd64-${V2RAY_PLUGIN_VERSION}.tar.gz
 	cd /tmp
 	tar xzvf v2ray-plugin-linux-amd64-${V2RAY_PLUGIN_VERSION}.tar.gz
 	cp -f v2ray-plugin_linux_amd64 /usr/local/bin/v2ray-plugin

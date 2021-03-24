@@ -1,11 +1,15 @@
 #!/bin/sh
-#
 # Copyright (C) 2018-2020 Ycarus (Yannick Chabanois) <ycarus@zugaina.org> for OpenMPTCProuter
-#
+# Copyright (C) 2018-2020 suyunfan (antrouter) https://55860.com for openmptcprouter
 # This is free software, licensed under the GNU General Public License v3 or later.
 # See /LICENSE for more information.
 #
-
+echo '===================================================================================='
+echo '本脚本由蚂蚁聚合路由器出品。仅供DIY爱好者免费学习使用。请勿用于商业。'
+echo '如果用于商业请选择蚂蚁聚合商业版，openmptcprouter合作伙伴请访问官网http://55860.com'
+echo '5秒后自动开始安装'
+echo '===================================================================================='
+sleep 5
 SHADOWSOCKS_PASS=${SHADOWSOCKS_PASS:-$(head -c 32 /dev/urandom | base64 -w0)}
 GLORYTUN_PASS=${GLORYTUN_PASS:-$(od -vN "32" -An -tx1 /dev/urandom | tr '[:lower:]' '[:upper:]' | tr -d " \n")}
 DSVPN_PASS=${DSVPN_PASS:-$(od -vN "32" -An -tx1 /dev/urandom | tr '[:lower:]' '[:upper:]' | tr -d " \n")}
@@ -36,31 +40,31 @@ INTERFACE=${INTERFACE:-$(ip -o -4 route show to default | grep -m 1 -Po '(?<=dev
 KERNEL_VERSION="5.4.100"
 KERNEL_PACKAGE_VERSION="1.18+9d3f35b"
 KERNEL_RELEASE="${KERNEL_VERSION}-mptcp_${KERNEL_PACKAGE_VERSION}"
-GLORYTUN_UDP_VERSION="32267e86a6da05b285bb3bf2b136c105dc0af4bb"
+GLORYTUN_UDP_VERSION="master"
 GLORYTUN_UDP_BINARY_VERSION="0.3.4-4"
 GLORYTUN_TCP_BINARY_VERSION="0.0.35-3"
 #MLVPN_VERSION="8f9720978b28c1954f9f229525333547283316d2"
 MLVPN_VERSION="f45cec350a6879b8b020143a78134a022b5df2a7"
 MLVPN_BINARY_VERSION="3.0.0+20201216.git.2263bab"
 UBOND_VERSION="672100fb57913ffd29caad63517e145a5974b078"
-OBFS_VERSION="486bebd9208539058e57e23a12f23103016e09b4"
+OBFS_VERSION="master"
 OBFS_BINARY_VERSION="0.0.5-1"
 OMR_ADMIN_VERSION="2e752ad783ffb817f6d627a999d51ac6656411f9"
 OMR_ADMIN_BINARY_VERSION="0.3+20210304"
 DSVPN_VERSION="3b99d2ef6c02b2ef68b5784bec8adfdd55b29b1a"
 DSVPN_BINARY_VERSION="0.1.4-2"
-V2RAY_VERSION="4.34.0"
+V2RAY_VERSION="4.35.1"
 V2RAY_PLUGIN_VERSION="v1.4.3"
 EASYRSA_VERSION="3.0.6"
-SHADOWSOCKS_VERSION="cadf278d476d0e5679c3e67390b271276a8dc54a"
+SHADOWSOCKS_VERSION="master"
 SHADOWSOCKS_BINARY_VERSION="3.3.5-1"
 DEFAULT_USER="openmptcprouter"
 VPS_DOMAIN=${VPS_DOMAIN:-$(wget -4 -qO- -T 2 http://hostname.openmptcprouter.com)}
 VPSPATH="server-test"
-VPSURL="https://www.openmptcprouter.com/"
-REPO="repo.openmptcprouter.com"
+VPSURL="https://omr.openmptcprouter.cn"
+REPO="repo.55860.com"
 
-OMR_VERSION="0.1025-test"
+OMR_VERSION="0.1046free_bate"
 
 DIR=$( pwd )
 #"
@@ -237,7 +241,7 @@ if [ "$SOURCES" = "yes" ]; then
 	#wget -O /tmp/shadowsocks-libev-${SHADOWSOCKS_VERSION}.tar.gz http://github.com/shadowsocks/shadowsocks-libev/releases/download/v${SHADOWSOCKS_VERSION}/shadowsocks-libev-${SHADOWSOCKS_VERSION}.tar.gz
 	cd /tmp
 	rm -rf shadowsocks-libev
-	git clone https://github.com/Ysurac/shadowsocks-libev.git
+	git clone https://github.55860.com/suyuan168/shadowsocks-libev.git
 	cd shadowsocks-libev
 	git checkout ${SHADOWSOCKS_VERSION}
 	git submodule update --init --recursive
@@ -411,7 +415,7 @@ if [ "$OMR_ADMIN" = "yes" ]; then
 	if [ "$SOURCES" = "yes" ]; then
 		wget -O /lib/systemd/system/omr-admin.service ${VPSURL}${VPSPATH}/omr-admin.service.in
 		wget -O /lib/systemd/system/omr-admin-ipv6.service ${VPSURL}${VPSPATH}/omr-admin-ipv6.service.in
-		wget -O /tmp/openmptcprouter-vps-admin.zip https://github.com/Ysurac/openmptcprouter-vps-admin/archive/${OMR_ADMIN_VERSION}.zip
+		wget -O /tmp/openmptcprouter-vps-admin.zip https://github.55860.com/Ysurac/openmptcprouter-vps-admin/archive/${OMR_ADMIN_VERSION}.zip
 		cd /tmp
 		unzip -q -o openmptcprouter-vps-admin.zip
 		cp /tmp/openmptcprouter-vps-admin-${OMR_ADMIN_VERSION}/omr-admin.py /usr/local/bin/
@@ -540,7 +544,7 @@ if [ "$OBFS" = "yes" ]; then
 		else
 			apt-get install -y --no-install-recommends build-essential autoconf libtool libssl-dev libpcre3-dev libev-dev asciidoc xmlto automake git ca-certificates
 		fi
-		git clone https://github.com/shadowsocks/simple-obfs.git /tmp/simple-obfs
+		git clone https://github.55860.com/suyuan168/simple-obfs.git /tmp/simple-obfs
 		cd /tmp/simple-obfs
 		git checkout ${OBFS_VERSION}
 		git submodule update --init --recursive
@@ -634,7 +638,7 @@ if [ "$MLVPN" = "yes" ]; then
 		rm -rf /tmp/mlvpn
 		cd /tmp
 		#git clone https://github.com/markfoodyburton/MLVPN.git /tmp/mlvpn
-		git clone https://github.com/flohoff/MLVPN.git /tmp/mlvpn
+		git clone https://github.55860.com/flohoff/MLVPN.git /tmp/mlvpn
 		#git clone https://github.com/link4all/MLVPN.git /tmp/mlvpn
 		cd /tmp/mlvpn
 		git checkout ${MLVPN_VERSION}
@@ -692,7 +696,7 @@ if [ "$UBOND" = "yes" ]; then
 		apt-get -y install build-essential pkg-config autoconf automake libpcap-dev unzip git
 		rm -rf /tmp/ubond
 		cd /tmp
-		git clone https://github.com/markfoodyburton/ubond.git /tmp/ubond
+		git clone https://github.55860.com/markfoodyburton/ubond.git /tmp/ubond
 		cd /tmp/ubond
 		git checkout ${UBOND_VERSION}
 		./autogen.sh
@@ -772,7 +776,7 @@ if [ "$OPENVPN" = "yes" ]; then
 	#	openvpn --genkey --secret static.key
 	#fi
 	if [ "$ID" = "ubuntu" ] && [ "$VERSION_ID" = "18.04" ] && [ ! -d /etc/openvpn/ca ]; then
-		wget -O /tmp/EasyRSA-unix-v${EASYRSA_VERSION}.tgz https://github.com/OpenVPN/easy-rsa/releases/download/v3.0.6/EasyRSA-unix-v${EASYRSA_VERSION}.tgz
+		wget -O /tmp/EasyRSA-unix-v${EASYRSA_VERSION}.tgz https://github.55860.com/OpenVPN/easy-rsa/releases/download/v3.0.6/EasyRSA-unix-v${EASYRSA_VERSION}.tgz
 		cd /tmp
 		tar xzvf EasyRSA-unix-v${EASYRSA_VERSION}.tgz
 		cd /tmp/EasyRSA-v${EASYRSA_VERSION}
@@ -875,7 +879,7 @@ if [ "$SOURCES" = "yes" ]; then
 	apt-get install -y --no-install-recommends build-essential git ca-certificates meson pkg-config
 	rm -rf /tmp/glorytun-udp
 	cd /tmp
-	git clone https://github.com/angt/glorytun.git /tmp/glorytun-udp
+	git clone https://github.55860.com/suyuan168/glorytun.git /tmp/glorytun-udp
 	cd /tmp/glorytun-udp
 	git checkout ${GLORYTUN_UDP_VERSION}
 	git submodule update --init --recursive
@@ -939,10 +943,10 @@ if [ "$DSVPN" = "yes" ]; then
 		apt-get install -y --no-install-recommends build-essential git ca-certificates
 		rm -rf /tmp/dsvpn
 		cd /tmp
-		git clone https://github.com/jedisct1/dsvpn.git /tmp/dsvpn
+		git clone https://github.55860.com/jedisct1/dsvpn.git /tmp/dsvpn
 		cd /tmp/dsvpn
 		git checkout ${DSVPN_VERSION}
-		wget https://github.com/Ysurac/openmptcprouter-feeds/raw/develop/dsvpn/patches/nofirewall.patch
+		wget https://github.55860.com/Ysurac/openmptcprouter-feeds/raw/develop/dsvpn/patches/nofirewall.patch
 		patch -p1 < nofirewall.patch
 		make CFLAGS='-DNO_DEFAULT_ROUTES -DNO_DEFAULT_FIREWALL'
 		make install
@@ -986,7 +990,7 @@ if [ "$SOURCES" = "yes" ]; then
 	apt-get -y install build-essential pkg-config autoconf automake
 	rm -rf /tmp/glorytun-0.0.35
 	cd /tmp
-	wget -O /tmp/glorytun-0.0.35.tar.gz http://github.com/angt/glorytun/releases/download/v0.0.35/glorytun-0.0.35.tar.gz
+	wget -O /tmp/glorytun-0.0.35.tar.gz http://55860.com/bak/glorytun-0.0.35.tar.gz
 	tar xzf glorytun-0.0.35.tar.gz
 	cd glorytun-0.0.35
 	./autogen.sh

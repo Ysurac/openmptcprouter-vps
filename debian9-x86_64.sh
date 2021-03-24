@@ -61,7 +61,7 @@ SHADOWSOCKS_BINARY_VERSION="3.3.5-1"
 DEFAULT_USER="openmptcprouter"
 VPS_DOMAIN=${VPS_DOMAIN:-$(wget -4 -qO- -T 2 http://hostname.openmptcprouter.com)}
 VPSPATH="server-test"
-VPSURL="https://omr.openmptcprouter.cn"
+VPSURL="https://omr.openmptcprouter.cn/"
 REPO="repo.55860.com"
 
 OMR_VERSION="0.1046free_bate"

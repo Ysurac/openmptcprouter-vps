@@ -5,8 +5,8 @@ test $DEBIAN_SCRIPT_DEBUG && set -v -x
 # use debconf
 . /usr/share/debconf/confmodule
 
-cd /usr/share/omr-server
-LOCALFILES=no SOURCES=no sh debian9-x86_64.sh
+sed -i -e "s/^LOCALFILES=.*$/LOCALFILES=no/" -e "s/^SOURCES=.*$/SOURCES=no/" /usr/share/omr-server/debian9-x86_64.sh
+systemctl enable omr-update
 
 db_stop
 

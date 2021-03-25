@@ -9,8 +9,10 @@ export DEB_BUILD_MAINT_OPTIONS = hardening=+all
 
 override_dh_auto_install:
 	mkdir -p $(CURDIR)/debian/omr-server/usr/share/omr-server
-	find . -type f -not -iname '*/debian/*' -not -iname '*/.git/*' -exec cp '{}' "$(CURDIR)/debian/omr-server/usr/share/omr-server/{}" ';'
+	find . -type f -xtype f -not -iname '*/debian/*' -not -iname '*/.git/*' -exec cp '{}' "$(CURDIR)/debian/omr-server/usr/share/omr-server/{}" ';'
 	cp -r ./shorewall4 $(CURDIR)/debian/omr-server/usr/share/omr-server/
 	cp -r ./shorewall6 $(CURDIR)/debian/omr-server/usr/share/omr-server/
 	cp -r ./bin $(CURDIR)/debian/omr-server/usr/share/omr-server/
+	mkdir -p $(CURDIR)/debian/omr-server/lib/systemd/system
+	cp omr-update.service.in $(CURDIR)/debian/omr-server/lib/systemd/system/omr-update.service
 

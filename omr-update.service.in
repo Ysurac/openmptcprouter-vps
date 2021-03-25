@@ -1,0 +1,16 @@
+[Unit]
+Description=OMR Update
+After=network.target network-online.target
+
+[Service]
+Type=simple
+Restart=no
+Environment="SOURCES=no"
+Environment="REINSTALL=no"
+Environment="LOCALFILES=yes"
+ExecStart=/usr/share/omr-server/debian9-x86_64.sh
+StandardOutput=file:/var/log/omr-update.log
+StandardError=file:/var/log/omr-update.log
+
+[Install]
+WantedBy=multi-user.target

@@ -46,8 +46,8 @@ MLVPN_BINARY_VERSION="3.0.0+20201216.git.2263bab"
 UBOND_VERSION="672100fb57913ffd29caad63517e145a5974b078"
 OBFS_VERSION="486bebd9208539058e57e23a12f23103016e09b4"
 OBFS_BINARY_VERSION="0.0.5-1"
-OMR_ADMIN_VERSION="2694612565aba58cc0a9bd2ad5d550aa4ef7bcf5"
-OMR_ADMIN_BINARY_VERSION="0.3+20210325"
+OMR_ADMIN_VERSION="b40c6b615eca1a7171d83e3a3f58c7d4d17e0fd5"
+OMR_ADMIN_BINARY_VERSION="0.3+20210414"
 DSVPN_VERSION="3b99d2ef6c02b2ef68b5784bec8adfdd55b29b1a"
 DSVPN_BINARY_VERSION="0.1.4-2"
 V2RAY_VERSION="4.35.1"
@@ -1295,7 +1295,7 @@ if [ "$update" = "0" ]; then
 	echo 'Your glorytun key: '
 	echo $GLORYTUN_PASS
 	if [ "$DSVPN" = "yes" ]; then
-		echo 'A Dead Simple VPN port: 65011'
+		echo 'A Dead Simple VPN port: 65401'
 		echo 'A Dead Simple VPN key: '
 		echo $DSVPN_PASS
 	fi
@@ -1342,7 +1342,7 @@ if [ "$update" = "0" ]; then
 	EOF
 	if [ "$DSVPN" = "yes" ]; then
 		cat >> /root/openmptcprouter_config.txt <<-EOF
-		A Dead Simple VPN port: 65011
+		A Dead Simple VPN port: 65401
 		A Dead Simple VPN key: ${DSVPN_PASS}
 		EOF
 	fi

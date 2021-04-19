@@ -40,6 +40,11 @@ _glorytun_tcp() {
 	fi
 }
 
+_dsvpn() {
+	[ -n "$(ip -6 r show 64:ff9b::/96 dev dsvpn0)" ] && ip -6 r del 64:ff9b::/96 dev dsvpn0 2>&1 >/dev/null
+}
+
+
 _omr_api() {
 	[ -z "$(curl -s -k -m 30 https://127.0.0.1:65500/)" ] && {
 		logger -t "OMR-Service" "Restart OMR-Admin"
@@ -109,6 +114,7 @@ ip link add omr-bonding type bond 2>&1 >/dev/null
 while true; do
 	_glorytun_udp
 	_glorytun_tcp
+	_dsvpn
 	_multipath
 	_omr_api
 	_lan_route

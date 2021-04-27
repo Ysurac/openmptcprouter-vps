@@ -1157,38 +1157,29 @@ if [ "$update" = "0" ]; then
 else
 	# Update only needed firewall files
 	if [ "$LOCALFILES" = "no" ]; then
-		wget -O /etc/shorewall/interfaces ${VPSURL}${VPSPATH}/shorewall4/interfaces
-		wget -O /etc/shorewall/snat ${VPSURL}${VPSPATH}/shorewall4/snat
-		wget -O /etc/shorewall/stoppedrules ${VPSURL}${VPSPATH}/shorewall4/stoppedrules
-		wget -O /etc/shorewall/tcinterfaces ${VPSURL}${VPSPATH}/shorewall4/tcinterfaces
-		wget -O /etc/shorewall/shorewall.conf ${VPSURL}${VPSPATH}/shorewall4/shorewall.conf
-		wget -O /etc/shorewall/policy ${VPSURL}${VPSPATH}/shorewall4/policy
-		wget -O /etc/shorewall/params ${VPSURL}${VPSPATH}/shorewall4/params
-		wget -O /etc/shorewall/params.vpn ${VPSURL}${VPSPATH}/shorewall4/params.vpn
-		wget -O /etc/shorewall/params.net ${VPSURL}${VPSPATH}/shorewall4/params.net
-		wget -O /etc/shorewall6/params ${VPSURL}${VPSPATH}/shorewall6/params
-		wget -O /etc/shorewall6/params.net ${VPSURL}${VPSPATH}/shorewall6/params.net
-		wget -O /etc/shorewall6/params.vpn ${VPSURL}${VPSPATH}/shorewall6/params.vpn
-		wget -O /etc/shorewall6/interfaces ${VPSURL}${VPSPATH}/shorewall6/interfaces
-		wget -O /etc/shorewall6/stoppedrules ${VPSURL}${VPSPATH}/shorewall6/stoppedrules
-		wget -O /etc/shorewall6/snat ${VPSURL}${VPSPATH}/shorewall6/snat
-	else
-		cp ${DIR}/shorewall4/interfaces /etc/shorewall/interfaces
-		cp ${DIR}/shorewall4/snat /etc/shorewall/snat
-		cp ${DIR}/shorewall4/stoppedrules /etc/shorewall/stoppedrules
-		cp ${DIR}/shorewall4/tcinterfaces /etc/shorewall/tcinterfaces
-		cp ${DIR}/shorewall4/shorewall.conf /etc/shorewall/shorewall.conf
-		cp ${DIR}/shorewall4/policy /etc/shorewall/policy
-		cp ${DIR}/shorewall4/params /etc/shorewall/params
-		cp ${DIR}/shorewall4/params.vpn /etc/shorewall/params.vpn
-		cp ${DIR}/shorewall4/params.net /etc/shorewall/params.net
-		cp ${DIR}/shorewall6/params /etc/shorewall6/params
-		cp ${DIR}/shorewall6/params.net /etc/shorewall6/params.net
-		cp ${DIR}/shorewall6/params.vpn /etc/shorewall6/params.vpn
-		cp ${DIR}/shorewall6/interfaces /etc/shorewall6/interfaces
-		cp ${DIR}/shorewall6/stoppedrules /etc/shorewall6/stoppedrules
-		cp ${DIR}/shorewall6/snat /etc/shorewall6/snat
+		mkdir -p ${DIR}
+		wget -O ${DIR}/openmptcprouter-shorewall.tar.gz ${VPSURL}${VPSPATH}/openmptcprouter-shorewall.tar.gz
+		wget -O ${DIR}/openmptcprouter-shorewall6.tar.gz ${VPSURL}${VPSPATH}/openmptcprouter-shorewall6.tar.gz
+		mkdir -p ${DIR}/shorewall4
+		tar xzvf ${DIR}/openmptcprouter-shorewall.tar.gz -C ${DIR}/shorewall4
+		mkdir -p ${DIR}/shorewall6
+		tar xzvf ${DIR}/openmptcprouter-shorewall6.tar.gz -C ${DIR}/shorewall6
 	fi
+	cp ${DIR}/shorewall4/interfaces /etc/shorewall/interfaces
+	cp ${DIR}/shorewall4/snat /etc/shorewall/snat
+	cp ${DIR}/shorewall4/stoppedrules /etc/shorewall/stoppedrules
+	cp ${DIR}/shorewall4/tcinterfaces /etc/shorewall/tcinterfaces
+	cp ${DIR}/shorewall4/shorewall.conf /etc/shorewall/shorewall.conf
+	cp ${DIR}/shorewall4/policy /etc/shorewall/policy
+	cp ${DIR}/shorewall4/params /etc/shorewall/params
+	cp ${DIR}/shorewall4/params.vpn /etc/shorewall/params.vpn
+	cp ${DIR}/shorewall4/params.net /etc/shorewall/params.net
+	cp ${DIR}/shorewall6/params /etc/shorewall6/params
+	cp ${DIR}/shorewall6/params.net /etc/shorewall6/params.net
+	cp ${DIR}/shorewall6/params.vpn /etc/shorewall6/params.vpn
+	cp ${DIR}/shorewall6/interfaces /etc/shorewall6/interfaces
+	cp ${DIR}/shorewall6/stoppedrules /etc/shorewall6/stoppedrules
+	cp ${DIR}/shorewall6/snat /etc/shorewall6/snat
 	sed -i "s:eth0:$INTERFACE:g" /etc/shorewall/*
 	sed -i 's/^.*#DNAT/#DNAT/g' /etc/shorewall/rules
 	sed -i 's:10.0.0.2:$OMR_ADDR:g' /etc/shorewall/rules

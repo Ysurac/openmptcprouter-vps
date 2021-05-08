@@ -46,8 +46,8 @@ MLVPN_BINARY_VERSION="3.0.0+20201216.git.2263bab"
 UBOND_VERSION="672100fb57913ffd29caad63517e145a5974b078"
 OBFS_VERSION="486bebd9208539058e57e23a12f23103016e09b4"
 OBFS_BINARY_VERSION="0.0.5-1"
-OMR_ADMIN_VERSION="b40c6b615eca1a7171d83e3a3f58c7d4d17e0fd5"
-OMR_ADMIN_BINARY_VERSION="0.3+20210414"
+OMR_ADMIN_VERSION="027d5c8e80ef469d33e43f6cbf3103b30e55ea1c"
+OMR_ADMIN_BINARY_VERSION="0.3+20210508"
 DSVPN_VERSION="3b99d2ef6c02b2ef68b5784bec8adfdd55b29b1a"
 DSVPN_BINARY_VERSION="0.1.4-2"
 V2RAY_VERSION="4.35.1"
@@ -580,6 +580,12 @@ fi
 
 if systemctl -q is-active shadowsocks-libev-manager@manager; then
 	systemctl -q stop shadowsocks-libev-manager@manager > /dev/null 2>&1
+fi
+
+if [ "$LOCALFILES" = "no" ]; then
+	wget -O /lib/systemd/system/omr-update.service ${VPSURL}${VPSPATH}/omr-update.service.in
+else
+	cp ${DIR}/omr-update.service.in /lib/systemd/system/omr-update.service
 fi
 
 # Install simple-obfs
@@ -1260,6 +1266,7 @@ fi
 
 if [ "$SOURCES" != "yes" ]; then
 	apt-get -y install omr-server=${OMR_VERSION} 2>&1 >/dev/null || true
+	rm -f /etc/openmtpcprouter-vps-admin/update-bin
 fi
 
 if [ "$update" = "0" ]; then

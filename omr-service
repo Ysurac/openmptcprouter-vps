@@ -44,6 +44,10 @@ _dsvpn() {
 	[ -n "$(ip -6 r show 64:ff9b::/96 dev dsvpn0)" ] && ip -6 r del 64:ff9b::/96 dev dsvpn0 2>&1 >/dev/null
 }
 
+_wireguard() {
+	[ -n "$(ip a show dev wg0)" ] && ip a add 10.255.247.1/24 dev wg0 2>&1 >/dev/null
+}
+
 
 _omr_api() {
 	[ -z "$(curl -s -k -m 30 https://127.0.0.1:65500/)" ] && {
@@ -115,6 +119,7 @@ while true; do
 	_glorytun_udp
 	_glorytun_tcp
 	_dsvpn
+	_wireguard
 	_multipath
 	_omr_api
 	_lan_route

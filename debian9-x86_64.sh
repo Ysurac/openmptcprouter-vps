@@ -143,7 +143,8 @@ fi
 [ -f /etc/apt/sources.list.d/openmptcprouter.list ] && {
 	echo "Update ${REPO} key"
 	if [ "$CHINA" = "yes" ]; then
-		wget -O - https://gitee.com/ysurac/openmptcprouter-vps-debian/raw/main/openmptcprouter.gpg.key | apt-key add -
+		#wget -O - https://gitee.com/ysurac/openmptcprouter-vps-debian/raw/main/openmptcprouter.gpg.key | apt-key add -
+		wget -O - https://gitlab.com/ysurac/openmptcprouter-vps-debian/raw/main/openmptcprouter.gpg.key | apt-key add -
 	else
 		wget -O - https://${REPO}/openmptcprouter.gpg.key | apt-key add -
 	fi
@@ -188,7 +189,8 @@ if [ "$CHINA" = "yes" ]; then
 	echo "Install git..."
 	apt-get -y install git
 	if [ ! -d /var/lib/openmptcprouter-vps-debian ]; then
-		git clone https://gitee.com/ysurac/openmptcprouter-vps-debian.git /var/lib/openmptcprouter-vps-debian
+		#git clone https://gitee.com/ysurac/openmptcprouter-vps-debian.git /var/lib/openmptcprouter-vps-debian
+		git clone https://gitlab.com/ysurac/openmptcprouter-vps-debian.git /var/lib/openmptcprouter-vps-debian
 	fi
 	cd /var/lib/openmptcprouter-vps-debian
 	git pull
@@ -200,7 +202,8 @@ if [ "$CHINA" = "yes" ]; then
 	echo "deb [arch=amd64] file:/var/lib/openmptcprouter-vps-debian ./" > /etc/apt/sources.list.d/openmptcprouter.list
 	cat /var/lib/openmptcprouter-vps-debian/openmptcprouter.gpg.key | apt-key add -
 	if [ ! -d /usr/share/omr-server-git ]; then
-	git clone https://gitee.com/ysurac/openmptcprouter-vps.git /usr/share/omr-server-git
+		#git clone https://gitee.com/ysurac/openmptcprouter-vps.git /usr/share/omr-server-git
+		git clone https://gitlab.com/ysurac/openmptcprouter-vps.git /usr/share/omr-server-git
 	fi
 	cd /usr/share/omr-server-git
 	git pull

@@ -13,6 +13,6 @@ override_dh_auto_install:
 	cp -r ./shorewall4 $(CURDIR)/debian/omr-server/usr/share/omr-server/
 	cp -r ./shorewall6 $(CURDIR)/debian/omr-server/usr/share/omr-server/
 	cp -r ./bin $(CURDIR)/debian/omr-server/usr/share/omr-server/
-	mkdir -p $(CURDIR)/debian/omr-server/lib/systemd/system
-	cp omr-update.service.in $(CURDIR)/debian/omr-server/lib/systemd/system/omr-update.service
+	mkdir -p $(CURDIR)/debian/etc/openmptcprouter-vps-admin
+	touch $(CURDIR)/debian/etc/openmptcprouter-vps-admin/update-bin
 

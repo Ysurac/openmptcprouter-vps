@@ -1,0 +1,11 @@
+#!/bin/sh
+if [ -f /etc/openmptcprouter-vps-admin/update ]; then
+        wget -O - http://www.openmptcprouter.com/server-test/debian10-x86_64.sh | sh
+        rm -f /etc/openmptcprouter-vps-admin/update
+        reboot
+fi
+if [ -f /etc/openmptcprouter-vps-admin/update-bin ]; then
+        LOCALFILES=yes SOURCES=yes REINSTALL=no /usr/share/omr-server/debian9-x86_64.sh
+        rm -f /etc/openmptcprouter-vps-admin/update-bin
+        #reboot
+fi

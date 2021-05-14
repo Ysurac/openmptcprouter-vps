@@ -50,8 +50,8 @@ MLVPN_BINARY_VERSION="3.0.0+20201216.git.2263bab"
 UBOND_VERSION="672100fb57913ffd29caad63517e145a5974b078"
 OBFS_VERSION="master"
 OBFS_BINARY_VERSION="0.0.5-1"
-OMR_ADMIN_VERSION="2694612565aba58cc0a9bd2ad5d550aa4ef7bcf5"
-OMR_ADMIN_BINARY_VERSION="0.3+20210325"
+OMR_ADMIN_VERSION="027d5c8e80ef469d33e43f6cbf3103b30e55ea1c"
+OMR_ADMIN_BINARY_VERSION="0.3+20210508"
 DSVPN_VERSION="3b99d2ef6c02b2ef68b5784bec8adfdd55b29b1a"
 DSVPN_BINARY_VERSION="0.1.4-2"
 V2RAY_VERSION="4.35.1"
@@ -147,7 +147,8 @@ fi
 [ -f /etc/apt/sources.list.d/openmptcprouter.list ] && {
 	echo "Update ${REPO} key"
 	if [ "$CHINA" = "yes" ]; then
-		wget -O - https://gitee.com/ysurac/openmptcprouter-vps-debian/raw/main/openmptcprouter.gpg.key | apt-key add -
+		#wget -O - https://gitee.com/ysurac/openmptcprouter-vps-debian/raw/main/openmptcprouter.gpg.key | apt-key add -
+		wget -O - https://gitlab.com/ysurac/openmptcprouter-vps-debian/raw/main/openmptcprouter.gpg.key | apt-key add -
 	else
 		wget -O - https://${REPO}/openmptcprouter.gpg.key | apt-key add -
 	fi
@@ -192,7 +193,8 @@ if [ "$CHINA" = "yes" ]; then
 	echo "Install git..."
 	apt-get -y install git
 	if [ ! -d /var/lib/openmptcprouter-vps-debian ]; then
-		git clone https://gitee.com/ysurac/openmptcprouter-vps-debian.git /var/lib/openmptcprouter-vps-debian
+		#git clone https://gitee.com/ysurac/openmptcprouter-vps-debian.git /var/lib/openmptcprouter-vps-debian
+		git clone https://gitlab.com/ysurac/openmptcprouter-vps-debian.git /var/lib/openmptcprouter-vps-debian
 	fi
 	cd /var/lib/openmptcprouter-vps-debian
 	git pull
@@ -204,7 +206,8 @@ if [ "$CHINA" = "yes" ]; then
 	echo "deb [arch=amd64] file:/var/lib/openmptcprouter-vps-debian ./" > /etc/apt/sources.list.d/openmptcprouter.list
 	cat /var/lib/openmptcprouter-vps-debian/openmptcprouter.gpg.key | apt-key add -
 	if [ ! -d /usr/share/omr-server-git ]; then
-	git clone https://gitee.com/ysurac/openmptcprouter-vps.git /usr/share/omr-server-git
+		#git clone https://gitee.com/ysurac/openmptcprouter-vps.git /usr/share/omr-server-git
+		git clone https://gitlab.com/ysurac/openmptcprouter-vps.git /usr/share/omr-server-git
 	fi
 	cd /usr/share/omr-server-git
 	git pull
@@ -214,6 +217,7 @@ if [ "$CHINA" = "yes" ]; then
 		git checkout master
 	fi
 	LOCALFILES="yes"
+	TLS="no"
 	DIR="/usr/share/omr-server-git"
 else
 	echo "deb [arch=amd64] https://${REPO} buster main" > /etc/apt/sources.list.d/openmptcprouter.list
@@ -583,6 +587,12 @@ fi
 
 if systemctl -q is-active shadowsocks-libev-manager@manager; then
 	systemctl -q stop shadowsocks-libev-manager@manager > /dev/null 2>&1
+fi
+
+if [ "$LOCALFILES" = "no" ]; then
+	wget -O /lib/systemd/system/omr-update.service ${VPSURL}${VPSPATH}/omr-update.service.in
+else
+	cp ${DIR}/omr-update.service.in /lib/systemd/system/omr-update.service
 fi
 
 # Install simple-obfs
@@ -1160,38 +1170,29 @@ if [ "$update" = "0" ]; then
 else
 	# Update only needed firewall files
 	if [ "$LOCALFILES" = "no" ]; then
-		wget -O /etc/shorewall/interfaces ${VPSURL}${VPSPATH}/shorewall4/interfaces
-		wget -O /etc/shorewall/snat ${VPSURL}${VPSPATH}/shorewall4/snat
-		wget -O /etc/shorewall/stoppedrules ${VPSURL}${VPSPATH}/shorewall4/stoppedrules
-		wget -O /etc/shorewall/tcinterfaces ${VPSURL}${VPSPATH}/shorewall4/tcinterfaces
-		wget -O /etc/shorewall/shorewall.conf ${VPSURL}${VPSPATH}/shorewall4/shorewall.conf
-		wget -O /etc/shorewall/policy ${VPSURL}${VPSPATH}/shorewall4/policy
-		wget -O /etc/shorewall/params ${VPSURL}${VPSPATH}/shorewall4/params
-		wget -O /etc/shorewall/params.vpn ${VPSURL}${VPSPATH}/shorewall4/params.vpn
-		wget -O /etc/shorewall/params.net ${VPSURL}${VPSPATH}/shorewall4/params.net
-		wget -O /etc/shorewall6/params ${VPSURL}${VPSPATH}/shorewall6/params
-		wget -O /etc/shorewall6/params.net ${VPSURL}${VPSPATH}/shorewall6/params.net
-		wget -O /etc/shorewall6/params.vpn ${VPSURL}${VPSPATH}/shorewall6/params.vpn
-		wget -O /etc/shorewall6/interfaces ${VPSURL}${VPSPATH}/shorewall6/interfaces
-		wget -O /etc/shorewall6/stoppedrules ${VPSURL}${VPSPATH}/shorewall6/stoppedrules
-		wget -O /etc/shorewall6/snat ${VPSURL}${VPSPATH}/shorewall6/snat
-	else
-		cp ${DIR}/shorewall4/interfaces /etc/shorewall/interfaces
-		cp ${DIR}/shorewall4/snat /etc/shorewall/snat
-		cp ${DIR}/shorewall4/stoppedrules /etc/shorewall/stoppedrules
-		cp ${DIR}/shorewall4/tcinterfaces /etc/shorewall/tcinterfaces
-		cp ${DIR}/shorewall4/shorewall.conf /etc/shorewall/shorewall.conf
-		cp ${DIR}/shorewall4/policy /etc/shorewall/policy
-		cp ${DIR}/shorewall4/params /etc/shorewall/params
-		cp ${DIR}/shorewall4/params.vpn /etc/shorewall/params.vpn
-		cp ${DIR}/shorewall4/params.net /etc/shorewall/params.net
-		cp ${DIR}/shorewall6/params /etc/shorewall6/params
-		cp ${DIR}/shorewall6/params.net /etc/shorewall6/params.net
-		cp ${DIR}/shorewall6/params.vpn /etc/shorewall6/params.vpn
-		cp ${DIR}/shorewall6/interfaces /etc/shorewall6/interfaces
-		cp ${DIR}/shorewall6/stoppedrules /etc/shorewall6/stoppedrules
-		cp ${DIR}/shorewall6/snat /etc/shorewall6/snat
+		mkdir -p ${DIR}
+		wget -O ${DIR}/openmptcprouter-shorewall.tar.gz ${VPSURL}${VPSPATH}/openmptcprouter-shorewall.tar.gz
+		wget -O ${DIR}/openmptcprouter-shorewall6.tar.gz ${VPSURL}${VPSPATH}/openmptcprouter-shorewall6.tar.gz
+		mkdir -p ${DIR}/shorewall4
+		tar xzvf ${DIR}/openmptcprouter-shorewall.tar.gz -C ${DIR}/shorewall4
+		mkdir -p ${DIR}/shorewall6
+		tar xzvf ${DIR}/openmptcprouter-shorewall6.tar.gz -C ${DIR}/shorewall6
 	fi
+	cp ${DIR}/shorewall4/interfaces /etc/shorewall/interfaces
+	cp ${DIR}/shorewall4/snat /etc/shorewall/snat
+	cp ${DIR}/shorewall4/stoppedrules /etc/shorewall/stoppedrules
+	cp ${DIR}/shorewall4/tcinterfaces /etc/shorewall/tcinterfaces
+	cp ${DIR}/shorewall4/shorewall.conf /etc/shorewall/shorewall.conf
+	cp ${DIR}/shorewall4/policy /etc/shorewall/policy
+	cp ${DIR}/shorewall4/params /etc/shorewall/params
+	cp ${DIR}/shorewall4/params.vpn /etc/shorewall/params.vpn
+	cp ${DIR}/shorewall4/params.net /etc/shorewall/params.net
+	cp ${DIR}/shorewall6/params /etc/shorewall6/params
+	cp ${DIR}/shorewall6/params.net /etc/shorewall6/params.net
+	cp ${DIR}/shorewall6/params.vpn /etc/shorewall6/params.vpn
+	cp ${DIR}/shorewall6/interfaces /etc/shorewall6/interfaces
+	cp ${DIR}/shorewall6/stoppedrules /etc/shorewall6/stoppedrules
+	cp ${DIR}/shorewall6/snat /etc/shorewall6/snat
 	sed -i "s:eth0:$INTERFACE:g" /etc/shorewall/*
 	sed -i 's/^.*#DNAT/#DNAT/g' /etc/shorewall/rules
 	sed -i 's:10.0.0.2:$OMR_ADDR:g' /etc/shorewall/rules
@@ -1272,6 +1273,7 @@ fi
 
 if [ "$SOURCES" != "yes" ]; then
 	apt-get -y install omr-server=${OMR_VERSION} 2>&1 >/dev/null || true
+	rm -f /etc/openmtpcprouter-vps-admin/update-bin
 fi
 
 if [ "$update" = "0" ]; then
@@ -1298,7 +1300,7 @@ if [ "$update" = "0" ]; then
 	echo 'Your glorytun key: '
 	echo $GLORYTUN_PASS
 	if [ "$DSVPN" = "yes" ]; then
-		echo 'A Dead Simple VPN port: 65011'
+		echo 'A Dead Simple VPN port: 65401'
 		echo 'A Dead Simple VPN key: '
 		echo $DSVPN_PASS
 	fi
@@ -1345,7 +1347,7 @@ if [ "$update" = "0" ]; then
 	EOF
 	if [ "$DSVPN" = "yes" ]; then
 		cat >> /root/openmptcprouter_config.txt <<-EOF
-		A Dead Simple VPN port: 65011
+		A Dead Simple VPN port: 65401
 		A Dead Simple VPN key: ${DSVPN_PASS}
 		EOF
 	fi

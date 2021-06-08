@@ -44,8 +44,15 @@ _dsvpn() {
 	[ -n "$(ip -6 r show 64:ff9b::/96 dev dsvpn0)" ] && ip -6 r del 64:ff9b::/96 dev dsvpn0 2>&1 >/dev/null
 }
 
+_shadowsocks() {
+	[ -z "$(pgrep ss-server)" ] && {
+		logger -t "OMR-Service" "ss-server not detected, restart Shadowsocks"
+		systemctl restart shadowsocks-libev-manager@manager
+	}
+}
+
 _wireguard() {
-	[ -n "$(ip a show dev wg0)" ] && ip a add 10.255.247.1/24 dev wg0 2>&1 >/dev/null
+	[ -z "$(ip a show dev wg0 | grep '10.255.247.1')" ] && ip a add 10.255.247.1/24 dev wg0 2>&1 >/dev/null
 }
 
 
@@ -113,11 +120,13 @@ _openvpn_bonding() {
 	fi
 }
 
+sysctl -p /etc/sysctl.d/90-shadowsocks.conf 2>&1 >/dev/null
 modprobe bonding 2>&1 >/dev/null
 ip link add omr-bonding type bond 2>&1 >/dev/null
 while true; do
 	_glorytun_udp
 	_glorytun_tcp
+	_shadowsocks
 	_dsvpn
 	_wireguard
 	_multipath

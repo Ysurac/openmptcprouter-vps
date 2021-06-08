@@ -31,7 +31,7 @@ WIREGUARD=${WIREGUARD:-yes}
 SOURCES=${SOURCES:-no}
 NOINTERNET=${NOINTERNET:-no}
 REINSTALL=${REINSTALL:-yes}
-SPEEDTEST=${SPEEDTEST:-no}
+SPEEDTEST=${SPEEDTEST:-yes}
 LOCALFILES=${LOCALFILES:-no}
 INTERFACE=${INTERFACE:-$(ip -o -4 route show to default | grep -m 1 -Po '(?<=dev )(\S+)' | tr -d "\n")}
 KERNEL_VERSION="5.4.100"
@@ -53,8 +53,8 @@ DSVPN_BINARY_VERSION="0.1.4-2"
 V2RAY_VERSION="4.35.1"
 V2RAY_PLUGIN_VERSION="4.35.1"
 EASYRSA_VERSION="3.0.6"
-SHADOWSOCKS_VERSION="cadf278d476d0e5679c3e67390b271276a8dc54a"
-SHADOWSOCKS_BINARY_VERSION="3.3.5-1"
+SHADOWSOCKS_VERSION="bf44f710b4a0c451809279383acc847995c35ead"
+SHADOWSOCKS_BINARY_VERSION="3.3.5-2"
 DEFAULT_USER="openmptcprouter"
 VPS_DOMAIN=${VPS_DOMAIN:-$(wget -4 -qO- -T 2 http://hostname.openmptcprouter.com)}
 VPSPATH="server-test"
@@ -97,6 +97,13 @@ echo "Check architecture..."
 ARCH=$(dpkg --print-architecture | tr -d "\n")
 if [ "$ARCH" != "amd64" ]; then
 	echo "Only x86_64 (amd64) is supported"
+	exit 1
+fi
+
+echo "Check virtualized environment"
+VIRT="$(systemd-detect-virt 2>/dev/null || true)"
+if [ -z "$(uname -a | grep mptcp)" ] && [ -n "$VIRT" ] && ([ "$VIRT" = "openvz" ] || [ "$VIRT" = "lxc" ] || [ "$VIRT" = "docker" ]); then
+	echo "Container are not supported: kernel can't be modified."
 	exit 1
 fi
 
@@ -269,6 +276,7 @@ else
 		apt-get -y install linux-image-${KERNEL_VERSION}-mptcp=${KERNEL_PACKAGE_VERSION} linux-headers-${KERNEL_VERSION}-mptcp=${KERNEL_PACKAGE_VERSION}
 	fi
 fi
+
 # Check if mptcp kernel is grub default kernel
 echo "Set MPTCP kernel as grub default..."
 if [ "$LOCALFILES" = "no" ]; then
@@ -280,7 +288,7 @@ fi
 rm -f /etc/grub.d/30_os-prober
 bash update-grub.sh ${KERNEL_VERSION}-mptcp
 bash update-grub.sh ${KERNEL_RELEASE}
-sed -i 's/default="1>0"/default="0"/' /boot/grub/grub.cfg 2>&1 >/dev/null
+[ -f /boot/grub/grub.cfg ] && sed -i 's/default="1>0"/default="0"/' /boot/grub/grub.cfg 2>&1 >/dev/null
 
 echo "Install tracebox OpenMPTCProuter edition"
 apt-get -y -o Dpkg::Options::="--force-overwrite" install tracebox
@@ -1240,9 +1248,9 @@ if [ "$TLS" = "yes" ]; then
 fi
 
 if [ "$SPEEDTEST" = "yes" ]; then
-	if [ ! -f /usr/share/omr-server/speedtest/test.img ]; then
+	mkdir -p /usr/share/omr-server/speedtest
+	if [ ! -f /usr/share/omr-server/speedtest/test.img ] && [ "$(df /usr/share/omr-server/speedtest | awk '/[0-9]%/{print $(NF-2)}')" -gt 2000000 ]; then
 		echo "Generate speedtest image..."
-		mkdir -p /usr/share/omr-server/speedtest
 		dd if=/dev/urandom of=/usr/share/omr-server/speedtest/test.img count=1024 bs=1048576
 		echo "Done"
 	fi

@@ -1,0 +1,11 @@
+omr-server (0.1026) unstable; urgency=medium
+
+    * Many changes
+
+ -- OpenMPTCProuter <contact@openmptcprouter.com>  Mon, 14 Jun 2021 07:43:42 +0200
+
+omr-server (0.1025-test) unstable; urgency=medium
+
+    * Wireguard support and fixed
+
+ -- OpenMPTCProuter <contact@openmptcprouter.com>  Thu, 04 Mar 2021 14:36:12 +0200

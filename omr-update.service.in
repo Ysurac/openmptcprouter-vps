@@ -1,0 +1,15 @@
+[Unit]
+Description=OMR Update
+After=network.target network-online.target
+
+[Service]
+Type=simple
+Restart=never
+ExecStart=/usr/bin/omr-update
+#ExecStart=/usr/share/omr-server/debian9-x86_64.sh
+AmbientCapabilities=
+StandardOutput=file:/var/log/omr-update.log
+StandardError=file:/var/log/omr-update.log
+
+[Install]
+WantedBy=multi-user.target

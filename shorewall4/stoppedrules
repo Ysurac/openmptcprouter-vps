@@ -23,4 +23,6 @@ ACCEPT          dsvpn+		-
 ACCEPT          -               dsvpn+
 ACCEPT          tun+		-
 ACCEPT          -               tun+
+ACCEPT          wg+		-
+ACCEPT          -               wg+
 

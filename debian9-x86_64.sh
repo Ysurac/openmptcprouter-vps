@@ -1,6 +1,6 @@
 #!/bin/sh
 #
-# Copyright (C) 2018-2020 Ycarus (Yannick Chabanois) <ycarus@zugaina.org> for OpenMPTCProuter
+# Copyright (C) 2018-2021 Ycarus (Yannick Chabanois) <ycarus@zugaina.org> for OpenMPTCProuter
 #
 # This is free software, licensed under the GNU General Public License v3 or later.
 # See /LICENSE for more information.
@@ -27,31 +27,42 @@ UBOND=${UBOND:-no}
 UBOND_PASS=${UBOND_PASS:-$(head -c 32 /dev/urandom | base64 -w0)}
 OPENVPN=${OPENVPN:-yes}
 DSVPN=${DSVPN:-yes}
-SOURCES=${SOURCES:-yes}
+WIREGUARD=${WIREGUARD:-yes}
+SOURCES=${SOURCES:-no}
 NOINTERNET=${NOINTERNET:-no}
-SPEEDTEST=${SPEEDTEST:-no}
+REINSTALL=${REINSTALL:-yes}
+SPEEDTEST=${SPEEDTEST:-yes}
 LOCALFILES=${LOCALFILES:-no}
 INTERFACE=${INTERFACE:-$(ip -o -4 route show to default | grep -m 1 -Po '(?<=dev )(\S+)' | tr -d "\n")}
-KERNEL_VERSION="5.4.86"
-KERNEL_PACKAGE_VERSION="1.16+9d3f35b"
+KERNEL_VERSION="5.4.100"
+KERNEL_PACKAGE_VERSION="1.18+9d3f35b"
 KERNEL_RELEASE="${KERNEL_VERSION}-mptcp_${KERNEL_PACKAGE_VERSION}"
 GLORYTUN_UDP_VERSION="32267e86a6da05b285bb3bf2b136c105dc0af4bb"
+GLORYTUN_UDP_BINARY_VERSION="0.3.4-4"
+GLORYTUN_TCP_BINARY_VERSION="0.0.35-3"
 #MLVPN_VERSION="8f9720978b28c1954f9f229525333547283316d2"
 MLVPN_VERSION="f45cec350a6879b8b020143a78134a022b5df2a7"
+MLVPN_BINARY_VERSION="3.0.0+20201216.git.2263bab"
 UBOND_VERSION="672100fb57913ffd29caad63517e145a5974b078"
 OBFS_VERSION="486bebd9208539058e57e23a12f23103016e09b4"
-OMR_ADMIN_VERSION="f52acee888a39cc812ba6848aec5eeb1a82ab7ba"
+OBFS_BINARY_VERSION="0.0.5-1"
+OMR_ADMIN_VERSION="027d5c8e80ef469d33e43f6cbf3103b30e55ea1c"
+OMR_ADMIN_BINARY_VERSION="0.3+20210508"
 DSVPN_VERSION="3b99d2ef6c02b2ef68b5784bec8adfdd55b29b1a"
-V2RAY_VERSION="4.31.0"
-V2RAY_PLUGIN_VERSION="v1.4.3"
+DSVPN_BINARY_VERSION="0.1.4-2"
+V2RAY_VERSION="4.35.1"
+V2RAY_PLUGIN_VERSION="4.35.1"
 EASYRSA_VERSION="3.0.6"
-SHADOWSOCKS_VERSION="38871da8baf5cfa400983dcdf918397e48655203"
+SHADOWSOCKS_VERSION="bf44f710b4a0c451809279383acc847995c35ead"
+SHADOWSOCKS_BINARY_VERSION="3.3.5-2"
 DEFAULT_USER="openmptcprouter"
 VPS_DOMAIN=${VPS_DOMAIN:-$(wget -4 -qO- -T 2 http://hostname.openmptcprouter.com)}
-VPSPATH="server"
+VPSPATH="server-test"
 VPSURL="https://www.openmptcprouter.com/"
+REPO="repo.openmptcprouter.com"
+CHINA=${CHINA:-no}
 
-OMR_VERSION="0.1024"
+OMR_VERSION="0.1026"
 
 DIR=$( pwd )
 #"
@@ -78,7 +89,7 @@ elif [ "$ID" = "ubuntu" ] && [ "$VERSION_ID" != "18.04" ] && [ "$VERSION_ID" != 
 	echo "This script only work with Ubuntu 18.04, 19.04 or 20.04"
 	exit 1
 elif [ "$ID" != "debian" ] && [ "$ID" != "ubuntu" ]; then
-	echo "This script only work with Ubuntu 18.04, Ubuntu 19.04, Debian Stretch (9.x) or Debian Buster (10.x)"
+	echo "This script only work with Ubuntu 18.04, Ubuntu 19.04, Ubutun 20.04, Debian Stretch (9.x) or Debian Buster (10.x)"
 	exit 1
 fi
 
@@ -86,6 +97,13 @@ echo "Check architecture..."
 ARCH=$(dpkg --print-architecture | tr -d "\n")
 if [ "$ARCH" != "amd64" ]; then
 	echo "Only x86_64 (amd64) is supported"
+	exit 1
+fi
+
+echo "Check virtualized environment"
+VIRT="$(systemd-detect-virt 2>/dev/null || true)"
+if [ -z "$(uname -a | grep mptcp)" ] && [ -n "$VIRT" ] && ([ "$VIRT" = "openvz" ] || [ "$VIRT" = "lxc" ] || [ "$VIRT" = "docker" ]); then
+	echo "Container are not supported: kernel can't be modified."
 	exit 1
 fi
 
@@ -129,6 +147,21 @@ fi
 	wget -O - http://repo.openmptcprouter.com/openmptcprouter.gpg.key | apt-key add -
 }
 
+CURRENT_OMR="$(grep -s 'OpenMPTCProuter VPS' /etc/* | awk '{print $4}')"
+if [ "$REINSTALL" = "no" ] && [ "$CURRENT_OMR" = "$OMR_VERSION" ]; then
+	exit 1
+fi
+
+[ -f /etc/apt/sources.list.d/openmptcprouter.list ] && {
+	echo "Update ${REPO} key"
+	if [ "$CHINA" = "yes" ]; then
+		#wget -O - https://gitee.com/ysurac/openmptcprouter-vps-debian/raw/main/openmptcprouter.gpg.key | apt-key add -
+		wget -O - https://gitlab.com/ysurac/openmptcprouter-vps-debian/raw/main/openmptcprouter.gpg.key | apt-key add -
+	else
+		wget -O - https://${REPO}/openmptcprouter.gpg.key | apt-key add -
+	fi
+}
+
 echo "Remove lock and update packages list..."
 rm -f /var/lib/dpkg/lock
 rm -f /var/lib/dpkg/lock-frontend
@@ -161,48 +194,92 @@ if [ "$ID" = "ubuntu" ] && [ "$VERSION_ID" = "18.04" ] && [ "$UPDATE_OS" = "yes"
 	apt-get -y -o Dpkg::Options::="--force-confdef" -o Dpkg::Options::="--force-confnew" dist-upgrade
 	VERSION_ID="20.04"
 fi
+
 # Add OpenMPTCProuter repo
 echo "Add OpenMPTCProuter repo..."
-echo 'deb [arch=amd64] https://repo.openmptcprouter.com stretch main' > /etc/apt/sources.list.d/openmptcprouter.list
-cat <<EOF | tee /etc/apt/preferences.d/openmptcprouter.pref
-Explanation: Prefer OpenMPTCProuter provided packages over the Debian native ones
-Package: *
-Pin: origin repo.openmptcprouter.com
-Pin-Priority: 1001
-EOF
-wget -O - http://repo.openmptcprouter.com/openmptcprouter.gpg.key | apt-key add -
+if [ "$CHINA" = "yes" ]; then
+	echo "Install git..."
+	apt-get -y install git
+	if [ ! -d /var/lib/openmptcprouter-vps-debian ]; then
+		#git clone https://gitee.com/ysurac/openmptcprouter-vps-debian.git /var/lib/openmptcprouter-vps-debian
+		git clone https://gitlab.com/ysurac/openmptcprouter-vps-debian.git /var/lib/openmptcprouter-vps-debian
+	fi
+	cd /var/lib/openmptcprouter-vps-debian
+	git pull
+#	if [ "$VPSPATH" = "server-test" ]; then
+#		git checkout develop
+#	else
+#		git checkout main
+#	fi
+	echo "deb [arch=amd64] file:/var/lib/openmptcprouter-vps-debian ./" > /etc/apt/sources.list.d/openmptcprouter.list
+	cat /var/lib/openmptcprouter-vps-debian/openmptcprouter.gpg.key | apt-key add -
+	if [ ! -d /usr/share/omr-server-git ]; then
+		#git clone https://gitee.com/ysurac/openmptcprouter-vps.git /usr/share/omr-server-git
+		git clone https://gitlab.com/ysurac/openmptcprouter-vps.git /usr/share/omr-server-git
+	fi
+	cd /usr/share/omr-server-git
+	git pull
+	if [ "$VPSPATH" = "server-test" ]; then
+		git checkout develop
+	else
+		git checkout master
+	fi
+	LOCALFILES="yes"
+	TLS="no"
+	DIR="/usr/share/omr-server-git"
+else
+	echo "deb [arch=amd64] https://${REPO} buster main" > /etc/apt/sources.list.d/openmptcprouter.list
+	cat <<-EOF | tee /etc/apt/preferences.d/openmptcprouter.pref
+		Explanation: Prefer OpenMPTCProuter provided packages over the Debian native ones
+		Package: *
+		Pin: origin ${REPO}
+		Pin-Priority: 1001
+	EOF
+	wget -O - https://${REPO}/openmptcprouter.gpg.key | apt-key add -
+fi
 
-# Install mptcp kernel and shadowsocks
-echo "Install mptcp kernel and shadowsocks..."
-apt-get update
-sleep 2
-apt-get -y install dirmngr patch
 #apt-key adv --keyserver hkp://keys.gnupg.net --recv-keys 379CE192D401AB61
 if [ "$ID" = "debian" ]; then
 	if [ "$VERSION_ID" = "9" ]; then
 		#echo 'deb http://dl.bintray.com/cpaasch/deb jessie main' >> /etc/apt/sources.list
 		echo 'deb http://deb.debian.org/debian stretch-backports main' > /etc/apt/sources.list.d/stretch-backports.list
 	fi
+	# Add buster-backports repo
+	echo 'deb http://deb.debian.org/debian buster-backports main' > /etc/apt/sources.list.d/buster-backports.list
 elif [ "$ID" = "ubuntu" ]; then
 	echo 'deb http://archive.ubuntu.com/ubuntu bionic-backports main' > /etc/apt/sources.list.d/bionic-backports.list
 	echo 'deb http://archive.ubuntu.com/ubuntu bionic universe' > /etc/apt/sources.list.d/bionic-universe.list
 fi
+# Install mptcp kernel and shadowsocks
+echo "Install mptcp kernel and shadowsocks..."
 apt-get update
 sleep 2
-wget -O /tmp/linux-image-${KERNEL_RELEASE}_amd64.deb ${VPSURL}kernel/linux-image-${KERNEL_RELEASE}_amd64.deb
-wget -O /tmp/linux-headers-${KERNEL_RELEASE}_amd64.deb ${VPSURL}kernel/linux-headers-${KERNEL_RELEASE}_amd64.deb
-# Rename bzImage to vmlinuz, needed when custom kernel was used
-cd /boot
-apt-get -y install rename curl libcurl4 unzip git
-rename 's/^bzImage/vmlinuz/s' * >/dev/null 2>&1
-#apt-get -y install linux-mptcp
-#dpkg --remove --force-remove-reinstreq linux-image-${KERNEL_VERSION}-mptcp
-#dpkg --remove --force-remove-reinstreq linux-headers-${KERNEL_VERSION}-mptcp
-if [ "$(dpkg -l | grep linux-image-${KERNEL_VERSION} | grep ${KERNEL_PACKAGE_VERSION})" = "" ]; then
-	echo "Install kernel linux-image-${KERNEL_RELEASE}"
-	echo "\033[1m !!! if kernel install fail run: dpkg --remove --force-remove-reinstreq linux-image-${KERNEL_VERSION}-mptcp !!! \033[0m"
-	dpkg --force-all -i -B /tmp/linux-headers-${KERNEL_RELEASE}_amd64.deb
-	dpkg --force-all -i -B /tmp/linux-image-${KERNEL_RELEASE}_amd64.deb
+apt-get -y install dirmngr patch rename curl libcurl4 unzip
+
+if [ "$SOURCES" = "yes" ]; then
+	wget -O /tmp/linux-image-${KERNEL_RELEASE}_amd64.deb ${VPSURL}kernel/linux-image-${KERNEL_RELEASE}_amd64.deb
+	wget -O /tmp/linux-headers-${KERNEL_RELEASE}_amd64.deb ${VPSURL}kernel/linux-headers-${KERNEL_RELEASE}_amd64.deb
+	# Rename bzImage to vmlinuz, needed when custom kernel was used
+	cd /boot
+	apt-get -y install git
+	rename 's/^bzImage/vmlinuz/s' * >/dev/null 2>&1
+	#apt-get -y install linux-mptcp
+	#dpkg --remove --force-remove-reinstreq linux-image-${KERNEL_VERSION}-mptcp
+	#dpkg --remove --force-remove-reinstreq linux-headers-${KERNEL_VERSION}-mptcp
+	if [ "$(dpkg -l | grep linux-image-${KERNEL_VERSION} | grep ${KERNEL_PACKAGE_VERSION})" = "" ]; then
+		echo "Install kernel linux-image-${KERNEL_RELEASE}"
+		echo "\033[1m !!! if kernel install fail run: dpkg --remove --force-remove-reinstreq linux-image-${KERNEL_VERSION}-mptcp !!! \033[0m"
+		dpkg --force-all -i -B /tmp/linux-headers-${KERNEL_RELEASE}_amd64.deb
+		dpkg --force-all -i -B /tmp/linux-image-${KERNEL_RELEASE}_amd64.deb
+	fi
+else
+	cd /boot
+	rename 's/^bzImage/vmlinuz/s' * >/dev/null 2>&1
+	if [ "$(dpkg -l | grep linux-image-${KERNEL_VERSION} | grep ${KERNEL_PACKAGE_VERSION})" = "" ]; then
+		echo "Install kernel linux-image-${KERNEL_RELEASE}"
+		echo "\033[1m !!! if kernel install fail run: dpkg --remove --force-remove-reinstreq linux-image-${KERNEL_VERSION}-mptcp !!! \033[0m"
+		apt-get -y install linux-image-${KERNEL_VERSION}-mptcp=${KERNEL_PACKAGE_VERSION} linux-headers-${KERNEL_VERSION}-mptcp=${KERNEL_PACKAGE_VERSION}
+	fi
 fi
 
 # Check if mptcp kernel is grub default kernel
@@ -305,7 +382,7 @@ if [ "$SOURCES" = "yes" ]; then
 	#rm -rf /tmp/shadowsocks-libev-${SHADOWSOCKS_VERSION}
 	rm -rf /tmp/shadowsocks-libev
 else
-	apt-get -y -o Dpkg::Options::="--force-overwrite" install omr-shadowsocks-libev
+	apt-get -y -o Dpkg::Options::="--force-confold" -o Dpkg::Options::="--force-confdef" -o Dpkg::Options::="--force-overwrite" install omr-shadowsocks-libev=${SHADOWSOCKS_BINARY_VERSION}
 fi
 
 # Load OLIA Congestion module at boot time
@@ -405,6 +482,7 @@ if [ "$OMR_ADMIN" = "yes" ]; then
 	mkdir -p /var/opt/openmptcprouter
 	if [ "$SOURCES" = "yes" ]; then
 		wget -O /lib/systemd/system/omr-admin.service ${VPSURL}${VPSPATH}/omr-admin.service.in
+		wget -O /lib/systemd/system/omr-admin-ipv6.service ${VPSURL}${VPSPATH}/omr-admin-ipv6.service.in
 		wget -O /tmp/openmptcprouter-vps-admin.zip https://github.com/Ysurac/openmptcprouter-vps-admin/archive/${OMR_ADMIN_VERSION}.zip
 		cd /tmp
 		unzip -q -o openmptcprouter-vps-admin.zip
@@ -423,23 +501,39 @@ if [ "$OMR_ADMIN" = "yes" ]; then
 			cp /tmp/openmptcprouter-vps-admin-${OMR_ADMIN_VERSION}/omr-admin-config.json /etc/openmptcprouter-vps-admin/
 			cp /tmp/openmptcprouter-vps-admin-${OMR_ADMIN_VERSION}/omr-admin.py /usr/local/bin/
 			cd /etc/openmptcprouter-vps-admin
-			sed -i "s:openmptcptouter:${DEFAULT_USER}:g" /etc/openmptcprouter-vps-admin/omr-admin-config.json
 		fi
-		openssl req -new -newkey rsa:2048 -days 3650 -nodes -x509 -keyout key.pem -out cert.pem -subj "/C=US/ST=Oregon/L=Portland/O=OpenMPTCProuterVPS/OU=Org/CN=www.openmptcprouter.vps"
-		sed -i "s:AdminMySecretKey:$OMR_ADMIN_PASS_ADMIN:g" /etc/openmptcprouter-vps-admin/omr-admin-config.json
-		sed -i "s:MySecretKey:$OMR_ADMIN_PASS:g" /etc/openmptcprouter-vps-admin/omr-admin-config.json
-		[ "$NOINTERNET" = "yes" ] && {
-			sed -i 's/"port": 65500,/"port": 65500,\n    "internet": false,/' /etc/openmptcprouter-vps-admin/omr-admin-config.json
-		}
-		chmod u+x /usr/local/bin/omr-admin.py
-		systemctl enable omr-admin.service
 		rm -rf /tmp/tmp/openmptcprouter-vps-admin-${OMR_ADMIN_VERSION}
+		chmod u+x /usr/local/bin/omr-admin.py
 	else
-		apt-get -y install omr-vps-admin
-		OMR_ADMIN_PASS=$(cat /etc/openmptcprouter-vps-admin/omr-admin-config.json | jq -r .users[0].openmptcprouter.user_password | tr -d "\n")
-		OMR_ADMIN_PASS_ADMIN=$(cat /etc/openmptcprouter-vps-admin/omr-admin-config.json | jq -r .users[0].admin.user_password | tr -d "\n")
+		if [ -f /etc/openmptcprouter-vps-admin/omr-admin-config.json ]; then
+			OMR_ADMIN_PASS2=$(grep -Po '"'"pass"'"\s*:\s*"\K([^"]*)' /etc/openmptcprouter-vps-admin/omr-admin-config.json | tr -d  "\n")
+			[ -z "$OMR_ADMIN_PASS2" ] && OMR_ADMIN_PASS2=$(cat /etc/openmptcprouter-vps-admin/omr-admin-config.json | jq -r .users[0].openmptcprouter.user_password | tr -d "\n")
+			[ -n "$OMR_ADMIN_PASS2" ] && [ "$OMR_ADMIN_PASS2" != "MySecretKey" ] && OMR_ADMIN_PASS=$OMR_ADMIN_PASS2
+			OMR_ADMIN_PASS_ADMIN2=$(cat /etc/openmptcprouter-vps-admin/omr-admin-config.json | jq -r .users[0].admin.user_password | tr -d "\n")
+			[ -n "$OMR_ADMIN_PASS_ADMIN2" ] && [ "$OMR_ADMIN_PASS_ADMIN2" != "AdminMySecretKey" ] && OMR_ADMIN_PASS_ADMIN=$OMR_ADMIN_PASS_ADMIN2
+		fi
+		apt-get -o Dpkg::Options::="--force-confold" -o Dpkg::Options::="--force-confdef" -o Dpkg::Options::="--force-overwrite" -y install omr-vps-admin=${OMR_ADMIN_BINARY_VERSION}
+		if [ ! -f /etc/openmptcprouter-vps-admin/omr-admin-config.json ]; then
+			cp /usr/share/omr-admin/omr-admin-config.json /etc/openmptcprouter-vps-admin/
+		fi
+		#OMR_ADMIN_PASS=$(cat /etc/openmptcprouter-vps-admin/omr-admin-config.json | jq -r .users[0].openmptcprouter.user_password | tr -d "\n")
+		#OMR_ADMIN_PASS_ADMIN=$(cat /etc/openmptcprouter-vps-admin/omr-admin-config.json | jq -r .users[0].admin.user_password | tr -d "\n")
 	fi
-
+	if [ ! -f /etc/openmptcprouter-vps-admin/key.pem ]; then
+		cd /etc/openmptcprouter-vps-admin
+		openssl req -new -newkey rsa:2048 -days 3650 -nodes -x509 -keyout key.pem -out cert.pem -subj "/C=US/ST=Oregon/L=Portland/O=OpenMPTCProuterVPS/OU=Org/CN=www.openmptcprouter.vps"
+	fi
+	sed -i "s:openmptcptouter:${DEFAULT_USER}:g" /etc/openmptcprouter-vps-admin/omr-admin-config.json
+	sed -i "s:AdminMySecretKey:$OMR_ADMIN_PASS_ADMIN:g" /etc/openmptcprouter-vps-admin/omr-admin-config.json
+	sed -i "s:MySecretKey:$OMR_ADMIN_PASS:g" /etc/openmptcprouter-vps-admin/omr-admin-config.json
+	[ "$NOINTERNET" = "yes" ] && {
+		sed -i 's/"port": 65500,/"port": 65500,\n    "internet": false,/' /etc/openmptcprouter-vps-admin/omr-admin-config.json
+	}
+	#[ "$(ip -6 a)" != "" ] && sed -i 's/0.0.0.0/::/g' /usr/local/bin/omr-admin.py
+	[ "$(ip -6 a)" != "" ] && {
+		systemctl enable omr-admin-ipv6.service
+	}
+	systemctl enable omr-admin.service
 fi
 
 # Get shadowsocks optimization
@@ -504,6 +598,12 @@ if systemctl -q is-active shadowsocks-libev-manager@manager; then
 	systemctl -q stop shadowsocks-libev-manager@manager > /dev/null 2>&1
 fi
 
+if [ "$LOCALFILES" = "no" ]; then
+	wget -O /lib/systemd/system/omr-update.service ${VPSURL}${VPSPATH}/omr-update.service.in
+else
+	cp ${DIR}/omr-update.service.in /lib/systemd/system/omr-update.service
+fi
+
 # Install simple-obfs
 if [ "$OBFS" = "yes" ]; then
 	echo "Install OBFS"
@@ -529,7 +629,7 @@ if [ "$OBFS" = "yes" ]; then
 		cd /tmp
 		rm -rf /tmp/simple-obfs
 	else
-		apt-get -y -o Dpkg::Options::="--force-overwrite" install omr-simple-obfs
+		apt-get -y -o Dpkg::Options::="--force-overwrite" install omr-simple-obfs=${OBFS_BINARY_VERSION}
 	fi
 	#sed -i 's%"mptcp": true%"mptcp": true,\n"plugin": "/usr/local/bin/obfs-server",\n"plugin_opts": "obfs=http;mptcp;fast-open;t=400"%' /etc/shadowsocks-libev/config.json
 fi
@@ -537,29 +637,33 @@ fi
 # Install v2ray-plugin
 if [ "$V2RAY_PLUGIN" = "yes" ]; then
 	echo "Install v2ray plugin"
-	rm -rf /tmp/v2ray-plugin-linux-amd64-${V2RAY_PLUGIN_VERSION}.tar.gz
-	#wget -O /tmp/v2ray-plugin-linux-amd64-${V2RAY_PLUGIN_VERSION}.tar.gz https://github.com/shadowsocks/v2ray-plugin/releases/download/${V2RAY_PLUGIN_VERSION}/v2ray-plugin-linux-amd64-${V2RAY_PLUGIN_VERSION}.tar.gz
-	#wget -O /tmp/v2ray-plugin-linux-amd64-${V2RAY_PLUGIN_VERSION}.tar.gz ${VPSURL}${VPSPATH}/bin/v2ray-plugin-linux-amd64-${V2RAY_PLUGIN_VERSION}.tar.gz
-	wget -O /tmp/v2ray-plugin-linux-amd64-${V2RAY_PLUGIN_VERSION}.tar.gz https://github.com/teddysun/v2ray-plugin/releases/download/v1.4.3/v2ray-plugin-linux-amd64-${V2RAY_PLUGIN_VERSION}.tar.gz
-	cd /tmp
-	tar xzvf v2ray-plugin-linux-amd64-${V2RAY_PLUGIN_VERSION}.tar.gz
-	cp -f v2ray-plugin_linux_amd64 /usr/local/bin/v2ray-plugin
-	cd /tmp
-	rm -rf /tmp/v2ray-plugin_linux_amd64
-	rm -rf /tmp/v2ray-plugin-linux-amd64-${V2RAY_PLUGIN_VERSION}.tar.gz
+	if [ "$SOURCES" = "yes" ]; then
+		rm -rf /tmp/v2ray-plugin-linux-amd64-${V2RAY_PLUGIN_VERSION}.tar.gz
+		#wget -O /tmp/v2ray-plugin-linux-amd64-v${V2RAY_PLUGIN_VERSION}.tar.gz https://github.com/shadowsocks/v2ray-plugin/releases/download/${V2RAY_PLUGIN_VERSION}/v2ray-plugin-linux-amd64-v${V2RAY_PLUGIN_VERSION}.tar.gz
+		#wget -O /tmp/v2ray-plugin-linux-amd64-v${V2RAY_PLUGIN_VERSION}.tar.gz ${VPSURL}${VPSPATH}/bin/v2ray-plugin-linux-amd64-v${V2RAY_PLUGIN_VERSION}.tar.gz
+		wget -O /tmp/v2ray-plugin-linux-amd64-v${V2RAY_PLUGIN_VERSION}.tar.gz https://github.com/teddysun/v2ray-plugin/releases/download/v${V2RAY_PLUGIN_VERSION}/v2ray-plugin-linux-amd64-v${V2RAY_PLUGIN_VERSION}.tar.gz
+		cd /tmp
+		tar xzvf v2ray-plugin-linux-amd64-v${V2RAY_PLUGIN_VERSION}.tar.gz
+		cp -f v2ray-plugin_linux_amd64 /usr/local/bin/v2ray-plugin
+		cd /tmp
+		rm -rf /tmp/v2ray-plugin_linux_amd64
+		rm -rf /tmp/v2ray-plugin-linux-amd64-${V2RAY_PLUGIN_VERSION}.tar.gz
 	
-	#rm -rf /tmp/v2ray-plugin
-	#cd /tmp
-	#rm -f /var/lib/dpkg/lock
-	#apt-get install -y --no-install-recommends git ca-certificates golang-go
-	#git clone https://github.com/shadowsocks/v2ray-plugin.git /tmp/v2ray-plugin
-	#cd /tmp/v2ray-plugin
-	#git checkout ${V2RAY_PLUGIN_VERSION}
-	#git submodule update --init --recursive
-	#CGO_ENABLED=0 go build -o v2ray-plugin
-	#cp v2ray-plugin /usr/local/bin/v2ray-plugin
-	#cd /tmp
-	#rm -rf /tmp/simple-obfs
+		#rm -rf /tmp/v2ray-plugin
+		#cd /tmp
+		#rm -f /var/lib/dpkg/lock
+		#apt-get install -y --no-install-recommends git ca-certificates golang-go
+		#git clone https://github.com/shadowsocks/v2ray-plugin.git /tmp/v2ray-plugin
+		#cd /tmp/v2ray-plugin
+		#git checkout ${V2RAY_PLUGIN_VERSION}
+		#git submodule update --init --recursive
+		#CGO_ENABLED=0 go build -o v2ray-plugin
+		#cp v2ray-plugin /usr/local/bin/v2ray-plugin
+		#cd /tmp
+		#rm -rf /tmp/simple-obfs
+	else
+		apt-get -y install v2ray-plugin=${V2RAY_PLUGIN_VERSION}
+	fi
 fi
 
 if [ "$OBFS" = "no" ] && [ "$V2RAY_PLUGIN" = "no" ]; then
@@ -573,12 +677,13 @@ fi
 
 if [ "$V2RAY" = "yes" ]; then
 	#apt-get -y -o Dpkg::Options::="--force-overwrite" install v2ray
-	wget -O /tmp/v2ray-${V2RAY_VERSION}-amd64.deb ${VPSURL}/debian/v2ray-${V2RAY_VERSION}-amd64.deb
-	if [ -f /etc/v2ray/v2ray-server.conf ] && [ ! -f /etc/systemd/system/v2ray.service ]; then
-		wget -O /etc/systemd/system/v2ray.service ${VPSURL}${VPSPATH}/old-v2ray.service
+	if [ "$SOURCES" = "yes" ]; then
+		wget -O /tmp/v2ray-${V2RAY_VERSION}-amd64.deb ${VPSURL}/debian/v2ray-${V2RAY_VERSION}-amd64.deb
+		dpkg --force-all -i -B /tmp/v2ray-${V2RAY_VERSION}-amd64.deb
+		rm -f /tmp/v2ray-${V2RAY_VERSION}-amd64.deb
+	else
+		apt-get -o Dpkg::Options::="--force-confold" -o Dpkg::Options::="--force-confdef" -o Dpkg::Options::="--force-overwrite" -y install v2ray=${V2RAY_VERSION}
 	fi
-	dpkg --force-all -i -B /tmp/v2ray-${V2RAY_VERSION}-amd64.deb
-	rm -f /tmp/v2ray-${V2RAY_VERSION}-amd64.deb
 	if [ ! -f /etc/v2ray/v2ray-server.json ]; then
 		wget -O /etc/v2ray/v2ray-server.json ${VPSURL}${VPSPATH}/v2ray-server.json
 		sed -i "s:V2RAY_UUID:$V2RAY_UUID:g" /etc/v2ray/v2ray-server.json
@@ -604,6 +709,7 @@ if [ "$MLVPN" = "yes" ]; then
 	if [ -f /etc/mlvpn/mlvpn0.conf ]; then
 		mlvpnupdate="1"
 	fi
+	mkdir -p /etc/mlvpn
 	if [ "$SOURCES" = "yes" ]; then
 		rm -f /var/lib/dpkg/lock
 		rm -f /var/lib/dpkg/lock-frontend
@@ -621,23 +727,24 @@ if [ "$MLVPN" = "yes" ]; then
 		make install
 		cd /tmp
 		rm -rf /tmp/mlvpn
-	else
-		apt-get -y -o Dpkg::Options::="--force-overwrite" install mlvpn
-	fi
-	if [ "$LOCALFILES" = "no" ]; then
-		wget -O /lib/systemd/network/mlvpn.network ${VPSURL}${VPSPATH}/mlvpn.network
-		wget -O /lib/systemd/system/mlvpn@.service ${VPSURL}${VPSPATH}/mlvpn@.service.in
-	else
-		cp ${DIR}/mlvpn.network /lib/systemd/network/mlvpn.network
-		cp ${DIR}/mlvpn@.service.in /lib/systemd/system/mlvpn@.service
-	fi
-	mkdir -p /etc/mlvpn
-	if [ "$mlvpnupdate" = "0" ]; then
 		if [ "$LOCALFILES" = "no" ]; then
-			wget -O /etc/mlvpn/mlvpn0.conf ${VPSURL}${VPSPATH}/mlvpn0.conf
+			wget -O /lib/systemd/network/mlvpn.network ${VPSURL}${VPSPATH}/mlvpn.network
+			wget -O /lib/systemd/system/mlvpn@.service ${VPSURL}${VPSPATH}/mlvpn@.service.in
 		else
-			cp ${DIR}/mlvpn0.conf /etc/mlvpn/mlvpn0.conf
+			cp ${DIR}/mlvpn.network /lib/systemd/network/mlvpn.network
+			cp ${DIR}/mlvpn@.service.in /lib/systemd/system/mlvpn@.service
 		fi
+		if [ "$mlvpnupdate" = "0" ]; then
+			if [ "$LOCALFILES" = "no" ]; then
+				wget -O /etc/mlvpn/mlvpn0.conf ${VPSURL}${VPSPATH}/mlvpn0.conf
+			else
+				cp ${DIR}/mlvpn0.conf /etc/mlvpn/mlvpn0.conf
+			fi
+		fi
+	else
+		apt-get -y -o Dpkg::Options::="--force-confold" -o Dpkg::Options::="--force-confdef" install omr-mlvpn=${MLVPN_BINARY_VERSION}
+	fi
+	if [ "$mlvpnupdate" = "0" ]; then
 		sed -i "s:MLVPN_PASS:$MLVPN_PASS:" /etc/mlvpn/mlvpn0.conf
 	fi
 	chmod 0600 /etc/mlvpn/mlvpn0.conf
@@ -648,10 +755,6 @@ if [ "$MLVPN" = "yes" ]; then
 	systemctl enable mlvpn@mlvpn0.service
 	systemctl enable systemd-networkd.service
 	echo "install mlvpn done"
-fi
-if systemctl -q is-active openvpn-server@tun0.service; then
-	systemctl -q stop openvpn-server@tun0 > /dev/null 2>&1
-	systemctl -q disable openvpn-server@tun0 > /dev/null 2>&1
 fi
 if systemctl -q is-active ubond@ubond0.service; then
 	systemctl -q stop ubond@ubond0 > /dev/null 2>&1
@@ -708,6 +811,32 @@ if [ "$UBOND" = "yes" ]; then
 	systemctl enable systemd-networkd.service
 	echo "install ubond done"
 fi
+
+if systemctl -q is-active wg-quick@wg0.service; then
+	systemctl -q stop wg-quick@wg0 > /dev/null 2>&1
+	systemctl -q disable wg-quick@wg0 > /dev/null 2>&1
+fi
+
+if [ "$WIREGUARD" = "yes" ]; then
+	echo "Install WireGuard"
+	rm -f /var/lib/dpkg/lock
+	rm -f /var/lib/dpkg/lock-frontend
+	apt-get -y install wireguard-tools --no-install-recommends
+	if [ ! -f /etc/wireguard/wg0.conf ]; then
+		cd /etc/wireguard
+		umask 077; wg genkey | tee vpn-server-private.key | wg pubkey > vpn-server-public.key
+		cat > /etc/wireguard/wg0.conf <<-EOF
+		[Interface]
+		PrivateKey = $(cat /etc/wireguard/vpn-server-private.key | tr -d "\n")
+		ListenPort = 65311
+		Address = 10.255.247.1/24
+		SaveConfig = true
+		EOF
+	fi
+	systemctl enable wg-quick@wg0
+	echo "Install wireguard done"
+fi
+
 if systemctl -q is-active openvpn-server@tun0.service; then
 	systemctl -q stop openvpn-server@tun0 > /dev/null 2>&1
 	systemctl -q disable openvpn-server@tun0 > /dev/null 2>&1
@@ -869,9 +998,11 @@ if [ "$SOURCES" = "yes" ]; then
 	cd /tmp
 	rm -rf /tmp/glorytun-udp
 else
-	apt-get -y -o Dpkg::Options::="--force-confdef" -o Dpkg::Options::="--force-confold" -o Dpkg::Options::="--force-overwrite" install omr-glorytun
+	apt-get -y -o Dpkg::Options::="--force-confdef" -o Dpkg::Options::="--force-confold" -o Dpkg::Options::="--force-overwrite" install omr-glorytun=${GLORYTUN_UDP_BINARY_VERSION}
 	GLORYTUN_PASS="$(cat /etc/glorytun-udp/tun0.key | tr -d '\n')"
 fi
+[ "$(ip -6 a)" != "" ] && sed -i 's/0.0.0.0/::/g' /etc/glorytun-udp/tun0
+
 
 # Add chrony for time sync
 apt-get install -y chrony
@@ -913,7 +1044,7 @@ if [ "$DSVPN" = "yes" ]; then
 		cd /tmp
 		rm -rf /tmp/dsvpn
 	else
-		apt-get -y -o Dpkg::Options::="--force-confdef" -o Dpkg::Options::="--force-confold" -o Dpkg::Options::="--force-overwrite" install omr-dsvpn
+		apt-get -y -o Dpkg::Options::="--force-confdef" -o Dpkg::Options::="--force-confold" -o Dpkg::Options::="--force-overwrite" install omr-dsvpn=${DSVPN_BINARY_VERSION}
 		DSVPN_PASS=$(cat /etc/dsvpn/dsvpn0.key | tr -d "\n")
 	fi
 fi
@@ -961,9 +1092,9 @@ if [ "$SOURCES" = "yes" ]; then
 	cd /tmp
 	rm -rf /tmp/glorytun-0.0.35
 else
-	apt-get -y -o Dpkg::Options::="--force-confdef" -o Dpkg::Options::="--force-confold" -o Dpkg::Options::="--force-overwrite" install omr-glorytun-tcp
+	apt-get -y -o Dpkg::Options::="--force-confdef" -o Dpkg::Options::="--force-confold" -o Dpkg::Options::="--force-overwrite" install omr-glorytun-tcp=${GLORYTUN_TCP_BINARY_VERSION}
 fi
-
+[ "$(ip -6 a)" != "" ] && sed -i 's/0.0.0.0/::/g' /etc/glorytun-tcp/tun0
 
 
 # Load tun module at boot time
@@ -978,6 +1109,14 @@ else
 	cp ${DIR}/multipath /usr/local/bin/multipath
 fi
 chmod 755 /usr/local/bin/multipath
+
+# Add omr-test-speed utility
+if [ "$LOCALFILES" = "no" ]; then
+	wget -O /usr/local/bin/omr-test-speed ${VPSURL}${VPSPATH}/omr-test-speed
+else
+	cp ${DIR}/omr-test-speed /usr/local/bin/omr-test-speed
+fi
+chmod 755 /usr/local/bin/omr-test-speed
 
 # Add OpenMPTCProuter service
 if [ "$LOCALFILES" = "no" ]; then
@@ -1034,38 +1173,29 @@ if [ "$update" = "0" ]; then
 else
 	# Update only needed firewall files
 	if [ "$LOCALFILES" = "no" ]; then
-		wget -O /etc/shorewall/interfaces ${VPSURL}${VPSPATH}/shorewall4/interfaces
-		wget -O /etc/shorewall/snat ${VPSURL}${VPSPATH}/shorewall4/snat
-		wget -O /etc/shorewall/stoppedrules ${VPSURL}${VPSPATH}/shorewall4/stoppedrules
-		wget -O /etc/shorewall/tcinterfaces ${VPSURL}${VPSPATH}/shorewall4/tcinterfaces
-		wget -O /etc/shorewall/shorewall.conf ${VPSURL}${VPSPATH}/shorewall4/shorewall.conf
-		wget -O /etc/shorewall/policy ${VPSURL}${VPSPATH}/shorewall4/policy
-		wget -O /etc/shorewall/params ${VPSURL}${VPSPATH}/shorewall4/params
-		wget -O /etc/shorewall/params.vpn ${VPSURL}${VPSPATH}/shorewall4/params.vpn
-		wget -O /etc/shorewall/params.net ${VPSURL}${VPSPATH}/shorewall4/params.net
-		wget -O /etc/shorewall6/params ${VPSURL}${VPSPATH}/shorewall6/params
-		wget -O /etc/shorewall6/params.net ${VPSURL}${VPSPATH}/shorewall6/params.net
-		wget -O /etc/shorewall6/params.vpn ${VPSURL}${VPSPATH}/shorewall6/params.vpn
-		wget -O /etc/shorewall6/interfaces ${VPSURL}${VPSPATH}/shorewall6/interfaces
-		wget -O /etc/shorewall6/stoppedrules ${VPSURL}${VPSPATH}/shorewall6/stoppedrules
-		wget -O /etc/shorewall6/snat ${VPSURL}${VPSPATH}/shorewall6/snat
-	else
-		cp ${DIR}/shorewall4/interfaces /etc/shorewall/interfaces
-		cp ${DIR}/shorewall4/snat /etc/shorewall/snat
-		cp ${DIR}/shorewall4/stoppedrules /etc/shorewall/stoppedrules
-		cp ${DIR}/shorewall4/tcinterfaces /etc/shorewall/tcinterfaces
-		cp ${DIR}/shorewall4/shorewall.conf /etc/shorewall/shorewall.conf
-		cp ${DIR}/shorewall4/policy /etc/shorewall/policy
-		cp ${DIR}/shorewall4/params /etc/shorewall/params
-		cp ${DIR}/shorewall4/params.vpn /etc/shorewall/params.vpn
-		cp ${DIR}/shorewall4/params.net /etc/shorewall/params.net
-		cp ${DIR}/shorewall6/params /etc/shorewall6/params
-		cp ${DIR}/shorewall6/params.net /etc/shorewall6/params.net
-		cp ${DIR}/shorewall6/params.vpn /etc/shorewall6/params.vpn
-		cp ${DIR}/shorewall6/interfaces /etc/shorewall6/interfaces
-		cp ${DIR}/shorewall6/stoppedrules /etc/shorewall6/stoppedrules
-		cp ${DIR}/shorewall6/snat /etc/shorewall6/snat
+		mkdir -p ${DIR}
+		wget -O ${DIR}/openmptcprouter-shorewall.tar.gz ${VPSURL}${VPSPATH}/openmptcprouter-shorewall.tar.gz
+		wget -O ${DIR}/openmptcprouter-shorewall6.tar.gz ${VPSURL}${VPSPATH}/openmptcprouter-shorewall6.tar.gz
+		mkdir -p ${DIR}/shorewall4
+		tar xzvf ${DIR}/openmptcprouter-shorewall.tar.gz -C ${DIR}/shorewall4
+		mkdir -p ${DIR}/shorewall6
+		tar xzvf ${DIR}/openmptcprouter-shorewall6.tar.gz -C ${DIR}/shorewall6
 	fi
+	cp ${DIR}/shorewall4/interfaces /etc/shorewall/interfaces
+	cp ${DIR}/shorewall4/snat /etc/shorewall/snat
+	cp ${DIR}/shorewall4/stoppedrules /etc/shorewall/stoppedrules
+	cp ${DIR}/shorewall4/tcinterfaces /etc/shorewall/tcinterfaces
+	cp ${DIR}/shorewall4/shorewall.conf /etc/shorewall/shorewall.conf
+	cp ${DIR}/shorewall4/policy /etc/shorewall/policy
+	cp ${DIR}/shorewall4/params /etc/shorewall/params
+	cp ${DIR}/shorewall4/params.vpn /etc/shorewall/params.vpn
+	cp ${DIR}/shorewall4/params.net /etc/shorewall/params.net
+	cp ${DIR}/shorewall6/params /etc/shorewall6/params
+	cp ${DIR}/shorewall6/params.net /etc/shorewall6/params.net
+	cp ${DIR}/shorewall6/params.vpn /etc/shorewall6/params.vpn
+	cp ${DIR}/shorewall6/interfaces /etc/shorewall6/interfaces
+	cp ${DIR}/shorewall6/stoppedrules /etc/shorewall6/stoppedrules
+	cp ${DIR}/shorewall6/snat /etc/shorewall6/snat
 	sed -i "s:eth0:$INTERFACE:g" /etc/shorewall/*
 	sed -i 's/^.*#DNAT/#DNAT/g' /etc/shorewall/rules
 	sed -i 's:10.0.0.2:$OMR_ADDR:g' /etc/shorewall/rules
@@ -1099,6 +1229,12 @@ if [ "$TLS" = "yes" ]; then
 			systemctl -q restart shorewall
 			~/.acme.sh/acme.sh --force --alpn --issue -d $VPS_DOMAIN --pre-hook 'shorewall open all all tcp 443 2>&1 >/dev/null' --post-hook 'shorewall close all all tcp 443 2>&1 >/dev/null' 2>&1 >/dev/null
 			set -e
+			if [ -f /root/.acme.sh/$VPS_DOMAIN/$VPS_DOMAIN.cer ]; then
+				rm -f /etc/openmptcprouter-vps-admin/cert.pem
+				ln -s /root/.acme.sh/$VPS_DOMAIN/$VPS_DOMAIN.cer /etc/openmptcprouter-vps-admin/cert.pem
+				rm -f /etc/openmptcprouter-vps-admin/key.pem
+				ln -s /root/.acme.sh/$VPS_DOMAIN/$VPS_DOMAIN.key /etc/openmptcprouter-vps-admin/key.pem
+			fi
 #			mkdir -p /etc/ssl/v2ray
 #			ln -f -s /root/.acme.sh/$reverse/$reverse.key /etc/ssl/v2ray/omr.key
 #			ln -f -s /root/.acme.sh/$reverse/fullchain.cer /etc/ssl/v2ray/omr.cer
@@ -1111,9 +1247,9 @@ if [ "$TLS" = "yes" ]; then
 fi
 
 if [ "$SPEEDTEST" = "yes" ]; then
-	if [ ! -f /usr/share/omr-server/speedtest/test.img ]; then
+	mkdir -p /usr/share/omr-server/speedtest
+	if [ ! -f /usr/share/omr-server/speedtest/test.img ] && [ "$(df /usr/share/omr-server/speedtest | awk '/[0-9]%/{print $(NF-2)}')" -gt 2000000 ]; then
 		echo "Generate speedtest image..."
-		mkdir -p /usr/share/omr-server/speedtest
 		dd if=/dev/urandom of=/usr/share/omr-server/speedtest/test.img count=1024 bs=1048576
 		echo "Done"
 	fi
@@ -1136,6 +1272,11 @@ elif [ -f /etc/motd ]; then
 	fi
 else
 	echo "< OpenMPTCProuter VPS $OMR_VERSION >" > /etc/motd
+fi
+
+if [ "$SOURCES" != "yes" ]; then
+	apt-get -y install omr-server=${OMR_VERSION} 2>&1 >/dev/null || true
+	rm -f /etc/openmtpcprouter-vps-admin/update-bin
 fi
 
 if [ "$update" = "0" ]; then
@@ -1282,6 +1423,11 @@ else
 		systemctl -q restart openvpn@tun1
 		echo 'done'
 	fi
+	if [ "$WIREGUARD" = "yes" ]; then
+		echo 'Restarting WireGuard'
+		systemctl -q restart wg-quick@wg0
+		echo 'done'
+	fi
 	if [ "$OMR_ADMIN" = "yes" ]; then
 		echo 'Restarting OpenMPTCProuter VPS admin'
 		systemctl -q restart omr-admin
@@ -1299,16 +1445,14 @@ else
 			echo 'openmptcprouter'
 			echo '!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!'
 			echo '===================================================================================='
+		else
+			echo '!!! Keys are in /root/openmptcprouter_config.txt !!!'
 		fi
 	fi
 	if [ "$VPS_CERT" = "0" ]; then
 		echo 'No working domain detected, not able to generate certificate for v2ray.'
 		echo 'You can set VPS_DOMAIN to a working domain if you want a certificate.'
 	fi
-	echo 'Restarting shorewall...'
-	systemctl -q restart shorewall
-	systemctl -q restart shorewall6
-	echo 'done'
 	echo 'Apply latest sysctl...'
 	sysctl -p /etc/sysctl.d/90-shadowsocks.conf > /dev/null 2>&1
 	echo 'done'
@@ -1323,4 +1467,11 @@ else
 #		done
 #	fi
 	echo 'done'
+	echo 'Restarting shorewall...'
+	systemctl -q restart shorewall
+	systemctl -q restart shorewall6
+	echo 'done'
+	echo '===================================================================================='
+	echo '\033[1m  /!\ You need to reboot to use latest MPTCP kernel /!\ \033[0m'
+	echo '===================================================================================='
 fi

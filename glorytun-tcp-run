@@ -9,7 +9,7 @@ fi
 
 . "$(readlink -f "$1")"
 
-DEV="gt${HOST:+c}-$(basename "$1")"
+DEV="gt-$(basename "$1")"
 
 exec glorytun-tcp \
 	${SERVER:+listener} \

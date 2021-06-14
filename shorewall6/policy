@@ -15,7 +15,7 @@
 
 vpn             all             ACCEPT
 fw              all             ACCEPT
-net             all             DROP            info
+net             all             DROP
 # THE FOLLOWING POLICY MUST BE LAST
-all             all             REJECT          info
+all             all             REJECT
 

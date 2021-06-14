@@ -1,0 +1,16 @@
+#!/bin/sh -e
+
+test $DEBIAN_SCRIPT_DEBUG && set -v -x
+
+# use debconf
+. /usr/share/debconf/confmodule
+
+sed -i -e "s/^LOCALFILES=.*$/LOCALFILES=no/" -e "s/^SOURCES=.*$/SOURCES=no/" /usr/share/omr-server/debian9-x86_64.sh
+systemctl daemon-reload
+systemctl restart omr-update
+
+db_stop
+
+#DEBHELPER#
+exit 0
+# vim:set ai et sts=2 sw=2 tw=0:

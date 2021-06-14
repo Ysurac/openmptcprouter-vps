@@ -1,0 +1,37 @@
+Source: omr-server
+Section: net
+Priority: optional
+Maintainer: OpenMPTCProuter <contact@openmptcprouter.com>
+Build-Depends: debhelper (>= 10)
+X-Python-Version: >= 3.2
+Standards-Version: 0.0.1
+Homepage: https://github.com/ysurac/openmptcprouter-vps
+
+Package: omr-server
+Architecture: all
+Multi-Arch: foreign
+Depends:
+ curl,
+ rename,
+ libcurl4,
+ unzip,
+ tracebox,
+ omr-iperf3,
+ omr-shadowsocks-libev (= 3.3.5-2),
+ omr-vps-admin (= 0.3+20210508),
+ omr-simple-obfs,
+ omr-mlvpn (= 3.0.0+20201216.git.2263bab),
+ omr-glorytun (= 0.3.4-4),
+ omr-glorytun-tcp (= 0.0.35-3),
+ omr-dsvpn (= 0.1.4-2),
+ shorewall,
+ shorewall6,
+ iptables,
+ v2ray-plugin (= 4.35.1),
+ v2ray (=4.35.1),
+ linux-image-5.4.100-mptcp (= 1.18+9d3f35b),
+ ${misc:Depends}
+Provides: omr-server
+Conflicts: omr-server
+Replaces: omr-server
+Description: OpenMPTCProuter Server script

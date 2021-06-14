@@ -1,0 +1,55 @@
+#!/bin/sh
+# vim: set noexpandtab tabstop=4 shiftwidth=4 softtabstop=4 :
+OVH=false
+if [ "$1" = "ovh" ]; then
+	OVH=true
+	INTERFACE="$2"
+else
+	INTERFACE="$1"
+fi
+
+[ -n "$INTERFACE" ] && [ ! -d "/sys/class/net/$INTERFACE" ] && {
+	echo "You must use a real interface. You wan find them using 'ip a' for example"
+	exit 0
+}
+
+if [ "$OVH" = false ]; then
+	echo "Select best test server..."
+	HOSTLST="http://speedtest.frankfurt.linode.com/garbage.php?ckSize=10000 http://speedtest.tokyo2.linode.com/garbage.php?ckSize=10000 http://speedtest.singapore.linode.com/garbage.php?ckSize=10000 http://speedtest.newark.linode.com/garbage.php?ckSize=10000 http://speedtest.atlanta.linode.com/garbage.php?ckSize=10000 http://speedtest.dallas.linode.com/garbage.php?ckSize=10000 http://speedtest.fremont.linode.com/garbage.php?ckSize=10000 http://speedtest.tele2.net/1000GB.zip http://proof.ovh.net/files/10Gb.dat https://speed.hetzner.de/10GB.bin http://ipv4.bouygues.testdebit.info/10G.iso http://par.download.datapacket.com/10000mb.bin http://nyc.download.datapacket.com/10000mb.bin http://ams.download.datapacket.com/10000mb.bin http://fra.download.datapacket.com/10000mb.bin http://lon.download.datapacket.com/10000mb.bin http://mad.download.datapacket.com/10000mb.bin http://prg.download.datapacket.com/10000mb.bin http://sto.download.datapacket.com/10000mb.bin http://vie.download.datapacket.com/10000mb.bin http://war.download.datapacket.com/10000mb.bin http://atl.download.datapacket.com/10000mb.bin http://chi.download.datapacket.com/10000mb.bin http://lax.download.datapacket.com/10000mb.bin http://mia.download.datapacket.com/10000mb.bin http://nyc.download.datapacket.com/10000mb.bin"
+	bestping="9999"
+	for pinghost in $HOSTLST; do
+		domain=$(echo $pinghost | awk -F/ '{print $3}')
+		if [ -z "$INTERFACE" ]; then
+			ping=$(ping -c1 -w2 $domain | cut -d "/" -s -f5 | cut -d "." -f1)
+		else
+			ping=$(ping -c1 -w2 -I $INTERFACE -B $domain | cut -d "/" -s -f5 | cut -d "." -f1)
+		fi
+		echo "host: $domain - ping: $ping"
+		if [ -n "$ping" ] && [ "$ping" -lt "$bestping" ]; then
+			bestping=$ping
+			HOST=$pinghost
+		fi
+	done
+fi
+
+[ -z "$HOST" ] && HOST="http://proof.ovh.net/files/10Gio.dat"
+
+echo "Best server is $HOST, running test:"
+trap : HUP INT TERM
+if [ -z "$INTERFACE" ]; then
+	curl -4 -o /dev/null $HOST || echo
+else
+	domain=$(echo $HOST | awk -F/ '{print $3}')
+	hostip=$(dig +nocmd +noall +answer A $domain | grep -v CNAME | awk '{print $5}' | tr '\n' ' ')
+	if [ -n "$(ipset list 2>/dev/null | grep ss_rules)" ]; then
+		for ip in $hostip; do
+			ipset add ss_rules_dst_bypass_all $ip
+		done
+	fi
+	curl -4 -o /dev/null --interface $INTERFACE $HOST || echo
+	if [ -n "$(ipset list 2>/dev/null | grep ss_rules)" ]; then
+		for ip in $hostip; do
+			ipset del ss_rules_dst_bypass_all $ip
+		done
+	fi
+fi

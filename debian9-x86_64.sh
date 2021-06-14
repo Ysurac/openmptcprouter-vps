@@ -123,6 +123,11 @@ if [ "$UPDATE" = "yes" ]; then
 	fi
 	echo "Update mode"
 fi
+# Force update key
+[ -f /etc/apt/sources.list.d/openmptcprouter.list ] && {
+	echo "Update OpenMPTCProuter repo key"
+	wget -O - http://repo.openmptcprouter.com/openmptcprouter.gpg.key | apt-key add -
+}
 
 echo "Remove lock and update packages list..."
 rm -f /var/lib/dpkg/lock
@@ -211,7 +216,7 @@ fi
 rm -f /etc/grub.d/30_os-prober
 bash update-grub.sh ${KERNEL_VERSION}-mptcp
 bash update-grub.sh ${KERNEL_RELEASE}
-sed -i 's/default="1>0"/default="0"/' /boot/grub/grub.cfg 2>&1 >/dev/null
+[ -f /boot/grub/grub.cfg ] && sed -i 's/default="1>0"/default="0"/' /boot/grub/grub.cfg 2>&1 >/dev/null
 
 echo "Install tracebox OpenMPTCProuter edition"
 apt-get -y -o Dpkg::Options::="--force-overwrite" install tracebox
@@ -1157,7 +1162,7 @@ if [ "$update" = "0" ]; then
 	echo 'Your glorytun key: '
 	echo $GLORYTUN_PASS
 	if [ "$DSVPN" = "yes" ]; then
-		echo 'A Dead Simple VPN port: 65011'
+		echo 'A Dead Simple VPN port: 65401'
 		echo 'A Dead Simple VPN key: '
 		echo $DSVPN_PASS
 	fi
@@ -1204,7 +1209,7 @@ if [ "$update" = "0" ]; then
 	EOF
 	if [ "$DSVPN" = "yes" ]; then
 		cat >> /root/openmptcprouter_config.txt <<-EOF
-		A Dead Simple VPN port: 65011
+		A Dead Simple VPN port: 65401
 		A Dead Simple VPN key: ${DSVPN_PASS}
 		EOF
 	fi
@@ -1227,6 +1232,7 @@ if [ "$update" = "0" ]; then
 		Your OpenMPTCProuter Server username: openmptcprouter
 		EOF
 	fi
+	systemctl -q restart sshd
 else
 	echo '===================================================================================='
 	echo "OpenMPTCProuter Server is now updated to version $OMR_VERSION !"

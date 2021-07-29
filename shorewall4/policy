@@ -17,8 +17,9 @@ vpn             net             ACCEPT
 vpn             fw             ACCEPT
 fw              vpn             ACCEPT
 fw              net             ACCEPT
-net             all             DROP
-vpn		vpn		DROP
+net             all             DROP		        info		        client:10/sec:20,:60/sec:100
+vpn             vpn		          DROP		        info		        client:10/sec:20,:60/sec:100
 # THE FOLLOWING POLICY MUST BE LAST
-all		all		REJECT
+all		          all		          REJECT		      info		        client:10/sec:20,:60/sec:10
+
 

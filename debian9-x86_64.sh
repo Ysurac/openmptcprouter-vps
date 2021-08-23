@@ -141,6 +141,11 @@ if [ "$UPDATE" = "yes" ]; then
 	fi
 	echo "Update mode"
 fi
+# Force update key
+[ -f /etc/apt/sources.list.d/openmptcprouter.list ] && {
+	echo "Update OpenMPTCProuter repo key"
+	wget -O - http://repo.openmptcprouter.com/openmptcprouter.gpg.key | apt-key add -
+}
 
 CURRENT_OMR="$(grep -s 'OpenMPTCProuter VPS' /etc/* | awk '{print $4}')"
 if [ "$REINSTALL" = "no" ] && [ "$CURRENT_OMR" = "$OMR_VERSION" ]; then
@@ -679,18 +684,12 @@ if [ "$V2RAY" = "yes" ]; then
 	else
 		apt-get -o Dpkg::Options::="--force-confold" -o Dpkg::Options::="--force-confdef" -o Dpkg::Options::="--force-overwrite" -y install v2ray=${V2RAY_VERSION}
 	fi
-	if [ -f /etc/v2ray/v2ray-server.conf ] && [ ! -f /etc/systemd/system/v2ray.service ]; then
-		wget -O /etc/systemd/system/v2ray.service ${VPSURL}${VPSPATH}/old-v2ray.service
-	fi
 	if [ ! -f /etc/v2ray/v2ray-server.json ]; then
 		wget -O /etc/v2ray/v2ray-server.json ${VPSURL}${VPSPATH}/v2ray-server.json
 		sed -i "s:V2RAY_UUID:$V2RAY_UUID:g" /etc/v2ray/v2ray-server.json
 		rm /etc/v2ray/config.json
 		ln -s /etc/v2ray/v2ray-server.json /etc/v2ray/config.json
 	fi
-	ln -sf /etc/v2ray/v2ray-server.json /etc/v2ray/config.json
-	sed -i 's:debug:warning:' /etc/v2ray/v2ray-server.json
-	rm -f /tmp/v2rayError.log
 	if [ -f /etc/systemd/system/v2ray.service.dpkg-dist ]; then
 		mv -f /etc/systemd/system/v2ray.service.dpkg-dist /etc/systemd/system/v2ray.service
 	fi

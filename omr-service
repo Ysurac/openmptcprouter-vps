@@ -79,19 +79,21 @@ _lan_route() {
 
 _gre_tunnels() {
 	. "$(readlink -f "/etc/shorewall/params.vpn")"
-	for intf in /etc/openmptcprouter-vps-admin/intf/*; do
-		if [ -f "$intf" ]; then
-			. "$(readlink -f "$intf")"
-			iface="$(basename $intf)"
-			if [ "$(ip tunnel show $iface 2>/dev/null | awk '{print $4}')" != "$OMR_ADDR" ]; then
-				ip tunnel del $iface 2>&1 >/dev/null
-				ip tunnel add $iface mode gre local $INTFADDR remote $OMR_ADDR 2>&1 >/dev/null
-				ip link set $iface up 2>&1 >/dev/null
-				ip addr add $LOCALIP dev $iface 2>&1 >/dev/null
-				ip route add $NETWORK dev $iface 2>&1 >/dev/null
+	if [ -n "$OMR_ADDR" ]; then
+		for intf in /etc/openmptcprouter-vps-admin/intf/*; do
+			if [ -f "$intf" ]; then
+				. "$(readlink -f "$intf")"
+				iface="$(basename $intf)"
+				if [ "$(ip tunnel show $iface 2>/dev/null | awk '{print $4}')" != "$OMR_ADDR" ]; then
+					ip tunnel del $iface 2>&1 >/dev/null
+					ip tunnel add $iface mode gre local $INTFADDR remote $OMR_ADDR 2>&1 >/dev/null
+					ip link set $iface up 2>&1 >/dev/null
+					ip addr add $LOCALIP dev $iface 2>&1 >/dev/null
+					ip route add $NETWORK dev $iface 2>&1 >/dev/null
+				fi
 			fi
-		fi
-	done
+		done
+	fi
 }
 
 _openvpn_bonding() {

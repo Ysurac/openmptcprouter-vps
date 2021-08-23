@@ -43,7 +43,7 @@ GLORYTUN_TCP_BINARY_VERSION="0.0.35-3"
 #MLVPN_VERSION="8f9720978b28c1954f9f229525333547283316d2"
 MLVPN_VERSION="f45cec350a6879b8b020143a78134a022b5df2a7"
 MLVPN_BINARY_VERSION="3.0.0+20201216.git.2263bab"
-UBOND_VERSION="672100fb57913ffd29caad63517e145a5974b078"
+UBOND_VERSION="f9fb6aa0a65e8e20950977bda970c90012f830d7"
 OBFS_VERSION="486bebd9208539058e57e23a12f23103016e09b4"
 OBFS_BINARY_VERSION="0.0.5-1"
 OMR_ADMIN_VERSION="027d5c8e80ef469d33e43f6cbf3103b30e55ea1c"
@@ -62,7 +62,7 @@ VPSURL="https://www.openmptcprouter.com/"
 REPO="repo.openmptcprouter.com"
 CHINA=${CHINA:-no}
 
-OMR_VERSION="0.1026"
+OMR_VERSION="0.1026-test"
 
 DIR=$( pwd )
 #"
@@ -1189,11 +1189,11 @@ else
 	cp ${DIR}/shorewall4/shorewall.conf /etc/shorewall/shorewall.conf
 	cp ${DIR}/shorewall4/policy /etc/shorewall/policy
 	cp ${DIR}/shorewall4/params /etc/shorewall/params
-	cp ${DIR}/shorewall4/params.vpn /etc/shorewall/params.vpn
-	cp ${DIR}/shorewall4/params.net /etc/shorewall/params.net
+	#cp ${DIR}/shorewall4/params.vpn /etc/shorewall/params.vpn
+	#cp ${DIR}/shorewall4/params.net /etc/shorewall/params.net
 	cp ${DIR}/shorewall6/params /etc/shorewall6/params
-	cp ${DIR}/shorewall6/params.net /etc/shorewall6/params.net
-	cp ${DIR}/shorewall6/params.vpn /etc/shorewall6/params.vpn
+	#cp ${DIR}/shorewall6/params.net /etc/shorewall6/params.net
+	#cp ${DIR}/shorewall6/params.vpn /etc/shorewall6/params.vpn
 	cp ${DIR}/shorewall6/interfaces /etc/shorewall6/interfaces
 	cp ${DIR}/shorewall6/stoppedrules /etc/shorewall6/stoppedrules
 	cp ${DIR}/shorewall6/snat /etc/shorewall6/snat

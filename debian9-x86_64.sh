@@ -629,6 +629,8 @@ if [ "$OBFS" = "yes" ]; then
 		cd /tmp
 		rm -rf /tmp/simple-obfs
 	else
+		rm -f /var/lib/dpkg/lock
+		rm -f /var/lib/dpkg/lock-frontend
 		apt-get -y -o Dpkg::Options::="--force-overwrite" install omr-simple-obfs=${OBFS_BINARY_VERSION}
 	fi
 	#sed -i 's%"mptcp": true%"mptcp": true,\n"plugin": "/usr/local/bin/obfs-server",\n"plugin_opts": "obfs=http;mptcp;fast-open;t=400"%' /etc/shadowsocks-libev/config.json
@@ -662,6 +664,8 @@ if [ "$V2RAY_PLUGIN" = "yes" ]; then
 		#cd /tmp
 		#rm -rf /tmp/simple-obfs
 	else
+		rm -f /var/lib/dpkg/lock
+		rm -f /var/lib/dpkg/lock-frontend
 		apt-get -y install v2ray-plugin=${V2RAY_PLUGIN_VERSION}
 	fi
 fi
@@ -1188,11 +1192,11 @@ else
 	cp ${DIR}/shorewall4/shorewall.conf /etc/shorewall/shorewall.conf
 	cp ${DIR}/shorewall4/policy /etc/shorewall/policy
 	cp ${DIR}/shorewall4/params /etc/shorewall/params
-	cp ${DIR}/shorewall4/params.vpn /etc/shorewall/params.vpn
-	cp ${DIR}/shorewall4/params.net /etc/shorewall/params.net
+	#cp ${DIR}/shorewall4/params.vpn /etc/shorewall/params.vpn
+	#cp ${DIR}/shorewall4/params.net /etc/shorewall/params.net
 	cp ${DIR}/shorewall6/params /etc/shorewall6/params
-	cp ${DIR}/shorewall6/params.net /etc/shorewall6/params.net
-	cp ${DIR}/shorewall6/params.vpn /etc/shorewall6/params.vpn
+	#cp ${DIR}/shorewall6/params.net /etc/shorewall6/params.net
+	#cp ${DIR}/shorewall6/params.vpn /etc/shorewall6/params.vpn
 	cp ${DIR}/shorewall6/interfaces /etc/shorewall6/interfaces
 	cp ${DIR}/shorewall6/stoppedrules /etc/shorewall6/stoppedrules
 	cp ${DIR}/shorewall6/snat /etc/shorewall6/snat

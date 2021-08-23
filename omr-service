@@ -42,6 +42,15 @@ _glorytun_tcp() {
 
 _dsvpn() {
 	[ -n "$(ip -6 r show 64:ff9b::/96 dev dsvpn0)" ] && ip -6 r del 64:ff9b::/96 dev dsvpn0 2>&1 >/dev/null
+	if [ -f /etc/openmptcprouter-vps-admin/current-vpn ] && [ "$(cat /etc/openmptcprouter-vps-admin/current-vpn)" = "dsvpn" ]; then
+		localip="$(cat /etc/dsvpn/dsvpn0 | grep LOCALTUNIP | cut -d '=' -f2)"
+		[ -z "$localip" ] && localip="10.255.251.1"
+		remoteip="$(echo $localip | sed 's/\.1/\.2/')"
+		if [ "$(ping -c 5 -w 5 $remoteip | grep '100%')" != "" ] && [ "$(expr $(date +%s) - $(stat -c %Y /proc/$(pgrep dsvpn)/exe ))" -gt "300" ]; then
+			logger -t "OMR-Service" "No answer from VPN client end, restart DSVPN"
+			systemctl restart dsvpn@dsvpn0
+		fi
+	fi
 }
 
 _shadowsocks() {
@@ -66,13 +75,15 @@ _omr_api() {
 _lan_route() {
 	cat /etc/openmptcprouter-vps-admin/omr-admin-config.json | jq -c '.users[0][]' |
 	while IFS=$"\n" read -r c; do
-		vpnremoteip=$(echo "$c" | jq -r '.vpnremoteip')
-		if [ -n "$vpnremoteip" ] && [ "$vpnremoteip" != "null" ]; then
-			echo "$c" | jq -c -r '.lanips[] //empty' | 
-			while IFS=$"\n" read -r d; do
-				network=$(ipcalc -n $d | grep Network | awk '{print $2}')
-				[ -n "$network" ] && [ -z "$(ip r show $network via $vpnremoteip)" ] && ip r replace $network via $vpnremoteip 2>&1 >/dev/null
-			done
+		if [ -n "$c" ]; then
+			vpnremoteip=$(echo "$c" | jq -r '.vpnremoteip')
+			if [ -n "$vpnremoteip" ] && [ "$vpnremoteip" != "null" ]; then
+				echo "$c" | jq -c -r '.lanips[] //empty' | 
+				while IFS=$"\n" read -r d; do
+					network=$(ipcalc -n $d | grep Network | awk '{print $2}')
+					[ -n "$network" ] && [ -z "$(ip r show $network via $vpnremoteip)" ] && ip r replace $network via $vpnremoteip 2>&1 >/dev/null
+				done
+			fi
 		fi
 	done
 }

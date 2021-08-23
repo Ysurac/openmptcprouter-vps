@@ -8,6 +8,11 @@ if [ "$ID" = "debian" ] && [ "$VERSION_ID" = "9" ]; then
         echo "This script doesn't work with Debian Stretch (9.x)"
         exit 1
 fi
+if [ "$(id -u)" -ne 0 ]; then
+	echo "You must run the script as root"
+	exit 1
+fi
+
 echo "!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!"
 echo "You can select any interface and set any IPs during Pi-hole configuration, this will be modified for OpenMPTCProuter at the end."
 echo "Don't apply Pi-hole firewall rules."

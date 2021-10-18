@@ -61,7 +61,8 @@ VPSPATH="server-test"
 VPSURL="https://www.openmptcprouter.com/"
 REPO="repo.openmptcprouter.com"
 CHINA=${CHINA:-no}
-
+REQUIRED_PKG="ca-certificates"
+PKG_OK=$(dpkg-query -W --showformat='${Status}\n' $REQUIRED_PKG|grep "install ok installed")
 OMR_VERSION="0.1026-test"
 
 DIR=$( pwd )
@@ -140,6 +141,12 @@ if [ "$UPDATE" = "yes" ]; then
 		update="1"
 	fi
 	echo "Update mode"
+fi
+#Checking for ca-certificates package
+echo Checking for $REQUIRED_PKG: $PKG_OK
+if [ "" = "$PKG_OK" ]; then
+  echo "No $REQUIRED_PKG. Setting up $REQUIRED_PKG."
+  sudo apt-get --yes install $REQUIRED_PKG
 fi
 # Force update key
 [ -f /etc/apt/sources.list.d/openmptcprouter.list ] && {

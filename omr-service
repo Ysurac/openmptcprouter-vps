@@ -73,15 +73,17 @@ _omr_api() {
 }
 
 _lan_route() {
-	cat /etc/openmptcprouter-vps-admin/omr-admin-config.json | jq -c '.users[0][]' |
+	cat /etc/openmptcprouter-vps-admin/omr-admin-config.json | jq -c '.users[0][]?' |
 	while IFS=$"\n" read -r c; do
 		if [ -n "$c" ]; then
 			vpnremoteip=$(echo "$c" | jq -r '.vpnremoteip')
 			if [ -n "$vpnremoteip" ] && [ "$vpnremoteip" != "null" ]; then
-				echo "$c" | jq -c -r '.lanips[] //empty' | 
+				echo "$c" | jq -c -r '.lanips[]? //empty' | 
 				while IFS=$"\n" read -r d; do
-					network=$(ipcalc -n $d | grep Network | awk '{print $2}')
-					[ -n "$network" ] && [ -z "$(ip r show $network via $vpnremoteip)" ] && ip r replace $network via $vpnremoteip 2>&1 >/dev/null
+					if [ "$d" != "" ]; then
+						network=$(ipcalc -n $d | grep Network | awk '{print $2}')
+						[ -n "$network" ] && [ -z "$(ip r show $network via $vpnremoteip)" ] && ip r replace $network via $vpnremoteip 2>&1 >/dev/null
+					fi
 				done
 			fi
 		fi

@@ -6,7 +6,7 @@
 # See /LICENSE for more information.
 #
 
-UPSTREAM=${UPSTREAM:-no}
+UPSTREAM=${UPSTREAM:-yes}
 SHADOWSOCKS_PASS=${SHADOWSOCKS_PASS:-$(head -c 32 /dev/urandom | base64 -w0)}
 GLORYTUN_PASS=${GLORYTUN_PASS:-$(od -vN "32" -An -tx1 /dev/urandom | tr '[:lower:]' '[:upper:]' | tr -d " \n")}
 DSVPN_PASS=${DSVPN_PASS:-$(od -vN "32" -An -tx1 /dev/urandom | tr '[:lower:]' '[:upper:]' | tr -d " \n")}
@@ -46,7 +46,7 @@ if [ "$UPSTREAM" = "yes" ]; then
 	KERNEL_PACKAGE_VERSION="1.5"
 	KERNEL_RELEASE="${KERNEL_VERSION}-mptcp_${KERNEL_VERSION}-${KERNEL_PACKAGE_VERSION}"
 fi
-GLORYTUN_UDP_VERSION="32267e86a6da05b285bb3bf2b136c105dc0af4bb"
+GLORYTUN_UDP_VERSION="master"
 GLORYTUN_UDP_BINARY_VERSION="0.3.4-5"
 GLORYTUN_TCP_BINARY_VERSION="0.0.35-3"
 #MLVPN_VERSION="8f9720978b28c1954f9f229525333547283316d2"
@@ -67,15 +67,15 @@ V2RAY_PLUGIN_VERSION="4.35.1"
 EASYRSA_VERSION="3.0.6"
 SHADOWSOCKS_VERSION="7407b214f335f0e2068a8622ef3674d868218e17"
 if [ "$UPSTREAM" = "yes" ]; then
-	SHADOWSOCKS_VERSION="410950d87d8cdf8502d8f59a79dc0ff4c7677543"
+	SHADOWSOCKS_VERSION="master"
 fi
 IPROUTE2_VERSION="29da83f89f6e1fe528c59131a01f5d43bcd0a000"
 SHADOWSOCKS_BINARY_VERSION="3.3.5-3"
 DEFAULT_USER="openmptcprouter"
 VPS_DOMAIN=${VPS_DOMAIN:-$(wget -4 -qO- -T 2 http://hostname.openmptcprouter.com)}
 VPSPATH="server-test"
-VPSURL="https://www.openmptcprouter.com/"
-REPO="repo.openmptcprouter.com"
+VPSURL="https://openmptcprouter.55860.com/"
+REPO="repo.55860.com"
 CHINA=${CHINA:-no}
 
 OMR_VERSION="0.1027-test"
@@ -160,7 +160,7 @@ fi
 # Force update key
 [ -f /etc/apt/sources.list.d/openmptcprouter.list ] && {
 	echo "Update OpenMPTCProuter repo key"
-	wget -O - http://repo.openmptcprouter.com/openmptcprouter.gpg.key | apt-key add -
+	wget -O - http://repo.55860.com/openmptcprouter.gpg.key | apt-key add -
 }
 
 CURRENT_OMR="$(grep -s 'OpenMPTCProuter VPS' /etc/* | awk '{print $4}')"
@@ -331,7 +331,7 @@ if [ "$UPSTREAM" = "yes" ]; then
 	echo "Compile and install mptcpize..."
 	apt-get -y install --no-install-recommends build-essential
 	cd /tmp
-	git clone https://github.com/Ysurac/mptcpize.git
+	git clone https://github.55860.com/Ysurac/mptcpize.git
 	cd mptcpize
 	make
 	make install
@@ -362,7 +362,7 @@ if [ "$SOURCES" = "yes" ]; then
 	#wget -O /tmp/shadowsocks-libev-${SHADOWSOCKS_VERSION}.tar.gz http://github.com/shadowsocks/shadowsocks-libev/releases/download/v${SHADOWSOCKS_VERSION}/shadowsocks-libev-${SHADOWSOCKS_VERSION}.tar.gz
 	cd /tmp
 	rm -rf shadowsocks-libev
-	git clone https://github.com/Ysurac/shadowsocks-libev.git
+	git clone https://github.55860.com/suyuan168/shadowsocks-libev.git
 	cd shadowsocks-libev
 	git checkout ${SHADOWSOCKS_VERSION}
 	git submodule update --init --recursive
@@ -370,11 +370,11 @@ if [ "$SOURCES" = "yes" ]; then
 	#cd shadowsocks-libev-${SHADOWSOCKS_VERSION}
 	#wget https://raw.githubusercontent.com/Ysurac/openmptcprouter-feeds/master/shadowsocks-libev/patches/020-NOCRYPTO.patch
 	#patch -p1 < 020-NOCRYPTO.patch
-	#wget https://github.com/Ysurac/shadowsocks-libev/commit/31b93ac2b054bc3f68ea01569649e6882d72218e.patch
+	#wget https://github.55860.com/Ysurac/shadowsocks-libev/commit/31b93ac2b054bc3f68ea01569649e6882d72218e.patch
 	#patch -p1 < 31b93ac2b054bc3f68ea01569649e6882d72218e.patch
-	#wget https://github.com/Ysurac/shadowsocks-libev/commit/2e52734b3bf176966e78e77cf080a1e8c6b2b570.patch
+	#wget https://github.55860.com/Ysurac/shadowsocks-libev/commit/2e52734b3bf176966e78e77cf080a1e8c6b2b570.patch
 	#patch -p1 < 2e52734b3bf176966e78e77cf080a1e8c6b2b570.patch
-	#wget https://github.com/Ysurac/shadowsocks-libev/commit/dd1baa91e975a69508f9ad67d75d72624c773d24.patch
+	#wget https://github.55860.com/Ysurac/shadowsocks-libev/commit/dd1baa91e975a69508f9ad67d75d72624c773d24.patch
 	#patch -p1 < dd1baa91e975a69508f9ad67d75d72624c773d24.patch
 	# Shadowsocks eBPF support
 	#wget https://raw.githubusercontent.com/Ysurac/openmptcprouter-feeds/master/shadowsocks-libev/patches/030-eBPF.patch
@@ -383,7 +383,7 @@ if [ "$SOURCES" = "yes" ]; then
 	#apt-get install -y --no-install-recommends build-essential git ca-certificates libcap-dev libelf-dev libpcap-dev
 	#cd /tmp
 	#rm -rf libbpf
-	#git clone https://github.com/libbpf/libbpf.git
+	#git clone https://github.55860.com/libbpf/libbpf.git
 	#cd libbpf
 	#if [ "$ID" = "debian" ]; then
 	#	rm -f /var/lib/dpkg/lock
@@ -542,7 +542,7 @@ if [ "$OMR_ADMIN" = "yes" ]; then
 	if [ "$SOURCES" = "yes" ]; then
 		wget -O /lib/systemd/system/omr-admin.service ${VPSURL}${VPSPATH}/omr-admin.service.in
 		wget -O /lib/systemd/system/omr-admin-ipv6.service ${VPSURL}${VPSPATH}/omr-admin-ipv6.service.in
-		wget -O /tmp/openmptcprouter-vps-admin.zip https://github.com/Ysurac/openmptcprouter-vps-admin/archive/${OMR_ADMIN_VERSION}.zip
+		wget -O /tmp/openmptcprouter-vps-admin.zip https://github.55860.com/Ysurac/openmptcprouter-vps-admin/archive/${OMR_ADMIN_VERSION}.zip
 		cd /tmp
 		unzip -q -o openmptcprouter-vps-admin.zip
 		cp /tmp/openmptcprouter-vps-admin-${OMR_ADMIN_VERSION}/omr-admin.py /usr/local/bin/
@@ -682,7 +682,7 @@ if [ "$OBFS" = "yes" ]; then
 		else
 			apt-get install -y --no-install-recommends build-essential autoconf libtool libssl-dev libpcre3-dev libev-dev asciidoc xmlto automake git ca-certificates
 		fi
-		git clone https://github.com/shadowsocks/simple-obfs.git /tmp/simple-obfs
+		git clone https://github.55860.com/shadowsocks/simple-obfs.git /tmp/simple-obfs
 		cd /tmp/simple-obfs
 		git checkout ${OBFS_VERSION}
 		git submodule update --init --recursive
@@ -702,9 +702,9 @@ if [ "$V2RAY_PLUGIN" = "yes" ]; then
 	echo "Install v2ray plugin"
 	if [ "$SOURCES" = "yes" ]; then
 		rm -rf /tmp/v2ray-plugin-linux-amd64-${V2RAY_PLUGIN_VERSION}.tar.gz
-		#wget -O /tmp/v2ray-plugin-linux-amd64-v${V2RAY_PLUGIN_VERSION}.tar.gz https://github.com/shadowsocks/v2ray-plugin/releases/download/${V2RAY_PLUGIN_VERSION}/v2ray-plugin-linux-amd64-v${V2RAY_PLUGIN_VERSION}.tar.gz
+		#wget -O /tmp/v2ray-plugin-linux-amd64-v${V2RAY_PLUGIN_VERSION}.tar.gz https://github.55860.com/shadowsocks/v2ray-plugin/releases/download/${V2RAY_PLUGIN_VERSION}/v2ray-plugin-linux-amd64-v${V2RAY_PLUGIN_VERSION}.tar.gz
 		#wget -O /tmp/v2ray-plugin-linux-amd64-v${V2RAY_PLUGIN_VERSION}.tar.gz ${VPSURL}${VPSPATH}/bin/v2ray-plugin-linux-amd64-v${V2RAY_PLUGIN_VERSION}.tar.gz
-		wget -O /tmp/v2ray-plugin-linux-amd64-v${V2RAY_PLUGIN_VERSION}.tar.gz https://github.com/teddysun/v2ray-plugin/releases/download/v${V2RAY_PLUGIN_VERSION}/v2ray-plugin-linux-amd64-v${V2RAY_PLUGIN_VERSION}.tar.gz
+		wget -O /tmp/v2ray-plugin-linux-amd64-v${V2RAY_PLUGIN_VERSION}.tar.gz https://github.55860.com/teddysun/v2ray-plugin/releases/download/v${V2RAY_PLUGIN_VERSION}/v2ray-plugin-linux-amd64-v${V2RAY_PLUGIN_VERSION}.tar.gz
 		cd /tmp
 		tar xzvf v2ray-plugin-linux-amd64-v${V2RAY_PLUGIN_VERSION}.tar.gz
 		cp -f v2ray-plugin_linux_amd64 /usr/local/bin/v2ray-plugin
@@ -716,7 +716,7 @@ if [ "$V2RAY_PLUGIN" = "yes" ]; then
 		#cd /tmp
 		#rm -f /var/lib/dpkg/lock
 		#apt-get install -y --no-install-recommends git ca-certificates golang-go
-		#git clone https://github.com/shadowsocks/v2ray-plugin.git /tmp/v2ray-plugin
+		#git clone https://github.55860.com/shadowsocks/v2ray-plugin.git /tmp/v2ray-plugin
 		#cd /tmp/v2ray-plugin
 		#git checkout ${V2RAY_PLUGIN_VERSION}
 		#git submodule update --init --recursive
@@ -782,10 +782,10 @@ if [ "$MLVPN" = "yes" ]; then
 		apt-get -y install build-essential pkg-config autoconf automake libpcap-dev unzip git
 		rm -rf /tmp/mlvpn
 		cd /tmp
-		#git clone https://github.com/markfoodyburton/MLVPN.git /tmp/mlvpn
-		#git clone https://github.com/flohoff/MLVPN.git /tmp/mlvpn
-		git clone https://github.com/zehome/MLVPN.git /tmp/mlvpn
-		#git clone https://github.com/link4all/MLVPN.git /tmp/mlvpn
+		#git clone https://github.55860.com/markfoodyburton/MLVPN.git /tmp/mlvpn
+		#git clone https://github.55860.com/flohoff/MLVPN.git /tmp/mlvpn
+		git clone https://github.55860.com/zehome/MLVPN.git /tmp/mlvpn
+		#git clone https://github.55860.com/link4all/MLVPN.git /tmp/mlvpn
 		cd /tmp/mlvpn
 		git checkout ${MLVPN_VERSION}
 		./autogen.sh
@@ -841,7 +841,7 @@ if [ "$UBOND" = "yes" ]; then
 		apt-get -y install build-essential pkg-config autoconf automake libpcap-dev unzip git
 		rm -rf /tmp/ubond
 		cd /tmp
-		git clone https://github.com/markfoodyburton/ubond.git /tmp/ubond
+		git clone https://github.55860.com/markfoodyburton/ubond.git /tmp/ubond
 		cd /tmp/ubond
 		git checkout ${UBOND_VERSION}
 		./autogen.sh
@@ -921,7 +921,7 @@ if [ "$OPENVPN" = "yes" ]; then
 	#	openvpn --genkey --secret static.key
 	#fi
 	if [ "$ID" = "ubuntu" ] && [ "$VERSION_ID" = "18.04" ] && [ ! -d /etc/openvpn/ca ]; then
-		wget -O /tmp/EasyRSA-unix-v${EASYRSA_VERSION}.tgz https://github.com/OpenVPN/easy-rsa/releases/download/v3.0.6/EasyRSA-unix-v${EASYRSA_VERSION}.tgz
+		wget -O /tmp/EasyRSA-unix-v${EASYRSA_VERSION}.tgz https://github.55860.com/OpenVPN/easy-rsa/releases/download/v3.0.6/EasyRSA-unix-v${EASYRSA_VERSION}.tgz
 		cd /tmp
 		tar xzvf EasyRSA-unix-v${EASYRSA_VERSION}.tgz
 		cd /tmp/EasyRSA-v${EASYRSA_VERSION}
@@ -1027,7 +1027,7 @@ if [ "$SOURCES" = "yes" ]; then
 	apt-get install -y --no-install-recommends build-essential git ca-certificates meson pkg-config
 	rm -rf /tmp/glorytun-udp
 	cd /tmp
-	git clone https://github.com/angt/glorytun.git /tmp/glorytun-udp
+	git clone https://github.55860.com/suyuan168/glorytun.git /tmp/glorytun-udp
 	cd /tmp/glorytun-udp
 	git checkout ${GLORYTUN_UDP_VERSION}
 	git submodule update --init --recursive
@@ -1091,10 +1091,10 @@ if [ "$DSVPN" = "yes" ]; then
 		apt-get install -y --no-install-recommends build-essential git ca-certificates
 		rm -rf /tmp/dsvpn
 		cd /tmp
-		git clone https://github.com/jedisct1/dsvpn.git /tmp/dsvpn
+		git clone https://github.55860.com/jedisct1/dsvpn.git /tmp/dsvpn
 		cd /tmp/dsvpn
 		git checkout ${DSVPN_VERSION}
-		wget https://github.com/Ysurac/openmptcprouter-feeds/raw/develop/dsvpn/patches/nofirewall.patch
+		wget https://github.55860.com/Ysurac/openmptcprouter-feeds/raw/develop/dsvpn/patches/nofirewall.patch
 		patch -p1 < nofirewall.patch
 		make CFLAGS='-DNO_DEFAULT_ROUTES -DNO_DEFAULT_FIREWALL'
 		make install
@@ -1142,7 +1142,7 @@ if [ "$SOURCES" = "yes" ]; then
 	rm -rf /tmp/glorytun-0.0.35
 	cd /tmp
 	if [ "$UPSTREAM" = "yes" ]; then
-		wget -O /tmp/glorytun-0.0.35.tar.gz https://github.com/Ysurac/glorytun/archive/refs/heads/tcp.tar.gz
+		wget -O /tmp/glorytun-0.0.35.tar.gz https://github.55860.com/Ysurac/glorytun/archive/refs/heads/tcp.tar.gz
 	else
 		wget -O /tmp/glorytun-0.0.35.tar.gz http://github.com/angt/glorytun/releases/download/v0.0.35/glorytun-0.0.35.tar.gz
 	fi

@@ -6,9 +6,8 @@
 # Released under GPL 3 or later
 
 if [ -d "/proc/sys/net/mptcp" ]; then
-        if [ `cat /proc/sys/net/mptcp/mptcp_enabled` = 0 ]; then
+        if ([ -f /proc/sys/net/mptcp/mptcp_enabled ] && [ `cat /proc/sys/net/mptcp/mptcp_enabled` = 0 ]) || ([ -f /proc/sys/net/mptcp/enabled ] && [ `cat /proc/sys/net/mptcp/enabled` = 0 ]); then
                 echo "MPTCP is disabled!"
-                echo "Please set net.mptcp.mptcp_enabled = 1"
                 exit 1
         fi
 else
@@ -26,7 +25,7 @@ case $1 in
         echo "  multipath device {on | off | backup | handover}"
         echo
         echo "show established conections: -c"
-        echo "show mullmesh info: -f"
+        echo "show fullmesh info: -f"
         echo "show kernel config: -k"
         echo
         echo "Flag on the device, to enable/disable MPTCP for this interface. The backup-flag"
@@ -43,12 +42,28 @@ case $1 in
         cat /proc/net/mptcp_fullmesh
         exit 0;;
    "-k")
-        echo Enabled: `cat /proc/sys/net/mptcp/mptcp_enabled`
-        echo Path Manager: `cat /proc/sys/net/mptcp/mptcp_path_manager`
-        echo Use checksum: `cat /proc/sys/net/mptcp/mptcp_checksum`
-        echo Scheduler: `cat /proc/sys/net/mptcp/mptcp_scheduler`
-        echo Syn retries: `cat /proc/sys/net/mptcp/mptcp_syn_retries`
-        echo Debugmode: `cat /proc/sys/net/mptcp/mptcp_debug`
+        if [ -f /proc/sys/net/mptcp/mptcp_enabled ]; then
+            echo Enabled: `cat /proc/sys/net/mptcp/mptcp_enabled`
+        elif [ -f /proc/sys/net/mptcp/enabled ]; then
+            echo Enabled: `cat /proc/sys/net/mptcp/enabled`
+        fi
+        if [ -f /proc/sys/net/mptcp/mptcp_path_manager ]; then
+            echo Path Manager: `cat /proc/sys/net/mptcp/mptcp_path_manager`
+        fi
+        if [ -f /proc/sys/net/mptcp/mptcp_checksum ]; then
+            echo Use checksum: `cat /proc/sys/net/mptcp/mptcp_checksum`
+        else
+            echo Use checksum: `cat /proc/sys/net/mptcp/checksum_enabled`
+        fi
+        if [ -f /proc/sys/net/mptcp/mptcp_scheduler ]; then
+            echo Scheduler: `cat /proc/sys/net/mptcp/mptcp_scheduler`
+        fi
+        if [ -f /proc/sys/net/mptcp/mptcp_syn_retries ]; then
+            echo Syn retries: `cat /proc/sys/net/mptcp/mptcp_syn_retries`
+        fi
+        if [ -f /proc/sys/net/mptcp/mptcp_debug ]; then
+            echo Debugmode: `cat /proc/sys/net/mptcp/mptcp_debug`
+        fi
         echo
         echo See http://multipath-tcp.org/ for details
         exit 0 ;;
@@ -65,38 +80,74 @@ TYPE="$2"
 #FLAG_PATH=`find /sys/devices/ -path "*/net/$DEVICE/flags"`
 
 [ -d "/sys/class/net/$DEVICE/" ] || {
-        echo "Device '$DEVICE' can't found!"
-        echo "Use the hardware name like in ifconfig"
+        #echo "Device '$DEVICE' can't found!"
+        #echo "Use the hardware name like in ifconfig"
         exit 1
 }
 
-FLAG_PATH="/sys/class/net/$DEVICE/flags"
-IFF=`cat $FLAG_PATH`
+if [ -f /proc/sys/net/mptcp/mptcp_enabled ]; then
+        FLAG_PATH="/sys/class/net/$DEVICE/flags"
+        IFF=`cat $FLAG_PATH`
 
-IFF_OFF="0x80000"
-IFF_ON="0x00"
-IFF_BACKUP="0x100000"
-IFF_HANDOVER="0x200000"
-IFF_MASK="0x380000"
+        IFF_OFF="0x80000"
+        IFF_ON="0x00"
+        IFF_BACKUP="0x100000"
+        IFF_HANDOVER="0x200000"
+        IFF_MASK="0x380000"
 
-case $TYPE in
-        "off")          FLAG=$IFF_OFF;;
-        "on")           FLAG=$IFF_ON;;
-        "backup")       FLAG=$IFF_BACKUP;;
-        "handover")     FLAG=$IFF_HANDOVER;;
-        "")
-                IFF=`printf "0x%02x" $(($IFF&$IFF_MASK))`
-                case "$IFF" in
-                        $IFF_OFF)       echo $DEVICE is deactivated;;
-                        $IFF_ON)        echo $DEVICE is in default mode;;
-                        $IFF_BACKUP)    echo $DEVICE is in backup mode;;
-                        $IFF_HANDOVER)  echo $DEVICE is in handover mode;;
-                        *) echo "Unkown state!" && exit 1;;
-                esac
-                exit 0;;
-        *) echo "Unkown flag! Use 'multipath -h' for help" && exit 1;;
-esac
+        case $TYPE in
+                "off")          FLAG=$IFF_OFF;;
+                "on")           FLAG=$IFF_ON;;
+                "backup")       FLAG=$IFF_BACKUP;;
+                "handover")     FLAG=$IFF_HANDOVER;;
+                "")
+                        IFF=`printf "0x%02x" $(($IFF&$IFF_MASK))`
+                        case "$IFF" in
+                                $IFF_OFF)       echo $DEVICE is deactivated;;
+                                $IFF_ON)        echo $DEVICE is in default mode;;
+                                $IFF_BACKUP)    echo $DEVICE is in backup mode;;
+                                $IFF_HANDOVER)  echo $DEVICE is in handover mode;;
+                                *) echo "Unkown state!" && exit 1;;
+                        esac
+                        exit 0;;
+                *) echo "Unkown flag! Use 'multipath -h' for help" && exit 1;;
+        esac
 
-printf "0x%02x" $(($(($IFF^$(($IFF&$IFF_MASK))))|$FLAG)) > $FLAG_PATH
+        printf "0x%02x" $(($(($IFF^$(($IFF&$IFF_MASK))))|$FLAG)) > $FLAG_PATH
+else
+        ID=$(ip mptcp endpoint show | grep "dev $DEVICE" | awk '{print $3}')
+        IFF=$(ip mptcp endpoint show | grep "dev $DEVICE" | awk '{print $4}')
+        IP=$(ifconfig $DEVICE | sed -En 's/127.0.0.1//;s/.*inet (addr:)?(([0-9]*\.){3}[0-9]*).*/\2/p')
+	RMID=$(ip mptcp endpoint show | grep '::ffff' | awk '{ print $3 }')
+        [ -n "$RMID" ] && ip mptcp endpoint delete id $RMID 2>&1 >/dev/null
+        case $TYPE in
+                "off")
+                        [ -n "$ID" ] && ip mptcp endpoint delete id $ID 2>&1 >/dev/null
+                        exit 0;;
+                "on")
+                        [ -n "$ID" ] && ip mptcp endpoint delete id $ID 2>&1 >/dev/null
+                        ip mptcp endpoint add $IP dev $DEVICE subflow fullmesh
+                        exit 0;;
+                "signal")
+                        [ -n "$ID" ] && ip mptcp endpoint delete id $ID 2>&1 >/dev/null
+                        ip mptcp endpoint add $IP dev $DEVICE signal fullmesh
+                        exit 0;;
+                "backup")
+                        [ -n "$ID" ] && ip mptcp endpoint delete id $ID 2>&1 >/dev/null
+                        ip mptcp endpoint add $IP dev $DEVICE backup fullmesh
+                        exit 0;;
+                "")
+                        case "$IFF" in
+                                "")          echo $DEVICE is deactivated;;
+                                "subflow")   echo $DEVICE is in default mode;;
+                                "backup")    echo $DEVICE is in backup mode;;
+                                "signal")    echo $DEVICE is in signal mode;;
+                                "fullmesh")  echo $DEVICE is in fullmesh mode;;
+                                *)           echo "$DEVICE Unkown state!" && exit 1;;
+                        esac
+                        exit 0;;
+                *) echo "Unkown flag! Use 'multipath -h' for help" && exit 1;;
+        esac
 
+fi
 

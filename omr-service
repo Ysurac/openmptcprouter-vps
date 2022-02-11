@@ -7,7 +7,11 @@ _multipath() {
 	for intf in `ls -1 /sys/class/net`; do
 		if [ "$intf" != "bonding_masters" ]; then
 			if [ "$intf" = "$NET_IFACE" ]; then
-				[ "$(multipath $intf | tr -d '\n')" != "$intf is in default mode" ] && multipath $intf on
+				[ -f /proc/sys/net/mptcp/mptcp_enabled ] && [ "$(multipath $intf | tr -d '\n')" != "$intf is in default mode" ] && multipath $intf on
+				[ -f /proc/sys/net/mptcp/enabled ] && [ "$(multipath $intf | tr -d '\n')" != "$intf is in signal mode" ] && {
+					multipath $intf signal
+					ip mptcp limits set subflows 8 add_addr_accepted 8 2>&1 >/dev/null
+				}
 			else
 				[ "$(multipath $intf | tr -d '\n')" != "$intf is deactivated" ] && multipath $intf off
 			fi

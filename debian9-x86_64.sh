@@ -471,7 +471,7 @@ if [ "$OMR_ADMIN" = "yes" ]; then
 	else
 		apt-get -y install python3-passlib python3-jwt python3-netaddr libuv1 python3-uvloop
 	fi
-	apt-get -y install python3-uvicorn jq ipcalc python3-netifaces python3-aiofiles python3-psutil
+	apt-get -y install python3-uvicorn jq ipcalc python3-netifaces python3-aiofiles python3-psutil python3-requests
 	echo '-- pip3 install needed python modules'
 	#pip3 install pyjwt passlib uvicorn fastapi netjsonconfig python-multipart netaddr
 	#pip3 -q install fastapi netjsonconfig python-multipart uvicorn -U

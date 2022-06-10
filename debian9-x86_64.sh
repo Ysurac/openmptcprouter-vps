@@ -1,6 +1,8 @@
 #!/bin/sh
-# Copyright (C) 2018-2020 Ycarus (Yannick Chabanois) <ycarus@zugaina.org> for OpenMPTCProuter
+#
+# Copyright (C) 2018-2021 Ycarus (Yannick Chabanois) <ycarus@zugaina.org> for OpenMPTCProuter
 # Copyright (C) 2018-2020 suyunfan (antrouter) https://55860.com for openmptcprouter
+#
 # This is free software, licensed under the GNU General Public License v3 or later.
 # See /LICENSE for more information.
 #
@@ -10,7 +12,7 @@ echo '如果用于商业请选择蚂蚁聚合商业版，openmptcprouter合作�
 echo '5秒后自动开始安装'
 echo '===================================================================================='
 sleep 5
-UPSTREAM=${UPSTREAM:-yes}
+UPSTREAM=${UPSTREAM:-no}
 SHADOWSOCKS_PASS=${SHADOWSOCKS_PASS:-$(head -c 32 /dev/urandom | base64 -w0)}
 GLORYTUN_PASS=${GLORYTUN_PASS:-$(od -vN "32" -An -tx1 /dev/urandom | tr '[:lower:]' '[:upper:]' | tr -d " \n")}
 DSVPN_PASS=${DSVPN_PASS:-$(od -vN "32" -An -tx1 /dev/urandom | tr '[:lower:]' '[:upper:]' | tr -d " \n")}
@@ -45,14 +47,19 @@ INTERFACE=${INTERFACE:-$(ip -o -4 route show to default | grep -m 1 -Po '(?<=dev
 KERNEL_VERSION="5.4.132"
 KERNEL_PACKAGE_VERSION="1.19+4f508aa"
 KERNEL_RELEASE="${KERNEL_VERSION}-mptcp_${KERNEL_PACKAGE_VERSION}"
-GLORYTUN_UDP_VERSION="master"
-GLORYTUN_UDP_BINARY_VERSION="0.3.4-4"
+if [ "$UPSTREAM" = "yes" ]; then
+	KERNEL_VERSION="5.15.13"
+	KERNEL_PACKAGE_VERSION="1.5"
+	KERNEL_RELEASE="${KERNEL_VERSION}-mptcp_${KERNEL_VERSION}-${KERNEL_PACKAGE_VERSION}"
+fi
+GLORYTUN_UDP_VERSION="32267e86a6da05b285bb3bf2b136c105dc0af4bb"
+GLORYTUN_UDP_BINARY_VERSION="0.3.4-5"
 GLORYTUN_TCP_BINARY_VERSION="0.0.35-3"
 #MLVPN_VERSION="8f9720978b28c1954f9f229525333547283316d2"
-MLVPN_VERSION="f45cec350a6879b8b020143a78134a022b5df2a7"
-MLVPN_BINARY_VERSION="3.0.0+20201216.git.2263bab"
-UBOND_VERSION="672100fb57913ffd29caad63517e145a5974b078"
-OBFS_VERSION="master"
+MLVPN_VERSION="8aa1b16d843ea68734e2520e39a34cb7f3d61b2b"
+MLVPN_BINARY_VERSION="3.0.0+20211028.git.ddafba3"
+UBOND_VERSION="f9fb6aa0a65e8e20950977bda970c90012f830d7"
+OBFS_VERSION="486bebd9208539058e57e23a12f23103016e09b4"
 OBFS_BINARY_VERSION="0.0.5-1"
 OMR_ADMIN_VERSION="027d5c8e80ef469d33e43f6cbf3103b30e55ea1c"
 if [ "$UPSTREAM" = "yes" ]; then
@@ -64,16 +71,20 @@ DSVPN_BINARY_VERSION="0.1.4-2"
 V2RAY_VERSION="4.43.0"
 V2RAY_PLUGIN_VERSION="4.35.1"
 EASYRSA_VERSION="3.0.6"
-SHADOWSOCKS_VERSION="master"
-SHADOWSOCKS_BINARY_VERSION="3.3.5-1"
-DEFAULT_USER="antrouter"
+SHADOWSOCKS_VERSION="7407b214f335f0e2068a8622ef3674d868218e17"
+if [ "$UPSTREAM" = "yes" ]; then
+	SHADOWSOCKS_VERSION="410950d87d8cdf8502d8f59a79dc0ff4c7677543"
+fi
+IPROUTE2_VERSION="29da83f89f6e1fe528c59131a01f5d43bcd0a000"
+SHADOWSOCKS_BINARY_VERSION="3.3.5-3"
+DEFAULT_USER="openmptcprouter"
 VPS_DOMAIN=${VPS_DOMAIN:-$(wget -4 -qO- -T 2 http://hostname.openmptcprouter.com)}
 VPSPATH="server-test"
-VPSURL="https://omr.openmptcprouter.cn/"
+VPSURL="https://openmptcprouter.55860.com/"
 REPO="repo.55860.com"
-CHINA=${CHINA:-yes}
+CHINA=${CHINA:-no}
 
-OMR_VERSION="0.1047-test"
+OMR_VERSION="0.1027-test"
 
 DIR=$( pwd )
 #"
@@ -357,7 +368,7 @@ if [ "$SOURCES" = "yes" ]; then
 	#wget -O /tmp/shadowsocks-libev-${SHADOWSOCKS_VERSION}.tar.gz http://github.com/shadowsocks/shadowsocks-libev/releases/download/v${SHADOWSOCKS_VERSION}/shadowsocks-libev-${SHADOWSOCKS_VERSION}.tar.gz
 	cd /tmp
 	rm -rf shadowsocks-libev
-	git clone https://github.55860.com/suyuan168/shadowsocks-libev.git
+	git clone https://github.55860.com/Ysurac/shadowsocks-libev.git
 	cd shadowsocks-libev
 	git checkout ${SHADOWSOCKS_VERSION}
 	git submodule update --init --recursive
@@ -677,7 +688,7 @@ if [ "$OBFS" = "yes" ]; then
 		else
 			apt-get install -y --no-install-recommends build-essential autoconf libtool libssl-dev libpcre3-dev libev-dev asciidoc xmlto automake git ca-certificates
 		fi
-		git clone https://github.55860.com/suyuan168/simple-obfs.git /tmp/simple-obfs
+		git clone https://github.55860.com/shadowsocks/simple-obfs.git /tmp/simple-obfs
 		cd /tmp/simple-obfs
 		git checkout ${OBFS_VERSION}
 		git submodule update --init --recursive
@@ -699,7 +710,7 @@ if [ "$V2RAY_PLUGIN" = "yes" ]; then
 		rm -rf /tmp/v2ray-plugin-linux-amd64-${V2RAY_PLUGIN_VERSION}.tar.gz
 		#wget -O /tmp/v2ray-plugin-linux-amd64-v${V2RAY_PLUGIN_VERSION}.tar.gz https://github.55860.com/shadowsocks/v2ray-plugin/releases/download/${V2RAY_PLUGIN_VERSION}/v2ray-plugin-linux-amd64-v${V2RAY_PLUGIN_VERSION}.tar.gz
 		#wget -O /tmp/v2ray-plugin-linux-amd64-v${V2RAY_PLUGIN_VERSION}.tar.gz ${VPSURL}${VPSPATH}/bin/v2ray-plugin-linux-amd64-v${V2RAY_PLUGIN_VERSION}.tar.gz
-		wget -O /tmp/v2ray-plugin-linux-amd64-v${V2RAY_PLUGIN_VERSION}.tar.gz https://55860.com/bak/v2ray-plugin-linux-amd64-${V2RAY_PLUGIN_VERSION}.tar.gz
+		wget -O /tmp/v2ray-plugin-linux-amd64-v${V2RAY_PLUGIN_VERSION}.tar.gz https://github.55860.com/teddysun/v2ray-plugin/releases/download/v${V2RAY_PLUGIN_VERSION}/v2ray-plugin-linux-amd64-v${V2RAY_PLUGIN_VERSION}.tar.gz
 		cd /tmp
 		tar xzvf v2ray-plugin-linux-amd64-v${V2RAY_PLUGIN_VERSION}.tar.gz
 		cp -f v2ray-plugin_linux_amd64 /usr/local/bin/v2ray-plugin
@@ -778,7 +789,8 @@ if [ "$MLVPN" = "yes" ]; then
 		rm -rf /tmp/mlvpn
 		cd /tmp
 		#git clone https://github.55860.com/markfoodyburton/MLVPN.git /tmp/mlvpn
-		git clone https://github.55860.com/flohoff/MLVPN.git /tmp/mlvpn
+		#git clone https://github.55860.com/flohoff/MLVPN.git /tmp/mlvpn
+		git clone https://github.55860.com/zehome/MLVPN.git /tmp/mlvpn
 		#git clone https://github.55860.com/link4all/MLVPN.git /tmp/mlvpn
 		cd /tmp/mlvpn
 		git checkout ${MLVPN_VERSION}
@@ -1021,7 +1033,7 @@ if [ "$SOURCES" = "yes" ]; then
 	apt-get install -y --no-install-recommends build-essential git ca-certificates meson pkg-config
 	rm -rf /tmp/glorytun-udp
 	cd /tmp
-	git clone https://github.55860.com/suyuan168/glorytun.git /tmp/glorytun-udp
+	git clone https://github.55860.com/angt/glorytun.git /tmp/glorytun-udp
 	cd /tmp/glorytun-udp
 	git checkout ${GLORYTUN_UDP_VERSION}
 	git submodule update --init --recursive

@@ -7,7 +7,11 @@ _multipath() {
 	for intf in `ls -1 /sys/class/net`; do
 		if [ "$intf" != "bonding_masters" ]; then
 			if [ "$intf" = "$NET_IFACE" ]; then
-				[ "$(multipath $intf | tr -d '\n')" != "$intf is in default mode" ] && multipath $intf on
+				[ -f /proc/sys/net/mptcp/mptcp_enabled ] && [ "$(multipath $intf | tr -d '\n')" != "$intf is in default mode" ] && multipath $intf on
+				[ -f /proc/sys/net/mptcp/enabled ] && [ "$(multipath $intf | tr -d '\n')" != "$intf is in signal mode" ] && {
+					multipath $intf signal
+					ip mptcp limits set subflows 8 add_addr_accepted 8 2>&1 >/dev/null
+				}
 			else
 				[ "$(multipath $intf | tr -d '\n')" != "$intf is deactivated" ] && multipath $intf off
 			fi
@@ -40,6 +44,22 @@ _glorytun_tcp() {
 	fi
 }
 
+_dsvpn() {
+	[ -n "$(ip -6 r show 64:ff9b::/96 dev dsvpn0)" ] && ip -6 r del 64:ff9b::/96 dev dsvpn0 2>&1 >/dev/null
+}
+
+_shadowsocks() {
+	[ -z "$(pgrep ss-server)" ] && {
+		logger -t "OMR-Service" "ss-server not detected, restart Shadowsocks"
+		systemctl restart shadowsocks-libev-manager@manager
+	}
+}
+
+_wireguard() {
+	[ -z "$(ip a show dev wg0 | grep '10.255.247.1')" ] && ip a add 10.255.247.1/24 dev wg0 2>&1 >/dev/null
+}
+
+
 _omr_api() {
 	[ -z "$(curl -s -k -m 30 https://127.0.0.1:65500/)" ] && {
 		logger -t "OMR-Service" "Restart OMR-Admin"
@@ -63,19 +83,21 @@ _lan_route() {
 
 _gre_tunnels() {
 	. "$(readlink -f "/etc/shorewall/params.vpn")"
-	for intf in /etc/openmptcprouter-vps-admin/intf/*; do
-		if [ -f "$intf" ]; then
-			. "$(readlink -f "$intf")"
-			iface="$(basename $intf)"
-			if [ "$(ip tunnel show $iface 2>/dev/null | awk '{print $4}')" != "$OMR_ADDR" ]; then
-				ip tunnel del $iface 2>&1 >/dev/null
-				ip tunnel add $iface mode gre local $INTFADDR remote $OMR_ADDR 2>&1 >/dev/null
-				ip link set $iface up 2>&1 >/dev/null
-				ip addr add $LOCALIP dev $iface 2>&1 >/dev/null
-				ip route add $NETWORK dev $iface 2>&1 >/dev/null
+	if [ -n "$OMR_ADDR" ]; then
+		for intf in /etc/openmptcprouter-vps-admin/intf/*; do
+			if [ -f "$intf" ]; then
+				. "$(readlink -f "$intf")"
+				iface="$(basename $intf)"
+				if [ "$(ip tunnel show $iface 2>/dev/null | awk '{print $4}')" != "$OMR_ADDR" ]; then
+					ip tunnel del $iface 2>&1 >/dev/null
+					ip tunnel add $iface mode gre local $INTFADDR remote $OMR_ADDR 2>&1 >/dev/null
+					ip link set $iface up 2>&1 >/dev/null
+					ip addr add $LOCALIP dev $iface 2>&1 >/dev/null
+					ip route add $NETWORK dev $iface 2>&1 >/dev/null
+				fi
 			fi
-		fi
-	done
+		done
+	fi
 }
 
 _openvpn_bonding() {
@@ -104,11 +126,15 @@ _openvpn_bonding() {
 	fi
 }
 
+sysctl -p /etc/sysctl.d/90-shadowsocks.conf 2>&1 >/dev/null
 modprobe bonding 2>&1 >/dev/null
 ip link add omr-bonding type bond 2>&1 >/dev/null
 while true; do
 	_glorytun_udp
 	_glorytun_tcp
+	_shadowsocks
+	_dsvpn
+	_wireguard
 	_multipath
 	_omr_api
 	_lan_route

@@ -1,0 +1,16 @@
+[Unit]
+Description=UBOND connection to %i
+PartOf=ubond.service
+ReloadPropagatedFrom=ubond.service
+After=network.target network-online.target
+
+[Service]
+Type=notify
+NotifyAccess=main
+ExecStart=/usr/local/sbin/ubond --config /etc/ubond/%i.conf --name %i --user ubond --quiet
+ExecReload=/bin/kill -HUP $MAINPID
+WorkingDirectory=/etc/ubond
+Restart=always
+
+[Install]
+WantedBy=multi-user.target

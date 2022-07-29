@@ -11,7 +11,6 @@ echo '如果用于商业请选择蚂蚁聚合商业版，openmptcprouter合作�
 echo '5秒后自动开始安装'
 echo '===================================================================================='
 sleep 5
-
 UPSTREAM=${UPSTREAM:-no}
 SHADOWSOCKS_PASS=${SHADOWSOCKS_PASS:-$(head -c 32 /dev/urandom | base64 -w0)}
 GLORYTUN_PASS=${GLORYTUN_PASS:-$(od -vN "32" -An -tx1 /dev/urandom | tr '[:lower:]' '[:upper:]' | tr -d " \n")}

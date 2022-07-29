@@ -11,6 +11,7 @@ echo '如果用于商业请选择蚂蚁聚合商业版，openmptcprouter合作�
 echo '5秒后自动开始安装'
 echo '===================================================================================='
 sleep 5
+
 UPSTREAM=${UPSTREAM:-no}
 SHADOWSOCKS_PASS=${SHADOWSOCKS_PASS:-$(head -c 32 /dev/urandom | base64 -w0)}
 GLORYTUN_PASS=${GLORYTUN_PASS:-$(od -vN "32" -An -tx1 /dev/urandom | tr '[:lower:]' '[:upper:]' | tr -d " \n")}
@@ -43,12 +44,12 @@ REINSTALL=${REINSTALL:-yes}
 SPEEDTEST=${SPEEDTEST:-yes}
 LOCALFILES=${LOCALFILES:-no}
 INTERFACE=${INTERFACE:-$(ip -o -4 route show to default | grep -m 1 -Po '(?<=dev )(\S+)' | tr -d "\n")}
-KERNEL_VERSION="5.4.132"
-KERNEL_PACKAGE_VERSION="1.19+4f508aa"
+KERNEL_VERSION="5.4.207"
+KERNEL_PACKAGE_VERSION="1.22"
 KERNEL_RELEASE="${KERNEL_VERSION}-mptcp_${KERNEL_PACKAGE_VERSION}"
 if [ "$UPSTREAM" = "yes" ]; then
-	KERNEL_VERSION="5.15.13"
-	KERNEL_PACKAGE_VERSION="1.5"
+	KERNEL_VERSION="5.15.57"
+	KERNEL_PACKAGE_VERSION="1.6"
 	KERNEL_RELEASE="${KERNEL_VERSION}-mptcp_${KERNEL_VERSION}-${KERNEL_PACKAGE_VERSION}"
 fi
 GLORYTUN_UDP_VERSION="32267e86a6da05b285bb3bf2b136c105dc0af4bb"
@@ -61,16 +62,13 @@ UBOND_VERSION="f9fb6aa0a65e8e20950977bda970c90012f830d7"
 OBFS_VERSION="486bebd9208539058e57e23a12f23103016e09b4"
 OBFS_BINARY_VERSION="0.0.5-1"
 OMR_ADMIN_VERSION="20314b11f21eb5878ba62c85d874528e0e394024"
-if [ "$UPSTREAM" = "yes" ]; then
-	OMR_ADMIN_VERSION="2a8f642f89a982d2c26c3e176f6c4c1e3e91ffcb"
-fi
-OMR_ADMIN_BINARY_VERSION="0.3+20210508"
+OMR_ADMIN_BINARY_VERSION="0.3+20220715"
 DSVPN_VERSION="3b99d2ef6c02b2ef68b5784bec8adfdd55b29b1a"
 DSVPN_BINARY_VERSION="0.1.4-2"
 V2RAY_VERSION="4.43.0"
-V2RAY_PLUGIN_VERSION="4.35.1"
+V2RAY_PLUGIN_VERSION="4.43.0"
 EASYRSA_VERSION="3.0.6"
-SHADOWSOCKS_VERSION="master"
+SHADOWSOCKS_VERSION="7407b214f335f0e2068a8622ef3674d868218e17"
 if [ "$UPSTREAM" = "yes" ]; then
 	SHADOWSOCKS_VERSION="410950d87d8cdf8502d8f59a79dc0ff4c7677543"
 fi
@@ -187,7 +185,11 @@ echo "Remove lock and update packages list..."
 rm -f /var/lib/dpkg/lock
 rm -f /var/lib/dpkg/lock-frontend
 rm -f /var/cache/apt/archives/lock
-apt-get update --allow-releaseinfo-change
+if [ "$ID" = "debian" ] && [ "$VERSION_ID" = "9" ]; then
+	apt-get update
+else
+	apt-get update --allow-releaseinfo-change
+fi
 rm -f /var/lib/dpkg/lock
 rm -f /var/lib/dpkg/lock-frontend
 rm -f /var/cache/apt/archives/lock
@@ -288,6 +290,18 @@ apt-get update --allow-releaseinfo-change
 sleep 2
 apt-get -y install dirmngr patch rename curl libcurl4 unzip pkg-config
 
+if [ -z "$(dpkg-query -l | grep grub)" ]; then
+	if [ -d /boot/grub2 ]; then
+		apt-get -y install grub2
+	elif [ -d /boot/grub ]; then
+		apt-get -y install grub-legacy
+	fi
+	[ -n "$(grep 'net.ifnames=0' /boot/grub/grub.cfg)" ] && [ ! -f /etc/default/grub ] && {
+		echo 'GRUB_CMDLINE_LINUX="net.ifnames=0 biosdevname=0"' > /etc/default/grub
+	}
+fi
+
+
 if [ "$SOURCES" = "yes" ]; then
 	wget -O /tmp/linux-image-${KERNEL_RELEASE}_amd64.deb ${VPSURL}kernel/linux-image-${KERNEL_RELEASE}_amd64.deb
 	wget -O /tmp/linux-headers-${KERNEL_RELEASE}_amd64.deb ${VPSURL}kernel/linux-headers-${KERNEL_RELEASE}_amd64.deb
@@ -322,6 +336,7 @@ if [ "$LOCALFILES" = "no" ]; then
 else
 	cd ${DIR}
 fi
+[ -f /boot/grub/grub.cfg ] && [ -z "$(grep ${KERNEL_VERSION}-mptcp /boot/grub/grub.cfg)" ] && [ -n "$(which grub-mkconfig)" ] && grub-mkconfig -o /boot/grub/grub.cfg
 rm -f /etc/grub.d/30_os-prober
 bash update-grub.sh ${KERNEL_VERSION}-mptcp
 bash update-grub.sh ${KERNEL_RELEASE}
@@ -367,7 +382,7 @@ if [ "$SOURCES" = "yes" ]; then
 	#wget -O /tmp/shadowsocks-libev-${SHADOWSOCKS_VERSION}.tar.gz http://github.com/shadowsocks/shadowsocks-libev/releases/download/v${SHADOWSOCKS_VERSION}/shadowsocks-libev-${SHADOWSOCKS_VERSION}.tar.gz
 	cd /tmp
 	rm -rf shadowsocks-libev
-	git clone https://github.55860.com/suyuan168/shadowsocks-libev.git
+	git clone https://github.55860.com/Ysurac/shadowsocks-libev.git
 	cd shadowsocks-libev
 	git checkout ${SHADOWSOCKS_VERSION}
 	git submodule update --init --recursive
@@ -435,7 +450,7 @@ if [ "$SOURCES" = "yes" ]; then
 	rm -f /var/lib/dpkg/lock-frontend
 	cd /tmp
 	#dpkg -i shadowsocks-libev_*.deb
-	dpkg -i omr-shadowsocks-libev_*.deb
+	dpkg -i omr-shadowsocks-libev_*.deb 2>&1 >/dev/null
 	#mkdir -p /usr/lib/shadowsocks-libev
 	#cp -f /tmp/shadowsocks-libev-${SHADOWSOCKS_VERSION}/src/*.ebpf /usr/lib/shadowsocks-libev
 	#rm -rf /tmp/shadowsocks-libev-${SHADOWSOCKS_VERSION}
@@ -535,8 +550,9 @@ if [ "$OMR_ADMIN" = "yes" ]; then
 			apt-get -y install python3-passlib python3-jwt python3-netaddr libuv1 python3-uvloop
 		fi
 	fi
-	apt-get -y --allow-downgrades install python3-uvicorn jq ipcalc python3-netifaces python3-aiofiles python3-psutil python3-requests
+	apt-get -y --allow-downgrades install python3-uvicorn jq ipcalc python3-netifaces python3-aiofiles python3-psutil python3-requests pwgen
 	echo '-- pip3 install needed python modules'
+	echo "If you see any error here, I really don't care: it's about a not used module for home users"
 	#pip3 install pyjwt passlib uvicorn fastapi netjsonconfig python-multipart netaddr
 	#pip3 -q install fastapi netjsonconfig python-multipart uvicorn -U
 	pip3 -q install fastapi jsonschema netjsonconfig python-multipart jinja2 -U
@@ -969,7 +985,7 @@ if [ "$OPENVPN" = "yes" ]; then
 			make-cadir /etc/openvpn/ca
 		fi
 		cd /etc/openvpn/ca
-		./easyrsa init-pki
+		./easyrsa init-pki 2>&1 >/dev/null
 		./easyrsa --batch build-ca nopass
 		EASYRSA_CERT_EXPIRE=3650 ./easyrsa build-server-full server nopass
 		EASYRSA_CERT_EXPIRE=3650 ./easyrsa build-client-full "openmptcprouter" nopass
@@ -1029,6 +1045,7 @@ fi
 if [ "$SOURCES" = "yes" ]; then
 	rm -f /var/lib/dpkg/lock
 	rm -f /var/lib/dpkg/lock-frontend
+	rm -f /usr/bin/glorytun
 	apt-get install -y --no-install-recommends build-essential git ca-certificates meson pkg-config
 	rm -rf /tmp/glorytun-udp
 	cd /tmp
@@ -1073,6 +1090,7 @@ if [ "$SOURCES" = "yes" ]; then
 	cd /tmp
 	rm -rf /tmp/glorytun-udp
 else
+	rm -f /usr/local/bin/glorytun
 	apt-get -y -o Dpkg::Options::="--force-confdef" -o Dpkg::Options::="--force-confold" -o Dpkg::Options::="--force-overwrite" install omr-glorytun=${GLORYTUN_UDP_BINARY_VERSION}
 	GLORYTUN_PASS="$(cat /etc/glorytun-udp/tun0.key | tr -d '\n')"
 fi
@@ -1143,6 +1161,7 @@ if [ "$SOURCES" = "yes" ]; then
 	fi
 	rm -f /var/lib/dpkg/lock
 	rm -f /var/lib/dpkg/lock-frontend
+	rm -f /usr/bin/glorytun-tcp
 	apt-get -y install build-essential pkg-config autoconf automake
 	rm -rf /tmp/glorytun-0.0.35
 	cd /tmp
@@ -1177,6 +1196,7 @@ if [ "$SOURCES" = "yes" ]; then
 	cd /tmp
 	rm -rf /tmp/glorytun-0.0.35
 else
+	rm -f /usr/local/bin/glorytun-tcp
 	apt-get -y -o Dpkg::Options::="--force-confdef" -o Dpkg::Options::="--force-confold" -o Dpkg::Options::="--force-overwrite" install omr-glorytun-tcp=${GLORYTUN_TCP_BINARY_VERSION}
 fi
 [ "$(ip -6 a)" != "" ] && sed -i 's/0.0.0.0/::/g' /etc/glorytun-tcp/tun0
@@ -1286,6 +1306,7 @@ else
 	sed -i 's:10.0.0.2:$OMR_ADDR:g' /etc/shorewall/rules
 	sed -i "s:eth0:$INTERFACE:g" /etc/shorewall6/*
 fi
+[ -z "$(grep nf_conntrack_sip /etc/modprobe.d/blacklist.conf)" ] && echo 'blacklist nf_conntrack_sip' >> /etc/modprobe.d/blacklist.conf
 if [ "$ID" = "debian" ] && [ "$VERSION_ID" = "10" ]; then
 	apt-get -y install iptables
 	update-alternatives --set iptables /usr/sbin/iptables-legacy

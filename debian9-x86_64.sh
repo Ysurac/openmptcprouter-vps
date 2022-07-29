@@ -1,7 +1,6 @@
 #!/bin/sh
 #
 # Copyright (C) 2018-2021 Ycarus (Yannick Chabanois) <ycarus@zugaina.org> for OpenMPTCProuter
-# Copyright (C) 2018-2020 suyunfan (antrouter) https://55860.com for openmptcprouter
 #
 # This is free software, licensed under the GNU General Public License v3 or later.
 # See /LICENSE for more information.
@@ -61,7 +60,7 @@ MLVPN_BINARY_VERSION="3.0.0+20211028.git.ddafba3"
 UBOND_VERSION="f9fb6aa0a65e8e20950977bda970c90012f830d7"
 OBFS_VERSION="486bebd9208539058e57e23a12f23103016e09b4"
 OBFS_BINARY_VERSION="0.0.5-1"
-OMR_ADMIN_VERSION="8dcc64d1a455a71b63117963098a5525ba217518"
+OMR_ADMIN_VERSION="20314b11f21eb5878ba62c85d874528e0e394024"
 if [ "$UPSTREAM" = "yes" ]; then
 	OMR_ADMIN_VERSION="2a8f642f89a982d2c26c3e176f6c4c1e3e91ffcb"
 fi

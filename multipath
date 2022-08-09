@@ -117,7 +117,7 @@ if [ -f /proc/sys/net/mptcp/mptcp_enabled ]; then
 else
         ID=$(ip mptcp endpoint show | grep "dev $DEVICE" | awk '{print $3}')
         IFF=$(ip mptcp endpoint show | grep "dev $DEVICE" | awk '{print $4}')
-        IP=$(ifconfig $DEVICE | sed -En 's/127.0.0.1//;s/.*inet (addr:)?(([0-9]*\.){3}[0-9]*).*/\2/p')
+        IP=$(ip a show $DEVICE | sed -En 's/127.0.0.1//;s/.*inet (addr:)?(([0-9]*\.){3}[0-9]*).*/\2/p')
 	RMID=$(ip mptcp endpoint show | grep '::ffff' | awk '{ print $3 }')
         [ -n "$RMID" ] && ip mptcp endpoint delete id $RMID 2>&1 >/dev/null
         case $TYPE in

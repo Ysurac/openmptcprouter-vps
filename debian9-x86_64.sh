@@ -76,6 +76,7 @@ IPROUTE2_VERSION="29da83f89f6e1fe528c59131a01f5d43bcd0a000"
 SHADOWSOCKS_BINARY_VERSION="3.3.5-3"
 DEFAULT_USER="openmptcprouter"
 VPS_DOMAIN=${VPS_DOMAIN:-$(wget -4 -qO- -T 2 http://hostname.openmptcprouter.com)}
+VPS_PUBLIC_IP=${VPS_PUBLIC_IP:-$(wget -4 -qO- -T 2 http://ip.openmptcprouter.com)}
 VPSPATH="server-test"
 VPSURL="https://openmptcprouter.55860.com/"
 REPO="repo.55860.com"
@@ -922,6 +923,34 @@ if [ "$WIREGUARD" = "yes" ]; then
 		EOF
 	fi
 	systemctl enable wg-quick@wg0
+	if [ ! -f /etc/wireguard/client-wg0.conf ]; then
+		cd /etc/wireguard
+		umask 077; wg genkey | tee vpn-client-private.key | wg pubkey > vpn-client-public.key
+		cat > /etc/wireguard/client-wg0.conf <<-EOF
+		[Interface]
+		PrivateKey = $(cat /etc/wireguard/vpn-server-private.key | tr -d "\n")
+		ListenPort = 65311
+		Address = 10.255.246.1/24
+		SaveConfig = true
+		
+		[Peer]
+		PublicKey = $(cat /etc/wireguard/vpn-client-public.key | tr -d "\n")
+		AllowedIPs = 10.255.246.2/32
+		EOF
+	fi
+	if [ ! -f /root/wireguard-client.conf ]; then
+		cat > /root/wireguard-client.conf <<-EOF
+		[Interface]
+		Address = 10.255.246.2/24
+		PrivateKey = $(cat /etc/wireguard/vpn-client-private.key | tr -d "\n")
+		
+		[Peer]
+		PublicKey = $(cat /etc/wireguard/vpn-server-public.key | tr -d "\n")
+		Endpoint = ${VPS_PUBLIC_IP}:65312
+		AllowedIPs = 0.0.0.0/0, ::/0, 192.168.100.0/24
+		EOF
+	fi
+	systemctl enable wg-quick@client-wg0
 	echo "Install wireguard done"
 fi
 
@@ -1091,7 +1120,7 @@ if [ "$SOURCES" = "yes" ]; then
 	rm -rf /tmp/glorytun-udp
 else
 	rm -f /usr/local/bin/glorytun
-	apt-get -y -o Dpkg::Options::="--force-confdef" -o Dpkg::Options::="--force-confold" -o Dpkg::Options::="--force-overwrite" install omr-glorytun=${GLORYTUN_UDP_BINARY_VERSION}
+	apt-get -y -o Dpkg::Options::="--force-confdef" -o Dpkg::Options::="--force-confold" -o Dpkg::Options::="--force-overwrite" install --reinstall omr-glorytun=${GLORYTUN_UDP_BINARY_VERSION}
 	GLORYTUN_PASS="$(cat /etc/glorytun-udp/tun0.key | tr -d '\n')"
 fi
 [ "$(ip -6 a)" != "" ] && sed -i 's/0.0.0.0/::/g' /etc/glorytun-udp/tun0
@@ -1197,7 +1226,7 @@ if [ "$SOURCES" = "yes" ]; then
 	rm -rf /tmp/glorytun-0.0.35
 else
 	rm -f /usr/local/bin/glorytun-tcp
-	apt-get -y -o Dpkg::Options::="--force-confdef" -o Dpkg::Options::="--force-confold" -o Dpkg::Options::="--force-overwrite" install omr-glorytun-tcp=${GLORYTUN_TCP_BINARY_VERSION}
+	apt-get -y -o Dpkg::Options::="--force-confdef" -o Dpkg::Options::="--force-confold" -o Dpkg::Options::="--force-overwrite" install --reinstall omr-glorytun-tcp=${GLORYTUN_TCP_BINARY_VERSION}
 fi
 [ "$(ip -6 a)" != "" ] && sed -i 's/0.0.0.0/::/g' /etc/glorytun-tcp/tun0
 

@@ -1316,6 +1316,7 @@ else
 	cp ${DIR}/shorewall4/shorewall.conf /etc/shorewall/shorewall.conf
 	cp ${DIR}/shorewall4/policy /etc/shorewall/policy
 	cp ${DIR}/shorewall4/params /etc/shorewall/params
+	cp ${DIR}/shorewall4/zones /etc/shorewall/zones
 	#cp ${DIR}/shorewall4/params.vpn /etc/shorewall/params.vpn
 	#cp ${DIR}/shorewall4/params.net /etc/shorewall/params.net
 	cp ${DIR}/shorewall6/params /etc/shorewall6/params
@@ -1328,6 +1329,12 @@ else
 	sed -i 's/^.*#DNAT/#DNAT/g' /etc/shorewall/rules
 	sed -i 's:10.0.0.2:$OMR_ADDR:g' /etc/shorewall/rules
 	sed -i "s:eth0:$INTERFACE:g" /etc/shorewall6/*
+	if [ "$LOCALFILES" = "no" ]; then
+		rm -rf ${DIR}/shorewall4
+		rm -rf ${DIR}/shorewall6
+		rm -f ${DIR}/openmptcprouter-shorewall.tar.gz
+		rm -f ${DIR}/openmptcprouter-shorewall6.tar.gz
+	fi
 fi
 [ -z "$(grep nf_conntrack_sip /etc/modprobe.d/blacklist.conf)" ] && echo 'blacklist nf_conntrack_sip' >> /etc/modprobe.d/blacklist.conf
 if [ "$ID" = "debian" ] && [ "$VERSION_ID" = "10" ]; then

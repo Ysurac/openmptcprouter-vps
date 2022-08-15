@@ -929,7 +929,7 @@ if [ "$WIREGUARD" = "yes" ]; then
 		cat > /etc/wireguard/client-wg0.conf <<-EOF
 		[Interface]
 		PrivateKey = $(cat /etc/wireguard/vpn-server-private.key | tr -d "\n")
-		ListenPort = 65311
+		ListenPort = 65312
 		Address = 10.255.246.1/24
 		SaveConfig = true
 		

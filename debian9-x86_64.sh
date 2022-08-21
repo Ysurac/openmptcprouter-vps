@@ -256,6 +256,16 @@ apt-get update --allow-releaseinfo-change
 sleep 2
 apt-get -y install dirmngr patch rename curl libcurl4 unzip
 
+if [ -z "$(dpkg-query -l | grep grub)" ]; then
+	if [ -d /boot/grub2 ]; then
+		apt-get -y install grub2
+	elif [ -d /boot/grub ]; then
+		apt-get -y install grub-legacy
+	fi
+	[ -n "$(grep 'net.ifnames=0' /boot/grub/grub.cfg)" ] && [ ! -f /etc/default/grub ] && {
+		echo 'GRUB_CMDLINE_LINUX="net.ifnames=0 biosdevname=0"' > /etc/default/grub
+	}
+fi
 if [ "$SOURCES" = "yes" ]; then
 	wget -O /tmp/linux-image-${KERNEL_RELEASE}_amd64.deb ${VPSURL}kernel/linux-image-${KERNEL_RELEASE}_amd64.deb
 	wget -O /tmp/linux-headers-${KERNEL_RELEASE}_amd64.deb ${VPSURL}kernel/linux-headers-${KERNEL_RELEASE}_amd64.deb
@@ -290,6 +300,7 @@ if [ "$LOCALFILES" = "no" ]; then
 else
 	cd ${DIR}
 fi
+[ -f /boot/grub/grub.cfg ] && [ -z "$(grep ${KERNEL_VERSION}-mptcp /boot/grub/grub.cfg)" ] && [ -n "$(which grub-mkconfig)" ] &&  grub-mkconfig -o /boot/grub/grub.cfg
 rm -f /etc/grub.d/30_os-prober
 bash update-grub.sh ${KERNEL_VERSION}-mptcp
 bash update-grub.sh ${KERNEL_RELEASE}
@@ -471,7 +482,7 @@ if [ "$OMR_ADMIN" = "yes" ]; then
 	else
 		apt-get -y install python3-passlib python3-jwt python3-netaddr libuv1 python3-uvloop
 	fi
-	apt-get -y install python3-uvicorn jq ipcalc python3-netifaces python3-aiofiles python3-psutil python3-requests
+	apt-get -y install python3-uvicorn jq ipcalc python3-netifaces python3-aiofiles python3-psutil python3-requests pwgen
 	echo '-- pip3 install needed python modules'
 	#pip3 install pyjwt passlib uvicorn fastapi netjsonconfig python-multipart netaddr
 	#pip3 -q install fastapi netjsonconfig python-multipart uvicorn -U
@@ -901,7 +912,7 @@ if [ "$OPENVPN" = "yes" ]; then
 			make-cadir /etc/openvpn/ca
 		fi
 		cd /etc/openvpn/ca
-		./easyrsa init-pki
+		./easyrsa init-pki 2>&1 >/dev/null
 		./easyrsa --batch build-ca nopass
 		EASYRSA_CERT_EXPIRE=3650 ./easyrsa build-server-full server nopass
 		EASYRSA_CERT_EXPIRE=3650 ./easyrsa build-client-full "openmptcprouter" nopass

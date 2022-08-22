@@ -1,0 +1,17 @@
+[Match]
+Name=ubond*
+
+[Network]
+Description=UBOND tunnel
+Address=10.255.248.1/24
+DHCPServer=yes
+IPMasquerade=yes
+
+[DHCPServer]
+PoolOffset=2
+PoolSize=50
+EmitDNS=no
+EmitNTP=no
+DNS=9.9.9.9
+DefaultLeaseTimeSec=12h
+MaxLeaseTimeSec=24h

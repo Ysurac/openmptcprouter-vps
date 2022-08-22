@@ -7,7 +7,11 @@ _multipath() {
 	for intf in `ls -1 /sys/class/net`; do
 		if [ "$intf" != "bonding_masters" ]; then
 			if [ "$intf" = "$NET_IFACE" ]; then
-				[ "$(multipath $intf | tr -d '\n')" != "$intf is in default mode" ] && multipath $intf on
+				[ -f /proc/sys/net/mptcp/mptcp_enabled ] && [ "$(multipath $intf | tr -d '\n')" != "$intf is in default mode" ] && multipath $intf on
+				[ -f /proc/sys/net/mptcp/enabled ] && [ "$(multipath $intf | tr -d '\n')" != "$intf is in signal mode" ] && {
+					multipath $intf signal
+					ip mptcp limits set subflows 8 add_addr_accepted 8 2>&1 >/dev/null
+				}
 			else
 				[ "$(multipath $intf | tr -d '\n')" != "$intf is deactivated" ] && multipath $intf off
 			fi
@@ -16,26 +20,32 @@ _multipath() {
 }
 
 _glorytun_udp() {
-	[ -z "$(glorytun show dev gt-udp-tun0 2>/dev/null | grep tunnel)" ] && {
-		logger -t "OMR-Service" "Restart Glorytun-UDP"
-		systemctl -q restart 'glorytun-udp@*'
-	}
-	for intf in /etc/glorytun-udp/tun*; do
-		[ "$(echo $intf | grep key)" = "" ] && /etc/glorytun-udp/post.sh ${intf}
-	done
+	if [ -n "$(systemctl -a | grep 'glorytun-udp')" ]; then
+		[ -z "$(glorytun show dev gt-udp-tun0 2>/dev/null | grep tunnel)" ] && {
+			logger -t "OMR-Service" "Restart Glorytun-UDP"
+			systemctl -q restart 'glorytun-udp@*'
+			sleep 10
+		}
+		for intf in /etc/glorytun-udp/tun*; do
+			[ "$(echo $intf | grep key)" = "" ] && /etc/glorytun-udp/post.sh ${intf}
+		done
+	fi
 }
 
 _glorytun_tcp() {
-	for intf in /etc/glorytun-tcp/tun*; do
-		[ "$(echo $intf | grep key)" = "" ] && /etc/glorytun-tcp/post.sh ${intf}
-	done
-	if [ -f /etc/openmptcprouter-vps-admin/current-vpn ] && [ "$(cat /etc/openmptcprouter-vps-admin/current-vpn)" = "glorytun_tcp" ]; then
-		localip="$(cat /etc/glorytun-tcp/tun0 | grep LOCALIP | cut -d '=' -f2)"
-		[ -z "$localip" ] && localip="10.255.255.1"
-		remoteip="$(echo $localip | sed 's/\.1/\.2/')"
-		if [ "$(ping -c 5 -w 5 $remoteip | grep '100%')" != "" ] && [ "$(expr $(date +%s) - $(stat -c %Y /proc/$(pgrep glorytun-tcp)/exe ))" -gt "300" ]; then
-			logger -t "OMR-Service" "No answer from VPN client end, restart Glorytun-TCP"
-			systemctl restart glorytun-tcp@tun0
+	if [ -n "$(systemctl -a | grep 'glorytun-tcp')" ]; then
+		for intf in /etc/glorytun-tcp/tun*; do
+			[ "$(echo $intf | grep key)" = "" ] && /etc/glorytun-tcp/post.sh ${intf}
+		done
+		if [ -f /etc/openmptcprouter-vps-admin/current-vpn ] && [ "$(cat /etc/openmptcprouter-vps-admin/current-vpn)" = "glorytun_tcp" ]; then
+			localip="$(cat /etc/glorytun-tcp/tun0 | grep LOCALIP | cut -d '=' -f2)"
+			[ -z "$localip" ] && localip="10.255.255.1"
+			remoteip="$(echo $localip | sed 's/\.1/\.2/')"
+			if [ "$(ping -c 5 -w 5 $remoteip | grep '100%')" != "" ] && ([ -z "$(pgrep glorytun-tcp)" ] || [ "$(expr $(date +%s) - $(stat -c %Y /proc/$(pgrep glorytun-tcp)/exe ))" -gt "300" ]); then
+				logger -t "OMR-Service" "No answer from VPN client end, restart Glorytun-TCP"
+				systemctl restart glorytun-tcp@tun0
+				sleep 10
+			fi
 		fi
 	fi
 }
@@ -54,19 +64,22 @@ _dsvpn() {
 }
 
 _shadowsocks() {
-	[ -z "$(pgrep ss-server)" ] && {
+	[ -n "$(systemctl -a | grep 'shadowsocks')" ] && [ -z "$(pgrep ss-server)" ] && {
 		logger -t "OMR-Service" "ss-server not detected, restart Shadowsocks"
 		systemctl restart shadowsocks-libev-manager@manager
 	}
 }
 
 _wireguard() {
-	[ -z "$(ip a show dev wg0 | grep '10.255.247.1')" ] && ip a add 10.255.247.1/24 dev wg0 2>&1 >/dev/null
+	if [ -n "$(systemctl -a | grep 'wg')" ]; then
+		[ -z "$(ip a show dev wg0 | grep '10.255.247.1')" ] && ip a add 10.255.247.1/24 dev wg0 2>&1 >/dev/null
+		[ -z "$(ip a show dev client-wg0 | grep '10.255.246.1')" ] && ip a add 10.255.246.1/24 dev client-wg0 2>&1 >/dev/null
+	fi
 }
 
 
 _omr_api() {
-	[ -z "$(curl -s -k -m 30 https://127.0.0.1:65500/)" ] && {
+	[ -z "$(pgrep curl)" ] && [ -z "$(curl -s -k -m 30 https://127.0.0.1:65500/)" ] && {
 		logger -t "OMR-Service" "Restart OMR-Admin"
 		systemctl -q restart omr-admin
 	}

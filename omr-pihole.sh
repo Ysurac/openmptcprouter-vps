@@ -38,6 +38,7 @@ cat >> /etc/pihole/setupVars.conf <<-EOF
 PIHOLE_INTERFACE=gt-tun0
 IPV4_ADDRESS=10.255.0.0/16
 IPV6_ADDRESS=fe80::aff:ff01/64
+RATE_LIMIT=0/0
 EOF
 
 grep -v interface /etc/dnsmasq.d/01-pihole.conf > /etc/dnsmasq.d/01-pihole.new.conf

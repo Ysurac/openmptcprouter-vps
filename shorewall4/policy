@@ -19,6 +19,8 @@ fw              vpn             ACCEPT
 fw              net             ACCEPT
 net             all             DROP
 vpn		vpn		DROP
+vpncl		vpn		ACCEPT
+vpn		vpncl		ACCEPT
 # THE FOLLOWING POLICY MUST BE LAST
 all		all		REJECT
 

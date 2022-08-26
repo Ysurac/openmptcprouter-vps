@@ -25,4 +25,6 @@ ACCEPT          tun+		-
 ACCEPT          -               tun+
 ACCEPT          wg+		-
 ACCEPT          -               wg+
+ACCEPT          client-wg+	-
+ACCEPT          -               client-wg+
 

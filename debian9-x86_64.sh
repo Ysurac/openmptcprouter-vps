@@ -5,7 +5,7 @@
 # This is free software, licensed under the GNU General Public License v3 or later.
 # See /LICENSE for more information.
 #
-echo '===================================================================================='
+-echo '===================================================================================='
 echo '本脚本由蚂蚁聚合路由器出品。仅供DIY爱好者免费学习使用。请勿用于商业。'
 echo '如果用于商业请选择蚂蚁聚合商业版，openmptcprouter合作伙伴请访问官网http://55860.com'
 echo '5秒后自动开始安装'

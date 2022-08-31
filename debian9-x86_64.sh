@@ -61,8 +61,8 @@ MLVPN_BINARY_VERSION="3.0.0+20211028.git.ddafba3"
 UBOND_VERSION="f9fb6aa0a65e8e20950977bda970c90012f830d7"
 OBFS_VERSION="486bebd9208539058e57e23a12f23103016e09b4"
 OBFS_BINARY_VERSION="0.0.5-1"
-OMR_ADMIN_VERSION="20314b11f21eb5878ba62c85d874528e0e394024"
-OMR_ADMIN_BINARY_VERSION="0.3+20220715"
+OMR_ADMIN_VERSION="4f8dc4f997c6c95971beea9d52512ed91c77479b"
+OMR_ADMIN_BINARY_VERSION="0.3+20220827"
 DSVPN_VERSION="3b99d2ef6c02b2ef68b5784bec8adfdd55b29b1a"
 DSVPN_BINARY_VERSION="0.1.4-2"
 V2RAY_VERSION="4.43.0"
@@ -76,13 +76,13 @@ IPROUTE2_VERSION="29da83f89f6e1fe528c59131a01f5d43bcd0a000"
 SHADOWSOCKS_BINARY_VERSION="3.3.5-3"
 DEFAULT_USER="openmptcprouter"
 VPS_DOMAIN=${VPS_DOMAIN:-$(wget -4 -qO- -T 2 http://hostname.openmptcprouter.com)}
+VPSPATH="server"
 VPS_PUBLIC_IP=${VPS_PUBLIC_IP:-$(wget -4 -qO- -T 2 http://ip.openmptcprouter.com)}
-VPSPATH="server-test"
 VPSURL="https://openmptcprouter.55860.com/"
 REPO="repo.55860.com"
 CHINA=${CHINA:-no}
 
-OMR_VERSION="0.1027-test"
+OMR_VERSION="1031"
 
 DIR=$( pwd )
 #"
@@ -309,6 +309,16 @@ if [ -z "$(dpkg-query -l | grep grub)" ]; then
 fi
 
 
+if [ -z "$(dpkg-query -l | grep grub)" ]; then
+	if [ -d /boot/grub2 ]; then
+		apt-get -y install grub2
+	elif [ -d /boot/grub ]; then
+		apt-get -y install grub-legacy
+	fi
+	[ -n "$(grep 'net.ifnames=0' /boot/grub/grub.cfg)" ] && [ ! -f /etc/default/grub ] && {
+		echo 'GRUB_CMDLINE_LINUX="net.ifnames=0 biosdevname=0"' > /etc/default/grub
+	}
+fi
 if [ "$SOURCES" = "yes" ]; then
 	wget -O /tmp/linux-image-${KERNEL_RELEASE}_amd64.deb ${VPSURL}kernel/linux-image-${KERNEL_RELEASE}_amd64.deb
 	wget -O /tmp/linux-headers-${KERNEL_RELEASE}_amd64.deb ${VPSURL}kernel/linux-headers-${KERNEL_RELEASE}_amd64.deb
@@ -720,6 +730,8 @@ if [ "$OBFS" = "yes" ]; then
 		cd /tmp
 		rm -rf /tmp/simple-obfs
 	else
+		rm -f /var/lib/dpkg/lock
+		rm -f /var/lib/dpkg/lock-frontend
 		apt-get -y -o Dpkg::Options::="--force-overwrite" install omr-simple-obfs=${OBFS_BINARY_VERSION}
 	fi
 	#sed -i 's%"mptcp": true%"mptcp": true,\n"plugin": "/usr/local/bin/obfs-server",\n"plugin_opts": "obfs=http;mptcp;fast-open;t=400"%' /etc/shadowsocks-libev/config.json
@@ -753,6 +765,8 @@ if [ "$V2RAY_PLUGIN" = "yes" ]; then
 		#cd /tmp
 		#rm -rf /tmp/simple-obfs
 	else
+		rm -f /var/lib/dpkg/lock
+		rm -f /var/lib/dpkg/lock-frontend
 		apt-get -y install v2ray-plugin=${V2RAY_PLUGIN_VERSION}
 	fi
 fi

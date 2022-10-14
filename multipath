@@ -126,15 +126,21 @@ else
                         exit 0;;
                 "on")
                         [ -n "$ID" ] && ip mptcp endpoint delete id $ID 2>&1 >/dev/null
-                        ip mptcp endpoint add $IP dev $DEVICE subflow fullmesh
+                        for i in $IP; do
+                            ip mptcp endpoint add $i dev $DEVICE subflow fullmesh
+                        done
                         exit 0;;
                 "signal")
                         [ -n "$ID" ] && ip mptcp endpoint delete id $ID 2>&1 >/dev/null
-                        ip mptcp endpoint add $IP dev $DEVICE signal fullmesh
+                        for i in $IP; do
+                            ip mptcp endpoint add $i dev $DEVICE signal fullmesh
+                        done
                         exit 0;;
                 "backup")
                         [ -n "$ID" ] && ip mptcp endpoint delete id $ID 2>&1 >/dev/null
-                        ip mptcp endpoint add $IP dev $DEVICE backup fullmesh
+                        for i in $IP; do
+                            ip mptcp endpoint add $i dev $DEVICE backup fullmesh
+                        done
                         exit 0;;
                 "")
                         case "$IFF" in

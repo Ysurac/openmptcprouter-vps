@@ -4,7 +4,7 @@ After=network.target network-online.target
 
 [Service]
 Type=simple
-Restart=never
+Restart=no
 ExecStart=/usr/bin/omr-update
 #ExecStart=/usr/share/omr-server/debian9-x86_64.sh
 AmbientCapabilities=

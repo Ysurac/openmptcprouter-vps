@@ -6,7 +6,7 @@ _multipath() {
 	source /etc/shorewall/params.net
 	for intf in `ls -1 /sys/class/net`; do
 		if [ "$intf" != "bonding_masters" ]; then
-			if [ "$intf" = "$NET_IFACE" ]; then
+			if ([ "$(ip a show dev lo | grep -v inet6 | grep global)" != "" ] && [ "$intf" = "lo" ]) || ([ "$intf" = "$NET_IFACE" ] && [ "$(ip a show dev lo | grep -v inet6 | grep global)" = "" ]); then
 				[ -f /proc/sys/net/mptcp/mptcp_enabled ] && [ "$(multipath $intf | tr -d '\n')" != "$intf is in default mode" ] && multipath $intf on
 				[ -f /proc/sys/net/mptcp/enabled ] && [ "$(multipath $intf | tr -d '\n')" != "$intf is in signal mode" ] && {
 					multipath $intf signal

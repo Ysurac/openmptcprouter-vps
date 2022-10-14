@@ -55,8 +55,8 @@ MLVPN_BINARY_VERSION="3.0.0+20211028.git.ddafba3"
 UBOND_VERSION="f9fb6aa0a65e8e20950977bda970c90012f830d7"
 OBFS_VERSION="486bebd9208539058e57e23a12f23103016e09b4"
 OBFS_BINARY_VERSION="0.0.5-1"
-OMR_ADMIN_VERSION="20314b11f21eb5878ba62c85d874528e0e394024"
-OMR_ADMIN_BINARY_VERSION="0.3+20220715"
+OMR_ADMIN_VERSION="4f8dc4f997c6c95971beea9d52512ed91c77479b"
+OMR_ADMIN_BINARY_VERSION="0.3+20220827"
 DSVPN_VERSION="3b99d2ef6c02b2ef68b5784bec8adfdd55b29b1a"
 DSVPN_BINARY_VERSION="0.1.4-2"
 V2RAY_VERSION="4.43.0"
@@ -76,7 +76,7 @@ VPSURL="https://www.openmptcprouter.com/"
 REPO="repo.openmptcprouter.com"
 CHINA=${CHINA:-no}
 
-OMR_VERSION="0.1027"
+OMR_VERSION="0.1028"
 
 DIR=$( pwd )
 #"
@@ -563,10 +563,15 @@ if [ "$OMR_ADMIN" = "yes" ]; then
 	fi
 	apt-get -y --allow-downgrades install python3-uvicorn jq ipcalc python3-netifaces python3-aiofiles python3-psutil python3-requests pwgen
 	echo '-- pip3 install needed python modules'
-	echo "If you see any error here, I really don't care: it's about a not used module for home users"
+	echo "If you see any error here, I really don't care: it's about a module not used for home users"
 	#pip3 install pyjwt passlib uvicorn fastapi netjsonconfig python-multipart netaddr
 	#pip3 -q install fastapi netjsonconfig python-multipart uvicorn -U
-	pip3 -q install fastapi jsonschema netjsonconfig python-multipart jinja2 -U
+	pip3 -q install netjsonconfig
+	pip3 -q install fastapi -U
+	pip3 -q install jsonschema -U
+	pip3 -q install python-multipart jinja2 -U
+	pip3 -q install starlette
+	pip3 -q install starlette
 	mkdir -p /etc/openmptcprouter-vps-admin/omr-6in4
 	mkdir -p /etc/openmptcprouter-vps-admin/intf
 	[ ! -f "/etc/openmptcprouter-vps-admin/current-vpn" ] && echo "glorytun_tcp" > /etc/openmptcprouter-vps-admin/current-vpn
@@ -578,7 +583,7 @@ if [ "$OMR_ADMIN" = "yes" ]; then
 		cd /tmp
 		unzip -q -o openmptcprouter-vps-admin.zip
 		cp /tmp/openmptcprouter-vps-admin-${OMR_ADMIN_VERSION}/omr-admin.py /usr/local/bin/
-		if [ -f /usr/local/bin/omr-admin.py ]; then
+		if [ -f /usr/local/bin/omr-admin.py ] || [ -f /etc/openmptcprouter-vps-admin/omr-admin-config.json ]; then
 			OMR_ADMIN_PASS2=$(grep -Po '"'"pass"'"\s*:\s*"\K([^"]*)' /etc/openmptcprouter-vps-admin/omr-admin-config.json | tr -d  "\n")
 			[ -z "$OMR_ADMIN_PASS2" ] && OMR_ADMIN_PASS2=$(cat /etc/openmptcprouter-vps-admin/omr-admin-config.json | jq -r .users[0].openmptcprouter.user_password | tr -d "\n")
 			[ -n "$OMR_ADMIN_PASS2" ] && OMR_ADMIN_PASS=$OMR_ADMIN_PASS2
@@ -695,8 +700,12 @@ fi
 
 if [ "$LOCALFILES" = "no" ]; then
 	wget -O /lib/systemd/system/omr-update.service ${VPSURL}${VPSPATH}/omr-update.service.in
+	wget -O /usr/bin/omr-update ${VPSURL}${VPSPATH}/omr-update
+	chmod 755 /usr/bin/omr-update
 else
 	cp ${DIR}/omr-update.service.in /lib/systemd/system/omr-update.service
+	cp ${DIR}/omr-update /usr/bin/omr-update
+	chmod 755 /usr/bin/omr-update
 fi
 
 # Install simple-obfs
@@ -1375,8 +1384,8 @@ fi
 
 if [ "$TLS" = "yes" ]; then
 	VPS_CERT=0
-	apt-get -y install dnsutils socat
-	if [ "$VPS_DOMAIN" != "" ] && [ "$(dig +noidnout +noall +answer $VPS_DOMAIN)" != "" ] && [ "$(ping -c 1 -w 1 $VPS_DOMAIN)" ]; then
+	apt-get -y install socat
+	if [ "$VPS_DOMAIN" != "" ] && [ "$(getent hosts $VPS_DOMAIN | awk '{ print $1; exit }')" != "" ] && [ "$(ping -c 1 -w 1 $VPS_DOMAIN)" ]; then
 		if [ ! -f "/root/.acme.sh/$VPS_DOMAIN/$VPS_DOMAIN.cer" ]; then
 			echo "Generate certificate for V2Ray"
 			set +e

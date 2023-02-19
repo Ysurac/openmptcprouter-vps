@@ -7,6 +7,7 @@
 #
 
 UPSTREAM=${UPSTREAM:-no}
+UPSTREAM6=${UPSTREAM6:-no}
 SHADOWSOCKS_PASS=${SHADOWSOCKS_PASS:-$(head -c 32 /dev/urandom | base64 -w0)}
 GLORYTUN_PASS=${GLORYTUN_PASS:-$(od -vN "32" -An -tx1 /dev/urandom | tr '[:lower:]' '[:upper:]' | tr -d " \n")}
 DSVPN_PASS=${DSVPN_PASS:-$(od -vN "32" -An -tx1 /dev/urandom | tr '[:lower:]' '[:upper:]' | tr -d " \n")}
@@ -30,7 +31,7 @@ OPENVPN=${OPENVPN:-yes}
 DSVPN=${DSVPN:-yes}
 WIREGUARD=${WIREGUARD:-yes}
 SOURCES=${SOURCES:-no}
-if [ "$UPSTREAM" = "yes" ]; then
+if [ "$UPSTREAM" = "yes" ] || [ "$UPSTREAM6" ]; then
 	SOURCES="yes"
 fi
 NOINTERNET=${NOINTERNET:-no}
@@ -45,6 +46,11 @@ if [ "$UPSTREAM" = "yes" ]; then
 	KERNEL_VERSION="5.15.57"
 	KERNEL_PACKAGE_VERSION="1.6"
 	KERNEL_RELEASE="${KERNEL_VERSION}-mptcp_${KERNEL_VERSION}-${KERNEL_PACKAGE_VERSION}"
+fi
+if [ "$UPSTREAM6" = "yes" ]; then
+	KERNEL_VERSION="6.1.0"
+	KERNEL_PACKAGE_VERSION="1.30"
+	KERNEL_RELEASE="${KERNEL_VERSION}-mptcp_${KERNEL_PACKAGE_VERSION}"
 fi
 GLORYTUN_UDP_VERSION="32267e86a6da05b285bb3bf2b136c105dc0af4bb"
 GLORYTUN_UDP_BINARY_VERSION="0.3.4-5"
@@ -63,7 +69,7 @@ V2RAY_VERSION="4.43.0"
 V2RAY_PLUGIN_VERSION="4.43.0"
 EASYRSA_VERSION="3.0.6"
 SHADOWSOCKS_VERSION="7407b214f335f0e2068a8622ef3674d868218e17"
-if [ "$UPSTREAM" = "yes" ]; then
+if [ "$UPSTREAM" = "yes" ] || [ "$UPSTREAM6" = "yes" ]; then
 	SHADOWSOCKS_VERSION="410950d87d8cdf8502d8f59a79dc0ff4c7677543"
 fi
 IPROUTE2_VERSION="29da83f89f6e1fe528c59131a01f5d43bcd0a000"
@@ -255,6 +261,14 @@ else
 		Pin: origin ${REPO}
 		Pin-Priority: 1001
 	EOF
+	if [ "$ID" = "debian" ] && [ "$VERSION_ID" = "11" ]; then
+		cat <<-EOF | tee /etc/apt/preferences.d/openmptcprouter.pref
+			Explanation: Prefer libuv1 Debian native package
+			Package: libuv1
+			Pin: version *
+			Pin-Priority: 1003
+		EOF
+	fi
 	if [ -n "$(echo $OMR_VERSION | grep test)" ]; then
 		echo "deb [arch=amd64] https://${REPO} next main" > /etc/apt/sources.list.d/openmptcprouter-test.list
 		cat <<-EOF | tee /etc/apt/preferences.d/openmptcprouter.pref
@@ -358,7 +372,7 @@ apt-get -y -o Dpkg::Options::="--force-overwrite" install tracebox
 echo "Install iperf3 OpenMPTCProuter edition"
 apt-get -y -o Dpkg::Options::="--force-overwrite" install omr-iperf3
 
-if [ "$UPSTREAM" = "yes" ]; then
+if [ "$UPSTREAM" = "yes" ] || [ "$UPSTREAM6" = "yes" ]; then
 	echo "Compile and install mptcpize..."
 	apt-get -y install --no-install-recommends build-essential
 	cd /tmp
@@ -630,7 +644,7 @@ if [ "$OMR_ADMIN" = "yes" ]; then
 		systemctl enable omr-admin-ipv6.service
 	}
 	systemctl enable omr-admin.service
-	if [ "$UPSTREAM" = "yes" ]; then
+	if [ "$UPSTREAM" = "yes" ] || [ "$UPSTREAM6" = "yes" ]; then
 		mptcpize enable omr-admin.service
 		[ "$(ip -6 a)" != "" ] && mptcpize enable omr-admin-ipv6.service
 	fi
@@ -803,7 +817,7 @@ if [ "$V2RAY" = "yes" ]; then
 	fi
 	systemctl daemon-reload
 	systemctl enable v2ray.service
-	if [ "$UPSTREAM" = "yes" ]; then
+	if [ "$UPSTREAM" = "yes" ] || [ "$UPSTREAM6" = "yes" ]; then
 		mptcpize enable v2ray
 	fi
 fi
@@ -1076,7 +1090,7 @@ if [ "$OPENVPN" = "yes" ]; then
 	mkdir -p /etc/openvpn/ccd
 	systemctl enable openvpn@tun0.service
 	systemctl enable openvpn@tun1.service
-	if [ "$UPSTREAM" = "yes" ]; then
+	if [ "$UPSTREAM" = "yes" ] || [ "$UPSTREAM6" = "yes" ]; then
 		mptcpize enable openvpn@tun0
 	fi
 	systemctl enable openvpn@bonding1.service
@@ -1192,7 +1206,7 @@ if [ "$DSVPN" = "yes" ]; then
 		apt-get -y -o Dpkg::Options::="--force-confdef" -o Dpkg::Options::="--force-confold" -o Dpkg::Options::="--force-overwrite" install omr-dsvpn=${DSVPN_BINARY_VERSION}
 		DSVPN_PASS=$(cat /etc/dsvpn/dsvpn0.key | tr -d "\n")
 	fi
-	if [ "$UPSTREAM" = "yes" ]; then
+	if [ "$UPSTREAM" = "yes" ] || [ "$UPSTREAM6" = "yes" ]; then
 		mptcpize enable dsvpn-server@dsvpn0
 	fi
 fi
@@ -1217,13 +1231,13 @@ if [ "$SOURCES" = "yes" ]; then
 	apt-get -y install build-essential pkg-config autoconf automake
 	rm -rf /tmp/glorytun-0.0.35
 	cd /tmp
-	if [ "$UPSTREAM" = "yes" ]; then
+	if [ "$UPSTREAM" = "yes" ] || [ "$UPSTREAM6" = "yes" ]; then
 		wget -O /tmp/glorytun-0.0.35.tar.gz https://github.com/Ysurac/glorytun/archive/refs/heads/tcp.tar.gz
 	else
 		wget -O /tmp/glorytun-0.0.35.tar.gz http://github.com/angt/glorytun/releases/download/v0.0.35/glorytun-0.0.35.tar.gz
 	fi
 	tar xzf glorytun-0.0.35.tar.gz
-	if [ "$UPSTREAM" = "yes" ]; then
+	if [ "$UPSTREAM" = "yes" ] || [ "$UPSTREAM6" = "yes" ]; then
 		mv /tmp/glorytun-tcp /tmp/glorytun-0.0.35
 	fi
 	cd glorytun-0.0.35

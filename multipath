@@ -115,26 +115,48 @@ if [ -f /proc/sys/net/mptcp/mptcp_enabled ]; then
 
         printf "0x%02x" $(($(($IFF^$(($IFF&$IFF_MASK))))|$FLAG)) > $FLAG_PATH
 else
-        ID=$(ip mptcp endpoint show | grep "dev $DEVICE" | awk '{print $3}')
-        IFF=$(ip mptcp endpoint show | grep "dev $DEVICE" | awk '{print $4}')
+        ID=$(ip mptcp endpoint show | grep -m 1 "dev $DEVICE" | awk '{print $3}')
+        IFF=$(ip mptcp endpoint show | grep -m 1 "dev $DEVICE" | awk '{print $4}')
         IP=$(ip a show $DEVICE | sed -En 's/127.0.0.1//;s/.*inet (addr:)?(([0-9]*\.){3}[0-9]*).*/\2/p')
 	RMID=$(ip mptcp endpoint show | grep '::ffff' | awk '{ print $3 }')
         [ -n "$RMID" ] && ip mptcp endpoint delete id $RMID 2>&1 >/dev/null
         case $TYPE in
                 "off")
-                        [ -n "$ID" ] && ip mptcp endpoint delete id $ID 2>&1 >/dev/null
+                        [ -n "$ID" ] && {
+                            for i in $ID; do
+                                ip mptcp endpoint delete id $i 2>&1 >/dev/null
+                            done
+                        }
                         exit 0;;
                 "on")
-                        [ -n "$ID" ] && ip mptcp endpoint delete id $ID 2>&1 >/dev/null
-                        ip mptcp endpoint add $IP dev $DEVICE subflow fullmesh
+                        [ -n "$ID" ] && {
+                            for i in $ID; do
+                                ip mptcp endpoint delete id $i 2>&1 >/dev/null
+                            done
+                        }
+                        for i in $IP; do
+                            ip mptcp endpoint add $i dev $DEVICE subflow fullmesh
+                        done
                         exit 0;;
                 "signal")
-                        [ -n "$ID" ] && ip mptcp endpoint delete id $ID 2>&1 >/dev/null
-                        ip mptcp endpoint add $IP dev $DEVICE signal fullmesh
+                        [ -n "$ID" ] && {
+                            for i in $ID; do
+                                ip mptcp endpoint delete id $i 2>&1 >/dev/null
+                            done
+                        }
+                        for i in $IP; do
+                            ip mptcp endpoint add $i dev $DEVICE signal
+                        done
                         exit 0;;
                 "backup")
-                        [ -n "$ID" ] && ip mptcp endpoint delete id $ID 2>&1 >/dev/null
-                        ip mptcp endpoint add $IP dev $DEVICE backup fullmesh
+                        [ -n "$ID" ] && {
+                            for i in $ID; do
+                                ip mptcp endpoint delete id $i 2>&1 >/dev/null
+                            done
+                        }
+                        for i in $IP; do
+                            ip mptcp endpoint add $i dev $DEVICE backup fullmesh
+                        done
                         exit 0;;
                 "")
                         case "$IFF" in

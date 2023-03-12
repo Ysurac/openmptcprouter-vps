@@ -5,14 +5,9 @@
 # This is free software, licensed under the GNU General Public License v3 or later.
 # See /LICENSE for more information.
 #
--echo '===================================================================================='
-echo '本脚本由蚂蚁聚合路由器出品。仅供DIY爱好者免费学习使用。请勿用于商业。'
-echo '如果用于商业请选择蚂蚁聚合商业版，openmptcprouter合作伙伴请访问官网http://55860.com'
-echo '5秒后自动开始安装'
-echo '===================================================================================='
-sleep 5
 
 UPSTREAM=${UPSTREAM:-no}
+UPSTREAM6=${UPSTREAM6:-no}
 SHADOWSOCKS_PASS=${SHADOWSOCKS_PASS:-$(head -c 32 /dev/urandom | base64 -w0)}
 GLORYTUN_PASS=${GLORYTUN_PASS:-$(od -vN "32" -An -tx1 /dev/urandom | tr '[:lower:]' '[:upper:]' | tr -d " \n")}
 DSVPN_PASS=${DSVPN_PASS:-$(od -vN "32" -An -tx1 /dev/urandom | tr '[:lower:]' '[:upper:]' | tr -d " \n")}
@@ -36,7 +31,7 @@ OPENVPN=${OPENVPN:-yes}
 DSVPN=${DSVPN:-yes}
 WIREGUARD=${WIREGUARD:-yes}
 SOURCES=${SOURCES:-no}
-if [ "$UPSTREAM" = "yes" ]; then
+if [ "$UPSTREAM" = "yes" ] || [ "$UPSTREAM6" ]; then
 	SOURCES="yes"
 fi
 NOINTERNET=${NOINTERNET:-no}
@@ -51,6 +46,11 @@ if [ "$UPSTREAM" = "yes" ]; then
 	KERNEL_VERSION="5.15.57"
 	KERNEL_PACKAGE_VERSION="1.6"
 	KERNEL_RELEASE="${KERNEL_VERSION}-mptcp_${KERNEL_VERSION}-${KERNEL_PACKAGE_VERSION}"
+fi
+if [ "$UPSTREAM6" = "yes" ]; then
+	KERNEL_VERSION="6.1.0"
+	KERNEL_PACKAGE_VERSION="1.30"
+	KERNEL_RELEASE="${KERNEL_VERSION}-mptcp_${KERNEL_PACKAGE_VERSION}"
 fi
 GLORYTUN_UDP_VERSION="32267e86a6da05b285bb3bf2b136c105dc0af4bb"
 GLORYTUN_UDP_BINARY_VERSION="0.3.4-5"
@@ -69,7 +69,7 @@ V2RAY_VERSION="4.43.0"
 V2RAY_PLUGIN_VERSION="4.43.0"
 EASYRSA_VERSION="3.0.6"
 SHADOWSOCKS_VERSION="7407b214f335f0e2068a8622ef3674d868218e17"
-if [ "$UPSTREAM" = "yes" ]; then
+if [ "$UPSTREAM" = "yes" ] || [ "$UPSTREAM6" = "yes" ]; then
 	SHADOWSOCKS_VERSION="410950d87d8cdf8502d8f59a79dc0ff4c7677543"
 fi
 IPROUTE2_VERSION="29da83f89f6e1fe528c59131a01f5d43bcd0a000"
@@ -78,11 +78,11 @@ DEFAULT_USER="openmptcprouter"
 VPS_DOMAIN=${VPS_DOMAIN:-$(wget -4 -qO- -T 2 http://hostname.openmptcprouter.com)}
 VPSPATH="server"
 VPS_PUBLIC_IP=${VPS_PUBLIC_IP:-$(wget -4 -qO- -T 2 http://ip.openmptcprouter.com)}
-VPSURL="https://openmptcprouter.55860.com/"
-REPO="repo.55860.com"
+VPSURL="https://www.openmptcprouter.com/"
+REPO="repo.openmptcprouter.com"
 CHINA=${CHINA:-no}
 
-OMR_VERSION="1031"
+OMR_VERSION="0.1029-test"
 
 DIR=$( pwd )
 #"
@@ -166,7 +166,7 @@ fi
 # Force update key
 [ -f /etc/apt/sources.list.d/openmptcprouter.list ] && {
 	echo "Update OpenMPTCProuter repo key"
-	wget -O - http://repo.55860.com/openmptcprouter.gpg.key | apt-key add -
+	wget -O - http://repo.openmptcprouter.com/openmptcprouter.gpg.key | apt-key add -
 }
 
 CURRENT_OMR="$(grep -s 'OpenMPTCProuter VPS' /etc/* | awk '{print $4}')"
@@ -261,6 +261,14 @@ else
 		Pin: origin ${REPO}
 		Pin-Priority: 1001
 	EOF
+	if [ "$ID" = "debian" ] && [ "$VERSION_ID" = "11" ]; then
+		cat <<-EOF | tee /etc/apt/preferences.d/openmptcprouter.pref
+			Explanation: Prefer libuv1 Debian native package
+			Package: libuv1
+			Pin: version *
+			Pin-Priority: 1003
+		EOF
+	fi
 	if [ -n "$(echo $OMR_VERSION | grep test)" ]; then
 		echo "deb [arch=amd64] https://${REPO} next main" > /etc/apt/sources.list.d/openmptcprouter-test.list
 		cat <<-EOF | tee /etc/apt/preferences.d/openmptcprouter.pref
@@ -364,11 +372,11 @@ apt-get -y -o Dpkg::Options::="--force-overwrite" install tracebox
 echo "Install iperf3 OpenMPTCProuter edition"
 apt-get -y -o Dpkg::Options::="--force-overwrite" install omr-iperf3
 
-if [ "$UPSTREAM" = "yes" ]; then
+if [ "$UPSTREAM" = "yes" ] || [ "$UPSTREAM6" = "yes" ]; then
 	echo "Compile and install mptcpize..."
 	apt-get -y install --no-install-recommends build-essential
 	cd /tmp
-	git clone https://github.55860.com/Ysurac/mptcpize.git
+	git clone https://github.com/Ysurac/mptcpize.git
 	cd mptcpize
 	make
 	make install
@@ -399,7 +407,7 @@ if [ "$SOURCES" = "yes" ]; then
 	#wget -O /tmp/shadowsocks-libev-${SHADOWSOCKS_VERSION}.tar.gz http://github.com/shadowsocks/shadowsocks-libev/releases/download/v${SHADOWSOCKS_VERSION}/shadowsocks-libev-${SHADOWSOCKS_VERSION}.tar.gz
 	cd /tmp
 	rm -rf shadowsocks-libev
-	git clone https://github.55860.com/Ysurac/shadowsocks-libev.git
+	git clone https://github.com/Ysurac/shadowsocks-libev.git
 	cd shadowsocks-libev
 	git checkout ${SHADOWSOCKS_VERSION}
 	git submodule update --init --recursive
@@ -407,11 +415,11 @@ if [ "$SOURCES" = "yes" ]; then
 	#cd shadowsocks-libev-${SHADOWSOCKS_VERSION}
 	#wget https://raw.githubusercontent.com/Ysurac/openmptcprouter-feeds/master/shadowsocks-libev/patches/020-NOCRYPTO.patch
 	#patch -p1 < 020-NOCRYPTO.patch
-	#wget https://github.55860.com/Ysurac/shadowsocks-libev/commit/31b93ac2b054bc3f68ea01569649e6882d72218e.patch
+	#wget https://github.com/Ysurac/shadowsocks-libev/commit/31b93ac2b054bc3f68ea01569649e6882d72218e.patch
 	#patch -p1 < 31b93ac2b054bc3f68ea01569649e6882d72218e.patch
-	#wget https://github.55860.com/Ysurac/shadowsocks-libev/commit/2e52734b3bf176966e78e77cf080a1e8c6b2b570.patch
+	#wget https://github.com/Ysurac/shadowsocks-libev/commit/2e52734b3bf176966e78e77cf080a1e8c6b2b570.patch
 	#patch -p1 < 2e52734b3bf176966e78e77cf080a1e8c6b2b570.patch
-	#wget https://github.55860.com/Ysurac/shadowsocks-libev/commit/dd1baa91e975a69508f9ad67d75d72624c773d24.patch
+	#wget https://github.com/Ysurac/shadowsocks-libev/commit/dd1baa91e975a69508f9ad67d75d72624c773d24.patch
 	#patch -p1 < dd1baa91e975a69508f9ad67d75d72624c773d24.patch
 	# Shadowsocks eBPF support
 	#wget https://raw.githubusercontent.com/Ysurac/openmptcprouter-feeds/master/shadowsocks-libev/patches/030-eBPF.patch
@@ -420,7 +428,7 @@ if [ "$SOURCES" = "yes" ]; then
 	#apt-get install -y --no-install-recommends build-essential git ca-certificates libcap-dev libelf-dev libpcap-dev
 	#cd /tmp
 	#rm -rf libbpf
-	#git clone https://github.55860.com/libbpf/libbpf.git
+	#git clone https://github.com/libbpf/libbpf.git
 	#cd libbpf
 	#if [ "$ID" = "debian" ]; then
 	#	rm -f /var/lib/dpkg/lock
@@ -569,10 +577,15 @@ if [ "$OMR_ADMIN" = "yes" ]; then
 	fi
 	apt-get -y --allow-downgrades install python3-uvicorn jq ipcalc python3-netifaces python3-aiofiles python3-psutil python3-requests pwgen
 	echo '-- pip3 install needed python modules'
-	echo "If you see any error here, I really don't care: it's about a not used module for home users"
+	echo "If you see any error here, I really don't care: it's about a module not used for home users"
 	#pip3 install pyjwt passlib uvicorn fastapi netjsonconfig python-multipart netaddr
 	#pip3 -q install fastapi netjsonconfig python-multipart uvicorn -U
-	pip3 -q install fastapi jsonschema netjsonconfig python-multipart jinja2 -U
+	pip3 -q install netjsonconfig
+	pip3 -q install fastapi -U
+	pip3 -q install jsonschema -U
+	pip3 -q install python-multipart jinja2 -U
+	pip3 -q install starlette
+	pip3 -q install starlette
 	mkdir -p /etc/openmptcprouter-vps-admin/omr-6in4
 	mkdir -p /etc/openmptcprouter-vps-admin/intf
 	[ ! -f "/etc/openmptcprouter-vps-admin/current-vpn" ] && echo "glorytun_tcp" > /etc/openmptcprouter-vps-admin/current-vpn
@@ -580,11 +593,11 @@ if [ "$OMR_ADMIN" = "yes" ]; then
 	if [ "$SOURCES" = "yes" ]; then
 		wget -O /lib/systemd/system/omr-admin.service ${VPSURL}${VPSPATH}/omr-admin.service.in
 		wget -O /lib/systemd/system/omr-admin-ipv6.service ${VPSURL}${VPSPATH}/omr-admin-ipv6.service.in
-		wget -O /tmp/openmptcprouter-vps-admin.zip https://github.55860.com/Ysurac/openmptcprouter-vps-admin/archive/${OMR_ADMIN_VERSION}.zip
+		wget -O /tmp/openmptcprouter-vps-admin.zip https://github.com/Ysurac/openmptcprouter-vps-admin/archive/${OMR_ADMIN_VERSION}.zip
 		cd /tmp
 		unzip -q -o openmptcprouter-vps-admin.zip
 		cp /tmp/openmptcprouter-vps-admin-${OMR_ADMIN_VERSION}/omr-admin.py /usr/local/bin/
-		if [ -f /usr/local/bin/omr-admin.py ]; then
+		if [ -f /usr/local/bin/omr-admin.py ] || [ -f /etc/openmptcprouter-vps-admin/omr-admin-config.json ]; then
 			OMR_ADMIN_PASS2=$(grep -Po '"'"pass"'"\s*:\s*"\K([^"]*)' /etc/openmptcprouter-vps-admin/omr-admin-config.json | tr -d  "\n")
 			[ -z "$OMR_ADMIN_PASS2" ] && OMR_ADMIN_PASS2=$(cat /etc/openmptcprouter-vps-admin/omr-admin-config.json | jq -r .users[0].openmptcprouter.user_password | tr -d "\n")
 			[ -n "$OMR_ADMIN_PASS2" ] && OMR_ADMIN_PASS=$OMR_ADMIN_PASS2
@@ -631,7 +644,7 @@ if [ "$OMR_ADMIN" = "yes" ]; then
 		systemctl enable omr-admin-ipv6.service
 	}
 	systemctl enable omr-admin.service
-	if [ "$UPSTREAM" = "yes" ]; then
+	if [ "$UPSTREAM" = "yes" ] || [ "$UPSTREAM6" = "yes" ]; then
 		mptcpize enable omr-admin.service
 		[ "$(ip -6 a)" != "" ] && mptcpize enable omr-admin-ipv6.service
 	fi
@@ -701,8 +714,12 @@ fi
 
 if [ "$LOCALFILES" = "no" ]; then
 	wget -O /lib/systemd/system/omr-update.service ${VPSURL}${VPSPATH}/omr-update.service.in
+	wget -O /usr/bin/omr-update ${VPSURL}${VPSPATH}/omr-update
+	chmod 755 /usr/bin/omr-update
 else
 	cp ${DIR}/omr-update.service.in /lib/systemd/system/omr-update.service
+	cp ${DIR}/omr-update /usr/bin/omr-update
+	chmod 755 /usr/bin/omr-update
 fi
 
 # Install simple-obfs
@@ -720,7 +737,7 @@ if [ "$OBFS" = "yes" ]; then
 		else
 			apt-get install -y --no-install-recommends build-essential autoconf libtool libssl-dev libpcre3-dev libev-dev asciidoc xmlto automake git ca-certificates
 		fi
-		git clone https://github.55860.com/shadowsocks/simple-obfs.git /tmp/simple-obfs
+		git clone https://github.com/shadowsocks/simple-obfs.git /tmp/simple-obfs
 		cd /tmp/simple-obfs
 		git checkout ${OBFS_VERSION}
 		git submodule update --init --recursive
@@ -742,9 +759,9 @@ if [ "$V2RAY_PLUGIN" = "yes" ]; then
 	echo "Install v2ray plugin"
 	if [ "$SOURCES" = "yes" ]; then
 		rm -rf /tmp/v2ray-plugin-linux-amd64-${V2RAY_PLUGIN_VERSION}.tar.gz
-		#wget -O /tmp/v2ray-plugin-linux-amd64-v${V2RAY_PLUGIN_VERSION}.tar.gz https://github.55860.com/shadowsocks/v2ray-plugin/releases/download/${V2RAY_PLUGIN_VERSION}/v2ray-plugin-linux-amd64-v${V2RAY_PLUGIN_VERSION}.tar.gz
+		#wget -O /tmp/v2ray-plugin-linux-amd64-v${V2RAY_PLUGIN_VERSION}.tar.gz https://github.com/shadowsocks/v2ray-plugin/releases/download/${V2RAY_PLUGIN_VERSION}/v2ray-plugin-linux-amd64-v${V2RAY_PLUGIN_VERSION}.tar.gz
 		#wget -O /tmp/v2ray-plugin-linux-amd64-v${V2RAY_PLUGIN_VERSION}.tar.gz ${VPSURL}${VPSPATH}/bin/v2ray-plugin-linux-amd64-v${V2RAY_PLUGIN_VERSION}.tar.gz
-		wget -O /tmp/v2ray-plugin-linux-amd64-v${V2RAY_PLUGIN_VERSION}.tar.gz https://github.55860.com/teddysun/v2ray-plugin/releases/download/v${V2RAY_PLUGIN_VERSION}/v2ray-plugin-linux-amd64-v${V2RAY_PLUGIN_VERSION}.tar.gz
+		wget -O /tmp/v2ray-plugin-linux-amd64-v${V2RAY_PLUGIN_VERSION}.tar.gz https://github.com/teddysun/v2ray-plugin/releases/download/v${V2RAY_PLUGIN_VERSION}/v2ray-plugin-linux-amd64-v${V2RAY_PLUGIN_VERSION}.tar.gz
 		cd /tmp
 		tar xzvf v2ray-plugin-linux-amd64-v${V2RAY_PLUGIN_VERSION}.tar.gz
 		cp -f v2ray-plugin_linux_amd64 /usr/local/bin/v2ray-plugin
@@ -756,7 +773,7 @@ if [ "$V2RAY_PLUGIN" = "yes" ]; then
 		#cd /tmp
 		#rm -f /var/lib/dpkg/lock
 		#apt-get install -y --no-install-recommends git ca-certificates golang-go
-		#git clone https://github.55860.com/shadowsocks/v2ray-plugin.git /tmp/v2ray-plugin
+		#git clone https://github.com/shadowsocks/v2ray-plugin.git /tmp/v2ray-plugin
 		#cd /tmp/v2ray-plugin
 		#git checkout ${V2RAY_PLUGIN_VERSION}
 		#git submodule update --init --recursive
@@ -800,7 +817,7 @@ if [ "$V2RAY" = "yes" ]; then
 	fi
 	systemctl daemon-reload
 	systemctl enable v2ray.service
-	if [ "$UPSTREAM" = "yes" ]; then
+	if [ "$UPSTREAM" = "yes" ] || [ "$UPSTREAM6" = "yes" ]; then
 		mptcpize enable v2ray
 	fi
 fi
@@ -824,10 +841,10 @@ if [ "$MLVPN" = "yes" ]; then
 		apt-get -y install build-essential pkg-config autoconf automake libpcap-dev unzip git
 		rm -rf /tmp/mlvpn
 		cd /tmp
-		#git clone https://github.55860.com/markfoodyburton/MLVPN.git /tmp/mlvpn
-		#git clone https://github.55860.com/flohoff/MLVPN.git /tmp/mlvpn
-		git clone https://github.55860.com/zehome/MLVPN.git /tmp/mlvpn
-		#git clone https://github.55860.com/link4all/MLVPN.git /tmp/mlvpn
+		#git clone https://github.com/markfoodyburton/MLVPN.git /tmp/mlvpn
+		#git clone https://github.com/flohoff/MLVPN.git /tmp/mlvpn
+		git clone https://github.com/zehome/MLVPN.git /tmp/mlvpn
+		#git clone https://github.com/link4all/MLVPN.git /tmp/mlvpn
 		cd /tmp/mlvpn
 		git checkout ${MLVPN_VERSION}
 		./autogen.sh
@@ -883,7 +900,7 @@ if [ "$UBOND" = "yes" ]; then
 		apt-get -y install build-essential pkg-config autoconf automake libpcap-dev unzip git
 		rm -rf /tmp/ubond
 		cd /tmp
-		git clone https://github.55860.com/markfoodyburton/ubond.git /tmp/ubond
+		git clone https://github.com/markfoodyburton/ubond.git /tmp/ubond
 		cd /tmp/ubond
 		git checkout ${UBOND_VERSION}
 		./autogen.sh
@@ -991,7 +1008,7 @@ if [ "$OPENVPN" = "yes" ]; then
 	#	openvpn --genkey --secret static.key
 	#fi
 	if [ "$ID" = "ubuntu" ] && [ "$VERSION_ID" = "18.04" ] && [ ! -d /etc/openvpn/ca ]; then
-		wget -O /tmp/EasyRSA-unix-v${EASYRSA_VERSION}.tgz https://github.55860.com/OpenVPN/easy-rsa/releases/download/v3.0.6/EasyRSA-unix-v${EASYRSA_VERSION}.tgz
+		wget -O /tmp/EasyRSA-unix-v${EASYRSA_VERSION}.tgz https://github.com/OpenVPN/easy-rsa/releases/download/v3.0.6/EasyRSA-unix-v${EASYRSA_VERSION}.tgz
 		cd /tmp
 		tar xzvf EasyRSA-unix-v${EASYRSA_VERSION}.tgz
 		cd /tmp/EasyRSA-v${EASYRSA_VERSION}
@@ -1073,7 +1090,7 @@ if [ "$OPENVPN" = "yes" ]; then
 	mkdir -p /etc/openvpn/ccd
 	systemctl enable openvpn@tun0.service
 	systemctl enable openvpn@tun1.service
-	if [ "$UPSTREAM" = "yes" ]; then
+	if [ "$UPSTREAM" = "yes" ] || [ "$UPSTREAM6" = "yes" ]; then
 		mptcpize enable openvpn@tun0
 	fi
 	systemctl enable openvpn@bonding1.service
@@ -1098,7 +1115,7 @@ if [ "$SOURCES" = "yes" ]; then
 	apt-get install -y --no-install-recommends build-essential git ca-certificates meson pkg-config
 	rm -rf /tmp/glorytun-udp
 	cd /tmp
-	git clone https://github.55860.com/angt/glorytun.git /tmp/glorytun-udp
+	git clone https://github.com/angt/glorytun.git /tmp/glorytun-udp
 	cd /tmp/glorytun-udp
 	git checkout ${GLORYTUN_UDP_VERSION}
 	git submodule update --init --recursive
@@ -1163,10 +1180,10 @@ if [ "$DSVPN" = "yes" ]; then
 		apt-get install -y --no-install-recommends build-essential git ca-certificates
 		rm -rf /tmp/dsvpn
 		cd /tmp
-		git clone https://github.55860.com/jedisct1/dsvpn.git /tmp/dsvpn
+		git clone https://github.com/jedisct1/dsvpn.git /tmp/dsvpn
 		cd /tmp/dsvpn
 		git checkout ${DSVPN_VERSION}
-		wget https://github.55860.com/Ysurac/openmptcprouter-feeds/raw/develop/dsvpn/patches/nofirewall.patch
+		wget https://github.com/Ysurac/openmptcprouter-feeds/raw/develop/dsvpn/patches/nofirewall.patch
 		patch -p1 < nofirewall.patch
 		make CFLAGS='-DNO_DEFAULT_ROUTES -DNO_DEFAULT_FIREWALL'
 		make install
@@ -1189,7 +1206,7 @@ if [ "$DSVPN" = "yes" ]; then
 		apt-get -y -o Dpkg::Options::="--force-confdef" -o Dpkg::Options::="--force-confold" -o Dpkg::Options::="--force-overwrite" install omr-dsvpn=${DSVPN_BINARY_VERSION}
 		DSVPN_PASS=$(cat /etc/dsvpn/dsvpn0.key | tr -d "\n")
 	fi
-	if [ "$UPSTREAM" = "yes" ]; then
+	if [ "$UPSTREAM" = "yes" ] || [ "$UPSTREAM6" = "yes" ]; then
 		mptcpize enable dsvpn-server@dsvpn0
 	fi
 fi
@@ -1214,13 +1231,13 @@ if [ "$SOURCES" = "yes" ]; then
 	apt-get -y install build-essential pkg-config autoconf automake
 	rm -rf /tmp/glorytun-0.0.35
 	cd /tmp
-	if [ "$UPSTREAM" = "yes" ]; then
-		wget -O /tmp/glorytun-0.0.35.tar.gz https://github.55860.com/Ysurac/glorytun/archive/refs/heads/tcp.tar.gz
+	if [ "$UPSTREAM" = "yes" ] || [ "$UPSTREAM6" = "yes" ]; then
+		wget -O /tmp/glorytun-0.0.35.tar.gz https://github.com/Ysurac/glorytun/archive/refs/heads/tcp.tar.gz
 	else
 		wget -O /tmp/glorytun-0.0.35.tar.gz http://github.com/angt/glorytun/releases/download/v0.0.35/glorytun-0.0.35.tar.gz
 	fi
 	tar xzf glorytun-0.0.35.tar.gz
-	if [ "$UPSTREAM" = "yes" ]; then
+	if [ "$UPSTREAM" = "yes" ] || [ "$UPSTREAM6" = "yes" ]; then
 		mv /tmp/glorytun-tcp /tmp/glorytun-0.0.35
 	fi
 	cd glorytun-0.0.35
@@ -1381,8 +1398,8 @@ fi
 
 if [ "$TLS" = "yes" ]; then
 	VPS_CERT=0
-	apt-get -y install dnsutils socat
-	if [ "$VPS_DOMAIN" != "" ] && [ "$(dig +noidnout +noall +answer $VPS_DOMAIN)" != "" ] && [ "$(ping -c 1 -w 1 $VPS_DOMAIN)" ]; then
+	apt-get -y install socat
+	if [ "$VPS_DOMAIN" != "" ] && [ "$(getent hosts $VPS_DOMAIN | awk '{ print $1; exit }')" != "" ] && [ "$(ping -c 1 -w 1 $VPS_DOMAIN)" ]; then
 		if [ ! -f "/root/.acme.sh/$VPS_DOMAIN/$VPS_DOMAIN.cer" ]; then
 			echo "Generate certificate for V2Ray"
 			set +e

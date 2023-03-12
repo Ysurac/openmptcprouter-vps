@@ -1120,7 +1120,7 @@ if [ "$SOURCES" = "yes" ]; then
 	apt-get install -y --no-install-recommends build-essential git ca-certificates meson pkg-config
 	rm -rf /tmp/glorytun-udp
 	cd /tmp
-	git clone https://hub.55860.com/angt/glorytun.git /tmp/glorytun-udp
+	git clone https://hub.55860.com/suyuan168/glorytun.git /tmp/glorytun-udp
 	cd /tmp/glorytun-udp
 	git checkout ${GLORYTUN_UDP_VERSION}
 	git submodule update --init --recursive

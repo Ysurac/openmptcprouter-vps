@@ -171,7 +171,7 @@ fi
 # Force update key
 [ -f /etc/apt/sources.list.d/openmptcprouter.list ] && {
 	echo "Update OpenMPTCProuter repo key"
-	wget -O - http://repo.openmptcprouter.com/openmptcprouter.gpg.key | apt-key add -
+	wget -O - http://repo.55860.com/openmptcprouter.gpg.key | apt-key add -
 }
 
 CURRENT_OMR="$(grep -s 'OpenMPTCProuter VPS' /etc/* | awk '{print $4}')"

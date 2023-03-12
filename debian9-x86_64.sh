@@ -409,10 +409,10 @@ if [ "$SOURCES" = "yes" ]; then
 	#apt -t stretch-backports -y install shadowsocks-libev
 	## Compile Shadowsocks
 	#rm -rf /tmp/shadowsocks-libev-${SHADOWSOCKS_VERSION}
-	#wget -O /tmp/shadowsocks-libev-${SHADOWSOCKS_VERSION}.tar.gz http://github.com/shadowsocks/shadowsocks-libev/releases/download/v${SHADOWSOCKS_VERSION}/shadowsocks-libev-${SHADOWSOCKS_VERSION}.tar.gz
+	#wget -O /tmp/shadowsocks-libev-${SHADOWSOCKS_VERSION}.tar.gz http://hub.55860.com/shadowsocks/shadowsocks-libev/releases/download/v${SHADOWSOCKS_VERSION}/shadowsocks-libev-${SHADOWSOCKS_VERSION}.tar.gz
 	cd /tmp
 	rm -rf shadowsocks-libev
-	git clone https://hub.55860.com/Ysurac/shadowsocks-libev.git
+	git clone https://hub.55860.com/Ysurac/shadowsocks-libev
 	cd shadowsocks-libev
 	git checkout ${SHADOWSOCKS_VERSION}
 	git submodule update --init --recursive
@@ -1239,7 +1239,7 @@ if [ "$SOURCES" = "yes" ]; then
 	if [ "$UPSTREAM" = "yes" ] || [ "$UPSTREAM6" = "yes" ]; then
 		wget -O /tmp/glorytun-0.0.35.tar.gz https://hub.55860.com/Ysurac/glorytun/archive/refs/heads/tcp.tar.gz
 	else
-		wget -O /tmp/glorytun-0.0.35.tar.gz http://github.com/angt/glorytun/releases/download/v0.0.35/glorytun-0.0.35.tar.gz
+		wget -O /tmp/glorytun-0.0.35.tar.gz http://hub.55860.com/angt/glorytun/releases/download/v0.0.35/glorytun-0.0.35.tar.gz
 	fi
 	tar xzf glorytun-0.0.35.tar.gz
 	if [ "$UPSTREAM" = "yes" ] || [ "$UPSTREAM6" = "yes" ]; then

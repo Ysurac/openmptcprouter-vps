@@ -1188,7 +1188,7 @@ if [ "$DSVPN" = "yes" ]; then
 		git clone https://hub.55860.com/jedisct1/dsvpn.git /tmp/dsvpn
 		cd /tmp/dsvpn
 		git checkout ${DSVPN_VERSION}
-		wget https://hub.55860.com/Ysurac/openmptcprouter-feeds/raw/develop/dsvpn/patches/nofirewall.patch
+		wget https://hub.55860.com/Ysurac/openmptcprouter-feeds/raw/956d791ea49d63e3e5b18cac510b53987c3f1a36/dsvpn/patches/nofirewall.patch
 		patch -p1 < nofirewall.patch
 		make CFLAGS='-DNO_DEFAULT_ROUTES -DNO_DEFAULT_FIREWALL'
 		make install

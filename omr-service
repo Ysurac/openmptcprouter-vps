@@ -39,7 +39,7 @@ _glorytun_tcp() {
 		done
 		if [ -f /etc/openmptcprouter-vps-admin/current-vpn ] && [ "$(cat /etc/openmptcprouter-vps-admin/current-vpn)" = "glorytun_tcp" ]; then
 			localip="$(cat /etc/glorytun-tcp/tun0 | grep LOCALIP | cut -d '=' -f2)"
-			[ -z "$localip" ] && localip="10.255.255.1"
+			[ -z "$localip" ] && localip="172.255.255.1"
 			remoteip="$(echo $localip | sed 's/\.1/\.2/')"
 			if [ "$(ping -c 5 -w 5 $remoteip | grep '100%')" != "" ] && ([ -z "$(pgrep glorytun-tcp)" ] || [ "$(expr $(date +%s) - $(stat -c %Y /proc/$(pgrep glorytun-tcp)/exe ))" -gt "300" ]); then
 				logger -t "OMR-Service" "No answer from VPN client end, restart Glorytun-TCP"

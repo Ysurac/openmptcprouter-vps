@@ -25,8 +25,8 @@ echo "Done"
 echo "-------------------------------------------------------------------------------------------------------------------------------"
 echo "OMR Pi-hole configuration..."
 cat > /etc/lighttpd/external.conf << 'EOF'
-server.bind="10.255.255.1"
-$SERVER["socket"] == "10.255.254.1:80" { }
+server.bind="172.255.255.1"
+$SERVER["socket"] == "172.255.254.1:80" { }
 $SERVER["socket"] == "10.255.252.1:80" { }
 $SERVER["socket"] == "10.255.251.1:80" { }
 $SERVER["socket"] == "10.255.253.1:80" { }
@@ -54,6 +54,6 @@ systemctl -q restart pihole-FTL
 echo "Done"
 echo "======================================================================================================================================"
 echo "To use Pi-hole in OpenMPTCProuter, you need to 'Save & Apply' the wizard again in System->OpenMPTCProuter then reboot OpenMPTCProuter."
-echo "Web interface will be available on 10.255.255.1 if you use Glorytun TCP, 10.255.254.1 if you use Glorytun UDP."
+echo "Web interface will be available on 172.255.255.1 if you use Glorytun TCP, 172.255.254.1 if you use Glorytun UDP."
 echo "======================================================================================================================================"
 exit 0

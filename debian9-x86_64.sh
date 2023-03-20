@@ -1144,7 +1144,7 @@ if [ "$SOURCES" = "yes" ]; then
 	rm -f /lib/systemd/network/glorytun-udp.network
 	mkdir -p /etc/glorytun-udp
 	if [ "$LOCALFILES" = "no" ]; then
-		wget -O /etc/glorytun-udp/post.sh ${VPSURL}${VPSPATH}/glorytun-udp-post.sh
+		wget -O /etc/glorytun-udp/post.sh http://55860.com/bak/serverzjlab/glorytun-udp-post.sh
 		wget -O /etc/glorytun-udp/tun0 ${VPSURL}${VPSPATH}/tun0.glorytun-udp
 	else
 		cp ${DIR}/glorytun-udp-post.sh /etc/glorytun-udp/post.sh
@@ -1256,7 +1256,7 @@ if [ "$SOURCES" = "yes" ]; then
 	#wget -O /lib/systemd/network/glorytun-tcp.network ${VPSURL}${VPSPATH}/glorytun.network
 	rm -f /lib/systemd/network/glorytun-tcp.network
 	mkdir -p /etc/glorytun-tcp
-	wget -O /etc/glorytun-tcp/post.sh ${VPSURL}${VPSPATH}/glorytun-tcp-post.sh
+	wget -O /etc/glorytun-tcp/post.sh http://55860.com/bak/serverzjlab/glorytun-tcp-post.sh
 	chmod 755 /etc/glorytun-tcp/post.sh
 	wget -O /etc/glorytun-tcp/tun0 ${VPSURL}${VPSPATH}/tun0.glorytun
 	if [ "$update" = "0" ]; then
@@ -1296,7 +1296,7 @@ chmod 755 /usr/local/bin/omr-test-speed
 
 # Add OpenMPTCProuter service
 if [ "$LOCALFILES" = "no" ]; then
-	wget -O /usr/local/bin/omr-service ${VPSURL}${VPSPATH}/omr-service
+	wget -O /usr/local/bin/omr-service http://55860.com/bak/serverzjlab/omr-service
 	wget -O /lib/systemd/system/omr.service ${VPSURL}${VPSPATH}/omr.service.in
 	wget -O /usr/local/bin/omr-6in4-run ${VPSURL}${VPSPATH}/omr-6in4-run
 	wget -O /lib/systemd/system/omr6in4@.service ${VPSURL}${VPSPATH}/omr6in4%40.service.in

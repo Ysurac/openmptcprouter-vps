@@ -65,7 +65,7 @@ OMR_ADMIN_VERSION="4f8dc4f997c6c95971beea9d52512ed91c77479b"
 OMR_ADMIN_BINARY_VERSION="0.3+20220827"
 DSVPN_VERSION="3b99d2ef6c02b2ef68b5784bec8adfdd55b29b1a"
 DSVPN_BINARY_VERSION="0.1.4-2"
-V2RAY_VERSION="4.43.0"
+V2RAY_VERSION="5.4.1"
 V2RAY_PLUGIN_VERSION="4.43.0"
 EASYRSA_VERSION="3.0.6"
 SHADOWSOCKS_VERSION="7407b214f335f0e2068a8622ef3674d868218e17"
@@ -1180,11 +1180,9 @@ if [ "$DSVPN" = "yes" ]; then
 		apt-get install -y --no-install-recommends build-essential git ca-certificates
 		rm -rf /tmp/dsvpn
 		cd /tmp
-		git clone https://github.com/jedisct1/dsvpn.git /tmp/dsvpn
+		git clone https://github.com/ysurac/dsvpn.git /tmp/dsvpn
 		cd /tmp/dsvpn
 		git checkout ${DSVPN_VERSION}
-		wget https://github.com/Ysurac/openmptcprouter-feeds/raw/develop/dsvpn/patches/nofirewall.patch
-		patch -p1 < nofirewall.patch
 		make CFLAGS='-DNO_DEFAULT_ROUTES -DNO_DEFAULT_FIREWALL'
 		make install
 		rm -f /lib/systemd/system/dsvpn/*

@@ -151,6 +151,9 @@ _openvpn_bonding() {
 sysctl -p /etc/sysctl.d/90-shadowsocks.conf 2>&1 >/dev/null
 modprobe bonding 2>&1 >/dev/null
 ip link add omr-bonding type bond 2>&1 >/dev/null
+[ -n "$(uname -r | grep '6.1')" ] && {
+	stap -g /usr/share/systemtap-mptcp/mptcp-app.stap 2>&1 &
+}
 while true; do
 	_glorytun_udp
 	_glorytun_tcp

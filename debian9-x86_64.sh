@@ -70,13 +70,13 @@ V2RAY_PLUGIN_VERSION="4.43.0"
 EASYRSA_VERSION="3.0.6"
 SHADOWSOCKS_VERSION="7407b214f335f0e2068a8622ef3674d868218e17"
 if [ "$UPSTREAM" = "yes" ] || [ "$UPSTREAM6" = "yes" ]; then
-	SHADOWSOCKS_VERSION="410950d87d8cdf8502d8f59a79dc0ff4c7677543"
+	SHADOWSOCKS_VERSION="8fc18fcba3226e31f9f2bb9e60d6be6a1837862b"
 fi
 IPROUTE2_VERSION="29da83f89f6e1fe528c59131a01f5d43bcd0a000"
 SHADOWSOCKS_BINARY_VERSION="3.3.5-3"
 DEFAULT_USER="openmptcprouter"
 VPS_DOMAIN=${VPS_DOMAIN:-$(wget -4 -qO- -T 2 http://hostname.openmptcprouter.com)}
-VPSPATH="server"
+VPSPATH="server-test"
 VPS_PUBLIC_IP=${VPS_PUBLIC_IP:-$(wget -4 -qO- -T 2 http://ip.openmptcprouter.com)}
 VPSURL="https://www.openmptcprouter.com/"
 REPO="repo.openmptcprouter.com"
@@ -102,31 +102,33 @@ if test -f /etc/os-release ; then
 else
 	. /usr/lib/os-release
 fi
-if [ "$ID" = "debian" ] && [ "$VERSION_ID" != "9" ] && [ "$VERSION_ID" != "10" ] && [ "$VERSION_ID" != "11" ]; then
-	echo "This script only work with Debian Stretch (9.x), Debian Buster (10.x) or Debian Bullseye (11.x)"
+if [ "$ID" = "debian" ] && [ "$VERSION_ID" != "9" ] && [ "$VERSION_ID" != "10" ] && [ "$VERSION_ID" != "11" ] && [ "$VERSION_ID" != "12" ]; then
+	echo "This script only work with Debian Stretch (9.x), Debian Buster (10.x), Debian Bullseye (11.x) or Debian Bookworm (12.x)"
 	exit 1
 elif [ "$ID" = "ubuntu" ] && [ "$VERSION_ID" != "18.04" ] && [ "$VERSION_ID" != "19.04" ] && [ "$VERSION_ID" != "20.04" ] && [ "$VERSION_ID" != "22.04" ]; then
 	echo "This script only work with Ubuntu 18.04, 19.04, 20.04 or 22.04"
 	echo "Use debian when possible"
 	exit 1
 elif [ "$ID" != "debian" ] && [ "$ID" != "ubuntu" ]; then
-	echo "This script only work with Ubuntu 18.04, Ubuntu 19.04, Ubutun 20.04, Ubuntu 22.04, Debian Stretch (9.x), Debian Buster (10.x) or Debian Bullseye (11.x)"
+	echo "This script only work with Ubuntu 18.04, Ubuntu 19.04, Ubutun 20.04, Ubuntu 22.04, Debian Stretch (9.x), Debian Buster (10.x), Debian Bullseye (11.x) or Debian Bookworm (12.x)"
 	echo "Use Debian when possible"
 	exit 1
 fi
 
 echo "Check architecture..."
 ARCH=$(dpkg --print-architecture | tr -d "\n")
-if [ "$ARCH" != "amd64" ]; then
+if [ "$UPSTREAM6" != "yes" ] && [ "$ARCH" != "amd64" ]; then
 	echo "Only x86_64 (amd64) is supported"
 	exit 1
 fi
 
-echo "Check virtualized environment"
-VIRT="$(systemd-detect-virt 2>/dev/null || true)"
-if [ -z "$(uname -a | grep mptcp)" ] && [ -n "$VIRT" ] && ([ "$VIRT" = "openvz" ] || [ "$VIRT" = "lxc" ] || [ "$VIRT" = "docker" ]); then
-	echo "Container are not supported: kernel can't be modified."
-	exit 1
+if [ "$UPSTREAM6" != "yes" ]; then
+	echo "Check virtualized environment"
+	VIRT="$(systemd-detect-virt 2>/dev/null || true)"
+	if [ -z "$(uname -a | grep mptcp)" ] && [ -n "$VIRT" ] && ([ "$VIRT" = "openvz" ] || [ "$VIRT" = "lxc" ] || [ "$VIRT" = "docker" ]); then
+		echo "Container are not supported: kernel can't be modified."
+		exit 1
+	fi
 fi
 
 # Check if DPKG is locked and for broken packages
@@ -210,6 +212,26 @@ if [ "$ID" = "debian" ] && [ "$VERSION_ID" = "9" ] && [ "$UPDATE_OS" = "yes" ]; 
 	apt-get -y -o Dpkg::Options::="--force-confdef" -o Dpkg::Options::="--force-confnew" dist-upgrade
 	VERSION_ID="10"
 fi
+if [ "$ID" = "debian" ] && [ "$VERSION_ID" = "10" ] && [ "$UPDATE_OS" = "yes" ] && [ "$UPSTREAM6" = "yes" ]; then
+	echo "Update Debian 10 Stretch to Debian 11 Buster"
+	apt-get -y -f --force-yes upgrade
+	apt-get -y -f --force-yes dist-upgrade
+	sed -i 's:buster:bullseye:g' /etc/apt/sources.list
+	apt-get update --allow-releaseinfo-change
+	apt-get -y -o Dpkg::Options::="--force-confdef" -o Dpkg::Options::="--force-confnew" upgrade
+	apt-get -y -o Dpkg::Options::="--force-confdef" -o Dpkg::Options::="--force-confnew" dist-upgrade
+	VERSION_ID="11"
+fi
+if [ "$ID" = "debian" ] && [ "$VERSION_ID" = "11" ] && [ "$UPDATE_OS" = "yes" ] && [ "$UPSTREAM6" = "yes" ]; then
+	echo "Update Debian 10 Stretch to Debian 11 Buster"
+	apt-get -y -f --force-yes upgrade
+	apt-get -y -f --force-yes dist-upgrade
+	sed -i 's:bullseye:bookworm:g' /etc/apt/sources.list
+	apt-get update --allow-releaseinfo-change
+	apt-get -y -o Dpkg::Options::="--force-confdef" -o Dpkg::Options::="--force-confnew" upgrade
+	apt-get -y -o Dpkg::Options::="--force-confdef" -o Dpkg::Options::="--force-confnew" dist-upgrade
+	VERSION_ID="12"
+fi
 if [ "$ID" = "ubuntu" ] && [ "$VERSION_ID" = "18.04" ] && [ "$UPDATE_OS" = "yes" ]; then
 	echo "Update Ubuntu 18.04 to Ubuntu 20.04"
 	apt-get -y -f --force-yes upgrade
@@ -261,7 +283,7 @@ else
 		Pin: origin ${REPO}
 		Pin-Priority: 1001
 	EOF
-	if [ "$ID" = "debian" ] && [ "$VERSION_ID" = "11" ]; then
+	if [ "$ID" = "debian" ] && ([ "$VERSION_ID" = "11" ] || [ "$VERSION_ID" = "12" ]); then
 		cat <<-EOF | tee /etc/apt/preferences.d/openmptcprouter.pref
 			Explanation: Prefer libuv1 Debian native package
 			Package: libuv1
@@ -291,6 +313,9 @@ if [ "$ID" = "debian" ]; then
 	fi
 	# Add buster-backports repo
 	echo 'deb http://deb.debian.org/debian buster-backports main' > /etc/apt/sources.list.d/buster-backports.list
+	if [ "$VERSION_ID" = "12" ]; then
+		echo 'deb http://deb.debian.org/debian bullseye main' > /etc/apt/sources.list.d/bullseye.list
+	fi
 elif [ "$ID" = "ubuntu" ]; then
 	echo 'deb http://archive.ubuntu.com/ubuntu bionic-backports main' > /etc/apt/sources.list.d/bionic-backports.list
 	echo 'deb http://archive.ubuntu.com/ubuntu bionic universe' > /etc/apt/sources.list.d/bionic-universe.list
@@ -327,75 +352,93 @@ if [ -z "$(dpkg-query -l | grep grub)" ]; then
 		echo 'GRUB_CMDLINE_LINUX="net.ifnames=0 biosdevname=0"' > /etc/default/grub
 	}
 fi
-if [ "$SOURCES" = "yes" ]; then
-	wget -O /tmp/linux-image-${KERNEL_RELEASE}_amd64.deb ${VPSURL}kernel/linux-image-${KERNEL_RELEASE}_amd64.deb
-	wget -O /tmp/linux-headers-${KERNEL_RELEASE}_amd64.deb ${VPSURL}kernel/linux-headers-${KERNEL_RELEASE}_amd64.deb
-	# Rename bzImage to vmlinuz, needed when custom kernel was used
-	cd /boot
-	apt-get -y install git
-	rename 's/^bzImage/vmlinuz/s' * >/dev/null 2>&1
-	#apt-get -y install linux-mptcp
-	#dpkg --remove --force-remove-reinstreq linux-image-${KERNEL_VERSION}-mptcp
-	#dpkg --remove --force-remove-reinstreq linux-headers-${KERNEL_VERSION}-mptcp
-	if [ "$(dpkg -l | grep linux-image-${KERNEL_VERSION} | grep ${KERNEL_PACKAGE_VERSION})" = "" ]; then
-		echo "Install kernel linux-image-${KERNEL_RELEASE} source release"
-		echo "\033[1m !!! if kernel install fail run: dpkg --remove --force-remove-reinstreq linux-image-${KERNEL_VERSION}-mptcp !!! \033[0m"
-		dpkg --force-all -i -B /tmp/linux-headers-${KERNEL_RELEASE}_amd64.deb
-		dpkg --force-all -i -B /tmp/linux-image-${KERNEL_RELEASE}_amd64.deb
+if [ "$UPSTREAM6" != "yes" ]; then
+	if [ "$SOURCES" = "yes" ]; then
+		wget -O /tmp/linux-image-${KERNEL_RELEASE}_amd64.deb ${VPSURL}kernel/linux-image-${KERNEL_RELEASE}_amd64.deb
+		wget -O /tmp/linux-headers-${KERNEL_RELEASE}_amd64.deb ${VPSURL}kernel/linux-headers-${KERNEL_RELEASE}_amd64.deb
+		# Rename bzImage to vmlinuz, needed when custom kernel was used
+		cd /boot
+		apt-get -y install git
+		rename 's/^bzImage/vmlinuz/s' * >/dev/null 2>&1
+		#apt-get -y install linux-mptcp
+		#dpkg --remove --force-remove-reinstreq linux-image-${KERNEL_VERSION}-mptcp
+		#dpkg --remove --force-remove-reinstreq linux-headers-${KERNEL_VERSION}-mptcp
+		if [ "$(dpkg -l | grep linux-image-${KERNEL_VERSION} | grep ${KERNEL_PACKAGE_VERSION})" = "" ]; then
+			echo "Install kernel linux-image-${KERNEL_RELEASE} source release"
+			echo "\033[1m !!! if kernel install fail run: dpkg --remove --force-remove-reinstreq linux-image-${KERNEL_VERSION}-mptcp !!! \033[0m"
+			dpkg --force-all -i -B /tmp/linux-headers-${KERNEL_RELEASE}_amd64.deb
+			dpkg --force-all -i -B /tmp/linux-image-${KERNEL_RELEASE}_amd64.deb
+		fi
+	else
+		cd /boot
+		rename 's/^bzImage/vmlinuz/s' * >/dev/null 2>&1
+		if [ "$(dpkg -l | grep linux-image-${KERNEL_VERSION} | grep ${KERNEL_PACKAGE_VERSION})" = "" ]; then
+			echo "Install kernel linux-image-${KERNEL_RELEASE}"
+			echo "\033[1m !!! if kernel install fail run: dpkg --remove --force-remove-reinstreq linux-image-${KERNEL_VERSION}-mptcp !!! \033[0m"
+			apt-get -y install linux-image-${KERNEL_VERSION}-mptcp=${KERNEL_PACKAGE_VERSION} linux-headers-${KERNEL_VERSION}-mptcp=${KERNEL_PACKAGE_VERSION}
+		fi
 	fi
-else
-	cd /boot
-	rename 's/^bzImage/vmlinuz/s' * >/dev/null 2>&1
-	if [ "$(dpkg -l | grep linux-image-${KERNEL_VERSION} | grep ${KERNEL_PACKAGE_VERSION})" = "" ]; then
-		echo "Install kernel linux-image-${KERNEL_RELEASE}"
-		echo "\033[1m !!! if kernel install fail run: dpkg --remove --force-remove-reinstreq linux-image-${KERNEL_VERSION}-mptcp !!! \033[0m"
-		apt-get -y install linux-image-${KERNEL_VERSION}-mptcp=${KERNEL_PACKAGE_VERSION} linux-headers-${KERNEL_VERSION}-mptcp=${KERNEL_PACKAGE_VERSION}
+
+
+	# Check if mptcp kernel is grub default kernel
+	echo "Set MPTCP kernel as grub default..."
+	if [ "$LOCALFILES" = "no" ]; then
+		wget -O /tmp/update-grub.sh ${VPSURL}${VPSPATH}/update-grub.sh
+		cd /tmp
+	else
+		cd ${DIR}
 	fi
+	[ -f /boot/grub/grub.cfg ] && [ -z "$(grep ${KERNEL_VERSION}-mptcp /boot/grub/grub.cfg)" ] && [ -n "$(which grub-mkconfig)" ] && grub-mkconfig -o /boot/grub/grub.cfg
+	rm -f /etc/grub.d/30_os-prober
+	bash update-grub.sh ${KERNEL_VERSION}-mptcp
+	bash update-grub.sh ${KERNEL_RELEASE}
+	[ -f /boot/grub/grub.cfg ] && sed -i 's/default="1>0"/default="0"/' /boot/grub/grub.cfg 2>&1 >/dev/null
 fi
 
-# Check if mptcp kernel is grub default kernel
-echo "Set MPTCP kernel as grub default..."
-if [ "$LOCALFILES" = "no" ]; then
-	wget -O /tmp/update-grub.sh ${VPSURL}${VPSPATH}/update-grub.sh
-	cd /tmp
-else
-	cd ${DIR}
+if [ "$ARCH" = "amd64" ]; then
+	echo "Install tracebox OpenMPTCProuter edition"
+	apt-get -y -o Dpkg::Options::="--force-overwrite" install tracebox
+	echo "Install iperf3 OpenMPTCProuter edition"
+	apt-get -y -o Dpkg::Options::="--force-overwrite" install omr-iperf3
 fi
-[ -f /boot/grub/grub.cfg ] && [ -z "$(grep ${KERNEL_VERSION}-mptcp /boot/grub/grub.cfg)" ] && [ -n "$(which grub-mkconfig)" ] && grub-mkconfig -o /boot/grub/grub.cfg
-rm -f /etc/grub.d/30_os-prober
-bash update-grub.sh ${KERNEL_VERSION}-mptcp
-bash update-grub.sh ${KERNEL_RELEASE}
-[ -f /boot/grub/grub.cfg ] && sed -i 's/default="1>0"/default="0"/' /boot/grub/grub.cfg 2>&1 >/dev/null
-
-echo "Install tracebox OpenMPTCProuter edition"
-apt-get -y -o Dpkg::Options::="--force-overwrite" install tracebox
-echo "Install iperf3 OpenMPTCProuter edition"
-apt-get -y -o Dpkg::Options::="--force-overwrite" install omr-iperf3
 
 if [ "$UPSTREAM" = "yes" ] || [ "$UPSTREAM6" = "yes" ]; then
 	echo "Compile and install mptcpize..."
 	apt-get -y install --no-install-recommends build-essential
 	cd /tmp
+	apt-get -y install git
 	git clone https://github.com/Ysurac/mptcpize.git
 	cd mptcpize
 	make
 	make install
 	cd /tmp
 	rm -rf /tmp/mptcpize
-	echo "Compile and install iproute2..."
-	apt-get -y install --no-install-recommends bison libbison-dev flex
-	#wget https://mirrors.edge.kernel.org/pub/linux/utils/net/iproute2/iproute2-5.16.0.tar.gz
-	#tar xzf iproute2-5.16.0.tar.gz
-	#cd iproute2-5.16.0
-	git clone git://git.kernel.org/pub/scm/network/iproute2/iproute2.git 
-	cd iproute2
-	git checkout 29da83f89f6e1fe528c59131a01f5d43bcd0a000
-	make
-	make install
-	cd /tmp
+	if [ "$ID" = "debian" ] && [ "$VERSION_ID" = "12" ]; then
+		apt-get -y install iproute2
+	else
+		echo "Compile and install iproute2..."
+		apt-get -y install --no-install-recommends bison libbison-dev flex
+		#wget https://mirrors.edge.kernel.org/pub/linux/utils/net/iproute2/iproute2-5.16.0.tar.gz
+		#tar xzf iproute2-5.16.0.tar.gz
+		#cd iproute2-5.16.0
+		git clone git://git.kernel.org/pub/scm/network/iproute2/iproute2.git 
+		cd iproute2
+		git checkout 29da83f89f6e1fe528c59131a01f5d43bcd0a000
+		make
+		make install
+		cd /tmp
+	fi
 	rm -rf iproute2
-	echo "MPTCPize iperf3..."
-	mptcpize enable iperf3
+	if [ "$ARCH" = "amd64" ]; then
+		echo "MPTCPize iperf3..."
+		mptcpize enable iperf3
+	fi
+	if [ "$UPSTREAM6" = "yes" ]; then
+		apt-get -y install $(dpkg --get-selections | grep linux-image-6.1 | grep -v dbg | cut -f1)-dbg
+		apt-get -y install systemtap
+		mkdir -p /usr/share/systemtap-mptcp
+		wget -O /usr/share/systemtap-mptcp/mptcp-app.stap ${VPSURL}${VPSPATH}/mptcp-app.stap
+	fi
 fi
 
 apt-get -y remove shadowsocks-libev
@@ -568,9 +611,14 @@ if [ "$OMR_ADMIN" = "yes" ]; then
 		apt-get -y remove python3-jwt
 		pip3 -q install pyjwt
 	else
-		if [ "$ID" = "debian" ] && ([ "$VERSION_ID" = "10" ] || [ "$VERSION_ID" = "11" ]); then
-			apt-get -y --allow-downgrades install python3-passlib python3-jwt python3-netaddr libuv1
-			pip3 -q install uvloop
+		if [ "$ID" = "debian" ] && ([ "$VERSION_ID" = "10" ] || [ "$VERSION_ID" = "11" ] || [ "$VERSION_ID" = "12" ]); then
+			if [ "$VERSION_ID" = "12" ]; then
+				apt-get -y --allow-downgrades install python3-passlib python3-jwt python3-netaddr libuv1
+				pip3 -q install uvloop --break-system-packages
+			else
+				apt-get -y --allow-downgrades install python3-passlib python3-jwt python3-netaddr libuv1
+				pip3 -q install uvloop
+			fi
 		else
 			apt-get -y install python3-passlib python3-jwt python3-netaddr libuv1 python3-uvloop
 		fi
@@ -580,12 +628,21 @@ if [ "$OMR_ADMIN" = "yes" ]; then
 	echo "If you see any error here, I really don't care: it's about a module not used for home users"
 	#pip3 install pyjwt passlib uvicorn fastapi netjsonconfig python-multipart netaddr
 	#pip3 -q install fastapi netjsonconfig python-multipart uvicorn -U
-	pip3 -q install netjsonconfig
-	pip3 -q install fastapi -U
-	pip3 -q install jsonschema -U
-	pip3 -q install python-multipart jinja2 -U
-	pip3 -q install starlette
-	pip3 -q install starlette
+	if [ "$ID" = "debian" ] && [ "$VERSION_ID" = "12" ]; then
+		pip3 -q install netjsonconfig --break-system-packages
+		pip3 -q install fastapi -U --break-system-packages
+		pip3 -q install jsonschema -U --break-system-packages
+		pip3 -q install python-multipart jinja2 -U --break-system-packages
+		pip3 -q install starlette --break-system-packages
+		pip3 -q install starlette --break-system-packages
+	else
+		pip3 -q install netjsonconfig
+		pip3 -q install fastapi -U
+		pip3 -q install jsonschema -U
+		pip3 -q install python-multipart jinja2 -U
+		pip3 -q install starlette
+		pip3 -q install starlette
+	fi
 	mkdir -p /etc/openmptcprouter-vps-admin/omr-6in4
 	mkdir -p /etc/openmptcprouter-vps-admin/intf
 	[ ! -f "/etc/openmptcprouter-vps-admin/current-vpn" ] && echo "glorytun_tcp" > /etc/openmptcprouter-vps-admin/current-vpn
@@ -800,9 +857,29 @@ fi
 if [ "$V2RAY" = "yes" ]; then
 	#apt-get -y -o Dpkg::Options::="--force-overwrite" install v2ray
 	if [ "$SOURCES" = "yes" ]; then
-		wget -O /tmp/v2ray-${V2RAY_VERSION}-amd64.deb ${VPSURL}/debian/v2ray-${V2RAY_VERSION}-amd64.deb
-		dpkg --force-all -i -B /tmp/v2ray-${V2RAY_VERSION}-amd64.deb
-		rm -f /tmp/v2ray-${V2RAY_VERSION}-amd64.deb
+		if [ "$ARCH" = "amd64" ]; then
+			wget -O /tmp/v2ray-${V2RAY_VERSION}-amd64.deb ${VPSURL}/debian/v2ray-${V2RAY_VERSION}-amd64.deb
+			dpkg --force-all -i -B /tmp/v2ray-${V2RAY_VERSION}-amd64.deb
+			rm -f /tmp/v2ray-${V2RAY_VERSION}-amd64.deb
+		else
+			[ "$ARCH" = "i386" ] && V2RAY_FILENAME="v2ray-linux-32.zip"
+			[ "$ARCH" = "amd64" ] && V2RAY_FILENAME="v2ray-linux-64.zip"
+			[ "$ARCH" = "armel" ] && V2RAY_FILENAME="v2ray-linux-arm32-v7a.zip"
+			[ "$ARCH" = "armhf" ] && V2RAY_FILENAME="v2ray-linux-arm32-v7a.zip"
+			[ "$ARCH" = "arm64" ] && V2RAY_FILENAME="v2ray-linux-arm64-v8a.zip"
+			[ "$ARCH" = "mips64el" ] && V2RAY_FILENAME="v2ray-linux-mips64le.zip"
+			[ "$ARCH" = "mipsel" ] && V2RAY_FILENAME="v2ray-linux-mips32le.zip"
+			[ "$ARCH" = "riscv64" ] && V2RAY_FILENAME="v2ray-linux-riscv64.zip"
+			wget -O /tmp/v2ray-${V2RAY_VERSION}.zip https://github.com/v2fly/v2ray-core/releases/download/v${V2RAY_VERSION}/${V2RAY_FILENAME}
+			cd /tmp
+			mkdir v2ray
+			cd v2ray
+			unzip /tmp/v2ray-${V2RAY_VERSION}.zip
+			cp v2ray /usr/bin/
+			cp geoip.dat /usr/bin/
+			cp geosite.dat /usr/bin/
+			wget -O /lib/systemd/system/v2ray.service ${VPSURL}${VPSPATH}/v2ray.service
+		fi
 	else
 		apt-get -o Dpkg::Options::="--force-confold" -o Dpkg::Options::="--force-confdef" -o Dpkg::Options::="--force-overwrite" -y install v2ray=${V2RAY_VERSION}
 	fi
@@ -1051,11 +1128,11 @@ if [ "$OPENVPN" = "yes" ]; then
 			make-cadir /etc/openvpn/ca
 		fi
 		cd /etc/openvpn/ca
-		./easyrsa init-pki 2>&1 >/dev/null
+		./easyrsa --batch init-pki 2>&1 >/dev/null
 		./easyrsa --batch build-ca nopass
-		EASYRSA_CERT_EXPIRE=3650 ./easyrsa build-server-full server nopass
-		EASYRSA_CERT_EXPIRE=3650 ./easyrsa build-client-full "openmptcprouter" nopass
-		EASYRSA_CRL_DAYS=3650 ./easyrsa gen-crl
+		EASYRSA_CERT_EXPIRE=3650 ./easyrsa --batch build-server-full server nopass
+		EASYRSA_CERT_EXPIRE=3650 ./easyrsa --batch build-client-full "openmptcprouter" nopass
+		EASYRSA_CRL_DAYS=3650 ./easyrsa --batch gen-crl
 	fi
 	if [ ! -f "/etc/openvpn/ca/pki/issued/openmptcprouter.crt" ]; then
 		mv /etc/openvpn/ca/pki/issued/client.crt /etc/openvpn/ca/pki/issued/openmptcprouter.crt

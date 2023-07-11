@@ -581,7 +581,11 @@ if [ "$OMR_ADMIN" = "yes" ]; then
 	#pip3 install pyjwt passlib uvicorn fastapi netjsonconfig python-multipart netaddr
 	#pip3 -q install fastapi netjsonconfig python-multipart uvicorn -U
 	pip3 -q install netjsonconfig
-	pip3 -q install fastapi -U
+	if [ "$ID" = "ubuntu" ] || ([ "$ID" = "debian" ] && [ "$VERSION_ID" = "10" ]); then
+		pip3 -q install fastapi==0.99.1 -U
+	else
+		pip3 -q install fastapi -U
+	fi
 	pip3 -q install jsonschema -U
 	pip3 -q install python-multipart jinja2 -U
 	pip3 -q install starlette

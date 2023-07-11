@@ -80,7 +80,7 @@ _wireguard() {
 
 _omr_api() {
 	[ -z "$(pgrep curl)" ] && [ -z "$(curl -s -k -m 30 https://127.0.0.1:65500/)" ] && {
-		logger -t "OMR-Service" "Restart OMR-Admin"
+		logger -t "OMR-Service" "Can't contact API, restart OMR-Admin"
 		systemctl -q restart omr-admin
 	}
 }

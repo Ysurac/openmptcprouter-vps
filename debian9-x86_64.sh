@@ -638,6 +638,11 @@ if [ "$OMR_ADMIN" = "yes" ]; then
 		pip3 -q install starlette --break-system-packages
 	else
 		pip3 -q install netjsonconfig
+		if [ "$ID" = "ubuntu" ] || ([ "$ID" = "debian" ] && [ "$VERSION_ID" = "10" ]); then
+			pip3 -q install fastapi==0.99.1 -U
+		else
+			pip3 -q install fastapi -U
+		fi
 		pip3 -q install fastapi -U
 		pip3 -q install jsonschema -U
 		pip3 -q install python-multipart jinja2 -U

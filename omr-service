@@ -29,6 +29,7 @@ _glorytun_udp() {
 		for intf in /etc/glorytun-udp/tun*; do
 			[ "$(echo $intf | grep key)" = "" ] && /etc/glorytun-udp/post.sh ${intf}
 		done
+		ip link set mtu 9000 dev gt-udp-tun0 2>&1 >/dev/null
 	fi
 }
 
@@ -47,6 +48,7 @@ _glorytun_tcp() {
 				sleep 10
 			fi
 		fi
+		ip link set mtu 9000 dev gt-tun0 2>&1 >/dev/null
 	fi
 }
 
@@ -60,6 +62,7 @@ _dsvpn() {
 			logger -t "OMR-Service" "No answer from VPN client end, restart DSVPN"
 			systemctl restart dsvpn@dsvpn0
 		fi
+		ip link set mtu 9000 dev dsvpn0 2>&1 >/dev/null
 	fi
 }
 
@@ -95,7 +98,7 @@ _lan_route() {
 				while IFS=$"\n" read -r d; do
 					if [ "$d" != "" ]; then
 						network=$(ipcalc -n $d | grep Network | awk '{print $2}')
-						[ -n "$network" ] && [ -z "$(ip r show $network via $vpnremoteip)" ] && ip r replace $network via $vpnremoteip 2>&1 >/dev/null
+						[ -n "$network" ] && [ -z "$(ip r show $network via $vpnremoteip)" ] && ip r replace $network via $vpnremoteip onlink 2>&1 >/dev/null
 					fi
 				done
 			fi
@@ -115,7 +118,7 @@ _gre_tunnels() {
 					ip tunnel add $iface mode gre local $INTFADDR remote $OMR_ADDR 2>&1 >/dev/null
 					ip link set $iface up 2>&1 >/dev/null
 					ip addr add $LOCALIP dev $iface 2>&1 >/dev/null
-					ip route add $NETWORK dev $iface 2>&1 >/dev/null
+					ip route add $NETWORK dev $iface onlink 2>&1 >/dev/null
 				fi
 			fi
 		done
@@ -143,7 +146,7 @@ _openvpn_bonding() {
 		ip link set ovpnbonding8 up 2>&1 >/dev/null
 		ip link set omr-bonding up mtu 1440 2>&1 >/dev/null
 		ip a add 10.255.248.1 dev omr-bonding 2>&1 >/dev/null
-		ip r add 10.255.248.0/24 dev omr-bonding 2>&1 >/dev/null
+		ip r add 10.255.248.0/24 dev omr-bonding onlink 2>&1 >/dev/null
 		ip r add 10.255.248.2 dev omr-bonding src 10.255.248.1 2>&1 >/dev/null
 	fi
 }
@@ -151,9 +154,9 @@ _openvpn_bonding() {
 sysctl -p /etc/sysctl.d/90-shadowsocks.conf 2>&1 >/dev/null
 modprobe bonding 2>&1 >/dev/null
 ip link add omr-bonding type bond 2>&1 >/dev/null
-[ -n "$(uname -r | grep '6.1')" ] && {
-	stap -g /usr/share/systemtap-mptcp/mptcp-app.stap 2>&1 &
-}
+#[ -n "$(uname -r | grep '6.1')" ] && {
+#	stap -g /usr/share/systemtap-mptcp/mptcp-app.stap 2>&1 &
+#}
 while true; do
 	_glorytun_udp
 	_glorytun_tcp

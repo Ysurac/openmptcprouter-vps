@@ -14,7 +14,7 @@ DSVPN_PASS=${DSVPN_PASS:-$(od -vN "32" -An -tx1 /dev/urandom | tr '[:lower:]' '[
 #NBCPU=${NBCPU:-$(nproc --all | tr -d "\n")}
 NBCPU=${NBCPU:-$(grep -c '^processor' /proc/cpuinfo | tr -d "\n")}
 OBFS=${OBFS:-yes}
-V2RAY_PLUGIN=${V2RAY_PLUGIN:-yes}
+V2RAY_PLUGIN=${V2RAY_PLUGIN:-no}
 V2RAY=${V2RAY:-yes}
 V2RAY_UUID=${V2RAY_UUID:-$(cat /proc/sys/kernel/random/uuid | tr -d "\n")}
 UPDATE_OS=${UPDATE_OS:-yes}
@@ -52,21 +52,21 @@ if [ "$UPSTREAM6" = "yes" ]; then
 	KERNEL_PACKAGE_VERSION="1.30"
 	KERNEL_RELEASE="${KERNEL_VERSION}-mptcp_${KERNEL_PACKAGE_VERSION}"
 fi
-GLORYTUN_UDP_VERSION="32267e86a6da05b285bb3bf2b136c105dc0af4bb"
+GLORYTUN_UDP_VERSION="23100474922259d00a8c0c4b00a0c8de89202cf9"
 GLORYTUN_UDP_BINARY_VERSION="0.3.4-5"
-GLORYTUN_TCP_BINARY_VERSION="0.0.35-3"
+GLORYTUN_TCP_BINARY_VERSION="0.0.35-6"
 #MLVPN_VERSION="8f9720978b28c1954f9f229525333547283316d2"
 MLVPN_VERSION="8aa1b16d843ea68734e2520e39a34cb7f3d61b2b"
 MLVPN_BINARY_VERSION="3.0.0+20211028.git.ddafba3"
-UBOND_VERSION="f9fb6aa0a65e8e20950977bda970c90012f830d7"
+UBOND_VERSION="31af0f69ebb6d07ed9348dca2fced33b956cedee"
 OBFS_VERSION="486bebd9208539058e57e23a12f23103016e09b4"
 OBFS_BINARY_VERSION="0.0.5-1"
-OMR_ADMIN_VERSION="ef57968ea44020cf693aa671c3e9f51387efb0b4"
-OMR_ADMIN_BINARY_VERSION="0.3+20230709"
+OMR_ADMIN_VERSION="18f16e21facff80fe91c62ba7b3ea5cfe587fcc3"
+OMR_ADMIN_BINARY_VERSION="0.3+20230807"
 #OMR_ADMIN_BINARY_VERSION="0.3+20220827"
 DSVPN_VERSION="3b99d2ef6c02b2ef68b5784bec8adfdd55b29b1a"
 DSVPN_BINARY_VERSION="0.1.4-2"
-V2RAY_VERSION="5.4.1"
+V2RAY_VERSION="5.7.0"
 V2RAY_PLUGIN_VERSION="4.43.0"
 EASYRSA_VERSION="3.0.6"
 #SHADOWSOCKS_VERSION="7407b214f335f0e2068a8622ef3674d868218e17"
@@ -118,8 +118,8 @@ fi
 
 echo "Check architecture..."
 ARCH=$(dpkg --print-architecture | tr -d "\n")
-if [ "$UPSTREAM6" != "yes" ] && [ "$ARCH" != "amd64" ]; then
-	echo "Only x86_64 (amd64) is supported"
+if [ "$UPSTREAM6" != "yes" ] && [ "$ARCH" != "amd64" ] && [ "$ID" != "debian" ]; then
+	echo "Only x86_64 (amd64) is supported on this OS"
 	exit 1
 fi
 
@@ -218,6 +218,7 @@ if [ "$ID" = "debian" ] && [ "$VERSION_ID" = "10" ] && [ "$UPDATE_OS" = "yes" ] 
 	apt-get -y -f --force-yes upgrade
 	apt-get -y -f --force-yes dist-upgrade
 	sed -i 's:buster:bullseye:g' /etc/apt/sources.list
+	sed -i 's:bullseye/updates:bullseye-security:g' /etc/apt/sources.list
 	apt-get update --allow-releaseinfo-change
 	apt-get -y -o Dpkg::Options::="--force-confdef" -o Dpkg::Options::="--force-confnew" upgrade
 	apt-get -y -o Dpkg::Options::="--force-confdef" -o Dpkg::Options::="--force-confnew" dist-upgrade
@@ -242,6 +243,16 @@ if [ "$ID" = "ubuntu" ] && [ "$VERSION_ID" = "18.04" ] && [ "$UPDATE_OS" = "yes"
 	apt-get -y -o Dpkg::Options::="--force-confdef" -o Dpkg::Options::="--force-confnew" upgrade
 	apt-get -y -o Dpkg::Options::="--force-confdef" -o Dpkg::Options::="--force-confnew" dist-upgrade
 	VERSION_ID="20.04"
+fi
+if [ "$ID" = "ubuntu" ] && [ "$VERSION_ID" = "18.04" ] && [ "$UPDATE_OS" = "yes" ] && [ "$UPSTREAM6" = "yes" ]; then
+	echo "Update Ubuntu 20.04 to Ubuntu 22.04"
+	apt-get -y -f --force-yes upgrade
+	apt-get -y -f --force-yes dist-upgrade
+	sed -i 's:focal:jammy:g' /etc/apt/sources.list
+	apt-get update --allow-releaseinfo-change
+	apt-get -y -o Dpkg::Options::="--force-confdef" -o Dpkg::Options::="--force-confnew" upgrade
+	apt-get -y -o Dpkg::Options::="--force-confdef" -o Dpkg::Options::="--force-confnew" dist-upgrade
+	VERSION_ID="22.04"
 fi
 
 # Add OpenMPTCProuter repo
@@ -394,6 +405,14 @@ if [ "$UPSTREAM6" != "yes" ]; then
 	bash update-grub.sh ${KERNEL_VERSION}-mptcp
 	bash update-grub.sh ${KERNEL_RELEASE}
 	[ -f /boot/grub/grub.cfg ] && sed -i 's/default="1>0"/default="0"/' /boot/grub/grub.cfg 2>&1 >/dev/null
+elif [ "$update" != "0" ]; then 
+	if [ "$ID" = "ubuntu" ] && [ -z "$(uname -a | grep '6.1')" ]; then
+		apt-get -y install $(apt-cache search linux-image-unsigned-6.1.0 | tail -n 1 | cut -d" " -f)
+	fi
+	[ -f /etc/default/grub ] && {
+		sed -i "s@^\(GRUB_DEFAULT=\).*@\1\"0\"@" /etc/default/grub >/dev/null 2>&1
+		[ -f /boot/grub/grub.cfg ] && grub-mkconfig -o /boot/grub/grub.cfg >/dev/null 2>&1
+	}
 fi
 
 if [ "$ARCH" = "amd64" ]; then
@@ -434,12 +453,12 @@ if [ "$UPSTREAM" = "yes" ] || [ "$UPSTREAM6" = "yes" ]; then
 		echo "MPTCPize iperf3..."
 		mptcpize enable iperf3
 	fi
-	if [ "$UPSTREAM6" = "yes" ]; then
-		apt-get -y install $(dpkg --get-selections | grep linux-image-6.1 | grep -v dbg | cut -f1)-dbg
-		apt-get -y install systemtap
-		mkdir -p /usr/share/systemtap-mptcp
-		wget -O /usr/share/systemtap-mptcp/mptcp-app.stap ${VPSURL}${VPSPATH}/mptcp-app.stap
-	fi
+	#if [ "$UPSTREAM6" = "yes" ]; then
+	#	apt-get -y install $(dpkg --get-selections | grep linux-image-6.1 | grep -v dbg | cut -f1)-dbg
+	#	apt-get -y install systemtap
+	#	mkdir -p /usr/share/systemtap-mptcp
+	#	wget -O /usr/share/systemtap-mptcp/mptcp-app.stap ${VPSURL}${VPSPATH}/mptcp-app.stap
+	#fi
 fi
 
 apt-get -y remove shadowsocks-libev
@@ -862,37 +881,45 @@ fi
 
 if [ "$V2RAY" = "yes" ]; then
 	#apt-get -y -o Dpkg::Options::="--force-overwrite" install v2ray
-	if [ "$SOURCES" = "yes" ]; then
+	if [ "$SOURCES" = "yes" ] || [ "$ARCH" = "arm64" ]; then
 		if [ "$ARCH" = "amd64" ]; then
 			wget -O /tmp/v2ray-${V2RAY_VERSION}-amd64.deb ${VPSURL}/debian/v2ray-${V2RAY_VERSION}-amd64.deb
 			dpkg --force-all -i -B /tmp/v2ray-${V2RAY_VERSION}-amd64.deb
 			rm -f /tmp/v2ray-${V2RAY_VERSION}-amd64.deb
-		else
-			[ "$ARCH" = "i386" ] && V2RAY_FILENAME="v2ray-linux-32.zip"
-			[ "$ARCH" = "amd64" ] && V2RAY_FILENAME="v2ray-linux-64.zip"
-			[ "$ARCH" = "armel" ] && V2RAY_FILENAME="v2ray-linux-arm32-v7a.zip"
-			[ "$ARCH" = "armhf" ] && V2RAY_FILENAME="v2ray-linux-arm32-v7a.zip"
-			[ "$ARCH" = "arm64" ] && V2RAY_FILENAME="v2ray-linux-arm64-v8a.zip"
-			[ "$ARCH" = "mips64el" ] && V2RAY_FILENAME="v2ray-linux-mips64le.zip"
-			[ "$ARCH" = "mipsel" ] && V2RAY_FILENAME="v2ray-linux-mips32le.zip"
-			[ "$ARCH" = "riscv64" ] && V2RAY_FILENAME="v2ray-linux-riscv64.zip"
-			wget -O /tmp/v2ray-${V2RAY_VERSION}.zip https://github.com/v2fly/v2ray-core/releases/download/v${V2RAY_VERSION}/${V2RAY_FILENAME}
-			cd /tmp
-			rm -rf v2ray
-			mkdir -p v2ray
-			cd v2ray
-			unzip /tmp/v2ray-${V2RAY_VERSION}.zip
-			cp v2ray /usr/bin/
-			cp geoip.dat /usr/bin/
-			cp geosite.dat /usr/bin/
-			wget -O /lib/systemd/system/v2ray.service ${VPSURL}${VPSPATH}/v2ray.service
+		elif [ "$ARCH" = "arm64" ]; then
+			wget -O /tmp/v2ray-${V2RAY_VERSION}-arm64.deb ${VPSURL}/debian/v2ray-${V2RAY_VERSION}-arm64.deb
+			dpkg --force-all -i -B /tmp/v2ray-${V2RAY_VERSION}-arm64.deb
+			rm -f /tmp/v2ray-${V2RAY_VERSION}-arm64.deb
 		fi
+#		else
+#			[ "$ARCH" = "i386" ] && V2RAY_FILENAME="v2ray-linux-32.zip"
+#			[ "$ARCH" = "amd64" ] && V2RAY_FILENAME="v2ray-linux-64.zip"
+#			[ "$ARCH" = "armel" ] && V2RAY_FILENAME="v2ray-linux-arm32-v7a.zip"
+#			[ "$ARCH" = "armhf" ] && V2RAY_FILENAME="v2ray-linux-arm32-v7a.zip"
+#			[ "$ARCH" = "arm64" ] && V2RAY_FILENAME="v2ray-linux-arm64-v8a.zip"
+#			[ "$ARCH" = "mips64el" ] && V2RAY_FILENAME="v2ray-linux-mips64le.zip"
+#			[ "$ARCH" = "mipsel" ] && V2RAY_FILENAME="v2ray-linux-mips32le.zip"
+#			[ "$ARCH" = "riscv64" ] && V2RAY_FILENAME="v2ray-linux-riscv64.zip"
+#			wget -O /tmp/v2ray-${V2RAY_VERSION}.zip https://github.com/v2fly/v2ray-core/releases/download/v${V2RAY_VERSION}/${V2RAY_FILENAME}
+#			cd /tmp
+#			rm -rf v2ray
+#			mkdir -p v2ray
+#			cd v2ray
+#			unzip /tmp/v2ray-${V2RAY_VERSION}.zip
+#			cp v2ray /usr/bin/
+#			cp geoip.dat /usr/bin/
+#			cp geosite.dat /usr/bin/
+#			wget -O /lib/systemd/system/v2ray.service ${VPSURL}${VPSPATH}/v2ray.service
+#		fi
 	else
 		apt-get -o Dpkg::Options::="--force-confold" -o Dpkg::Options::="--force-confdef" -o Dpkg::Options::="--force-overwrite" -y install v2ray=${V2RAY_VERSION}
 	fi
 	if [ ! -f /etc/v2ray/v2ray-server.json ]; then
 		wget -O /etc/v2ray/v2ray-server.json ${VPSURL}${VPSPATH}/v2ray-server.json
 		sed -i "s:V2RAY_UUID:$V2RAY_UUID:g" /etc/v2ray/v2ray-server.json
+	fi
+	if ([ "$UPSTREAM" = "yes" ] || [ "$UPSTREAM6" = "yes" ]) && [ -z "$(grep mptcp /etc/v2ray/v2ray-server.json | grep true)" ]; then
+		sed -i 's/"sockopt": {/&\n                    "mptcp": true,/' /etc/v2ray/v2ray-server.json
 	fi
 	rm -f /etc/v2ray/config.json
 	ln -s /etc/v2ray/v2ray-server.json /etc/v2ray/config.json
@@ -901,9 +928,9 @@ if [ "$V2RAY" = "yes" ]; then
 	fi
 	systemctl daemon-reload
 	systemctl enable v2ray.service
-	if [ "$UPSTREAM" = "yes" ] || [ "$UPSTREAM6" = "yes" ]; then
-		mptcpize enable v2ray
-	fi
+	#if [ "$UPSTREAM" = "yes" ] || [ "$UPSTREAM6" = "yes" ]; then
+	#	mptcpize enable v2ray
+	#fi
 fi
 
 if systemctl -q is-active mlvpn@mlvpn0.service; then
@@ -1477,6 +1504,8 @@ if [ "$(ip r | awk '/default/&&/src/ {print $7}')" != "" ] && [ "$(ip r | awk '/
 	sed -i "s/MASQUERADE/SNAT($(ip r | awk '/default/&&/src/ {print $7}'))/" /etc/shorewall/snat
 fi
 
+# Limit /var/log/journal size
+sed -i 's/#SystemMaxUse=/SystemMaxUse=100M/' /etc/systemd/journald.conf
 
 if [ "$TLS" = "yes" ]; then
 	VPS_CERT=0

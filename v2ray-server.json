@@ -1,6 +1,6 @@
 {
 	"log": {
-		"loglevel": "warning",
+		"loglevel": "error",
 		"error": "/tmp/v2rayError.log"
 	},
 	"transport": {

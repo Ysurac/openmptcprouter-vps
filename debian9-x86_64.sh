@@ -61,8 +61,8 @@ MLVPN_BINARY_VERSION="3.0.0+20211028.git.ddafba3"
 UBOND_VERSION="31af0f69ebb6d07ed9348dca2fced33b956cedee"
 OBFS_VERSION="486bebd9208539058e57e23a12f23103016e09b4"
 OBFS_BINARY_VERSION="0.0.5-1"
-OMR_ADMIN_VERSION="c4374c28594517231190e320020cb20d9dd1bcb2"
-OMR_ADMIN_BINARY_VERSION="0.3+20230823"
+OMR_ADMIN_VERSION="d77ffb62084271a388a09d1b0d17e42aae0514ab"
+OMR_ADMIN_BINARY_VERSION="0.3+20230828"
 #OMR_ADMIN_BINARY_VERSION="0.3+20220827"
 DSVPN_VERSION="3b99d2ef6c02b2ef68b5784bec8adfdd55b29b1a"
 DSVPN_BINARY_VERSION="0.1.4-2"
@@ -914,10 +914,13 @@ if [ "$V2RAY" = "yes" ]; then
 	else
 		apt-get -o Dpkg::Options::="--force-confold" -o Dpkg::Options::="--force-confdef" -o Dpkg::Options::="--force-overwrite" -y install v2ray=${V2RAY_VERSION}
 	fi
-	if [ ! -f /etc/v2ray/v2ray-server.json ]; then
+	if [ -f /etc/v2ray/v2ray-server.json ]; then
+		V2RAY_UUID=$(grep -Po '"'"id"'"\s*:\s*"\K([^"]*)' v2ray-server.json | head -n 1 | tr -d "\n")
+	fi
+	#if [ ! -f /etc/v2ray/v2ray-server.json ]; then
 		wget -O /etc/v2ray/v2ray-server.json ${VPSURL}${VPSPATH}/v2ray-server.json
 		sed -i "s:V2RAY_UUID:$V2RAY_UUID:g" /etc/v2ray/v2ray-server.json
-	fi
+	#fi
 	if ([ "$UPSTREAM" = "yes" ] || [ "$UPSTREAM6" = "yes" ]) && [ -z "$(grep mptcp /etc/v2ray/v2ray-server.json | grep true)" ]; then
 		sed -i 's/"sockopt": {/&\n                    "mptcp": true,/' /etc/v2ray/v2ray-server.json
 	fi
@@ -1199,6 +1202,7 @@ if [ "$OPENVPN" = "yes" ]; then
 		cp ${DIR}/openvpn-bonding8.conf /etc/openvpn/bonding8.conf
 	fi
 	mkdir -p /etc/openvpn/ccd
+	
 	systemctl enable openvpn@tun0.service
 	systemctl enable openvpn@tun1.service
 	if [ "$UPSTREAM" = "yes" ] || [ "$UPSTREAM6" = "yes" ]; then
@@ -1246,6 +1250,7 @@ if [ "$SOURCES" = "yes" ]; then
 	else
 		cp ${DIR}/glorytun-udp@.service.in /lib/systemd/system/glorytun-udp@.service
 	fi
+	chmod 644 /lib/systemd/system/glorytun-udp@.service
 	#wget -O /lib/systemd/network/glorytun-udp.network ${VPSURL}${VPSPATH}/glorytun-udp.network
 	rm -f /lib/systemd/network/glorytun-udp.network
 	mkdir -p /etc/glorytun-udp
@@ -1269,6 +1274,7 @@ if [ "$SOURCES" = "yes" ]; then
 else
 	rm -f /usr/local/bin/glorytun
 	apt-get -y -o Dpkg::Options::="--force-confdef" -o Dpkg::Options::="--force-confold" -o Dpkg::Options::="--force-overwrite" install --reinstall omr-glorytun=${GLORYTUN_UDP_BINARY_VERSION}
+	chmod 644 /lib/systemd/system/glorytun-udp@.service
 	GLORYTUN_PASS="$(cat /etc/glorytun-udp/tun0.key | tr -d '\n')"
 fi
 [ "$(ip -6 a)" != "" ] && sed -i 's/0.0.0.0/::/g' /etc/glorytun-udp/tun0
@@ -1300,6 +1306,7 @@ if [ "$DSVPN" = "yes" ]; then
 		wget -O /usr/local/bin/dsvpn-run ${VPSURL}${VPSPATH}/dsvpn-run
 		chmod 755 /usr/local/bin/dsvpn-run
 		wget -O /lib/systemd/system/dsvpn-server@.service ${VPSURL}${VPSPATH}/dsvpn-server%40.service.in
+		chmod 644 /lib/systemd/system/dsvpn-server@.service
 		mkdir -p /etc/dsvpn
 		wget -O /etc/dsvpn/dsvpn0 ${VPSURL}${VPSPATH}/dsvpn0-config
 		if [ -f /etc/dsvpn/dsvpn.key ]; then
@@ -1313,6 +1320,7 @@ if [ "$DSVPN" = "yes" ]; then
 		rm -rf /tmp/dsvpn
 	else
 		apt-get -y -o Dpkg::Options::="--force-confdef" -o Dpkg::Options::="--force-confold" -o Dpkg::Options::="--force-overwrite" install omr-dsvpn=${DSVPN_BINARY_VERSION}
+		chmod 644 /lib/systemd/system/dsvpn-server@.service
 		DSVPN_PASS=$(cat /etc/dsvpn/dsvpn0.key | tr -d "\n")
 	fi
 	if [ "$UPSTREAM" = "yes" ] || [ "$UPSTREAM6" = "yes" ]; then
@@ -1358,6 +1366,7 @@ if [ "$SOURCES" = "yes" ]; then
 	chmod 755 /usr/local/bin/glorytun-tcp-run
 	wget -O /lib/systemd/system/glorytun-tcp@.service ${VPSURL}${VPSPATH}/glorytun-tcp%40.service.in
 	#wget -O /lib/systemd/network/glorytun-tcp.network ${VPSURL}${VPSPATH}/glorytun.network
+	chmod 644 /lib/systemd/system/glorytun-tcp@.service
 	rm -f /lib/systemd/network/glorytun-tcp.network
 	mkdir -p /etc/glorytun-tcp
 	wget -O /etc/glorytun-tcp/post.sh ${VPSURL}${VPSPATH}/glorytun-tcp-post.sh
@@ -1410,6 +1419,8 @@ else
 	cp ${DIR}/omr-6in4-run /usr/local/bin/omr-6in4-run
 	cp ${DIR}/omr6in4@.service.in /lib/systemd/system/omr6in4@.service
 fi
+chmod 644 /lib/systemd/system/omr.service
+chmod 644 /lib/systemd/system/omr6in4@.service
 chmod 755 /usr/local/bin/omr-service
 chmod 755 /usr/local/bin/omr-6in4-run
 if systemctl -q is-active omr-6in4.service; then

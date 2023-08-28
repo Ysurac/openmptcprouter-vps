@@ -34,12 +34,106 @@
 			},
 			"streamSettings": {
 				"sockopt": {
+					"mptcp": true,
 					"mark": 0
 				},
 				"network": "tcp",
 				"security": "tls",
 				"tlsSettings": {
 					"certificates": [
+						{
+							"certificateFile": "/etc/openvpn/ca/pki/issued/server.crt",
+							"keyFile": "/etc/openvpn/ca/pki/private/server.key"
+						}
+					]
+				}
+			}
+		},
+		{
+			"tag": "omrin-vmess-tunnel",
+			"port": 65230,
+			"protocol": "vmess",
+			"settings": {
+				"decryption": "none",
+				"clients": [
+					{
+						"id": "V2RAY_UUID",
+						"level": 0,
+						"alterId": 0,
+						"email": "openmptcprouter"
+					}
+				]
+			},
+			"streamSettings": {
+				"sockopt": {
+					"mptcp": true,
+					"mark": 0
+				},
+				"network": "tcp",
+				"security": "tls",
+				"tlsSettings": {
+					"certificates": [
+						{
+							"certificateFile": "/etc/openvpn/ca/pki/issued/server.crt",
+							"keyFile": "/etc/openvpn/ca/pki/private/server.key"
+						}
+					]
+				}
+			}
+		},
+		{
+			"tag": "omrin-socks-tunnel",
+			"port": 65231,
+			"protocol": "socks",
+			"settings": {
+				"auth": "password",
+				"accounts": [
+					{
+						"pass": "V2RAY_UUID",
+						"user": "openmptcprouter"
+					}
+				],
+				"udp": true
+			},
+			"streamSettings": {
+				"sockopt": {
+					"mptcp": true,
+					"mark": 0
+				},
+				"network": "tcp",
+				"security": "tls",
+				"tlsSettings": {
+					"certificates": [
+						{
+							"certificateFile": "/etc/openvpn/ca/pki/issued/server.crt",
+							"keyFile": "/etc/openvpn/ca/pki/private/server.key"
+						}
+					]
+				}
+			}
+		},
+		{
+			"tag": "omrin-trojan-tunnel",
+			"port": 65229,
+			"protocol": "trojan",
+			"settings": {
+				"clients": [
+					{
+						"password": "V2RAY_UUID",
+						"email": "openmptcprouter",
+						"level": 0
+					}
+				]
+			},
+			"streamSettings": {
+				"sockopt": {
+					"mptcp": true,
+					"mark": 0
+				},
+				"network": "tcp",
+				"security": "tls",
+				"tlsSettings": {
+				"certificates": [
 						{
 							"certificateFile": "/etc/openvpn/ca/pki/issued/server.crt",
 							"keyFile": "/etc/openvpn/ca/pki/private/server.key"
@@ -72,7 +166,10 @@
 			{
 				"type": "field",
 				"inboundTag": [
-					"omrin-tunnel"
+					"omrin-tunnel",
+					"omrin-vmess-tunnel",
+					"omrin-socks-tunnel",
+					"omrin-trojan-tunnel"
 				],
 				"outboundTag": "OMRLan",
 				"domain": [

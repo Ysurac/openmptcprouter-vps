@@ -405,9 +405,9 @@ if [ "$UPSTREAM6" != "yes" ]; then
 	bash update-grub.sh ${KERNEL_VERSION}-mptcp
 	bash update-grub.sh ${KERNEL_RELEASE}
 	[ -f /boot/grub/grub.cfg ] && sed -i 's/default="1>0"/default="0"/' /boot/grub/grub.cfg 2>&1 >/dev/null
-elif [ "$update" != "0" ]; then 
+else 
 	if [ "$ID" = "ubuntu" ] && [ -z "$(uname -a | grep '6.1')" ]; then
-		apt-get -y install $(apt-cache search linux-image-unsigned-6.1.0 | tail -n 1 | cut -d" " -f)
+		apt-get -y install $(apt-cache search linux-image-unsigned-6.1.0 | tail -n 1 | cut -d" " -f1)
 	fi
 	[ -f /etc/default/grub ] && {
 		sed -i "s@^\(GRUB_DEFAULT=\).*@\1\"0\"@" /etc/default/grub >/dev/null 2>&1

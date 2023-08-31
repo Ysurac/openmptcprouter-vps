@@ -915,7 +915,8 @@ if [ "$V2RAY" = "yes" ]; then
 		apt-get -o Dpkg::Options::="--force-confold" -o Dpkg::Options::="--force-confdef" -o Dpkg::Options::="--force-overwrite" -y install v2ray=${V2RAY_VERSION}
 	fi
 	if [ -f /etc/v2ray/v2ray-server.json ]; then
-		V2RAY_UUID=$(grep -Po '"'"id"'"\s*:\s*"\K([^"]*)' v2ray-server.json | head -n 1 | tr -d "\n")
+		V2RAY_UUID2=$(grep -Po '"'"id"'"\s*:\s*"\K([^"]*)' /etc/v2ray/v2ray-server.json | head -n 1 | tr -d "\n")
+		[ -n "$V2RAY_UUID2" ] && V2RAY_UUID="$V2RAY_UUID2"
 	fi
 	#if [ ! -f /etc/v2ray/v2ray-server.json ]; then
 		wget -O /etc/v2ray/v2ray-server.json ${VPSURL}${VPSPATH}/v2ray-server.json

@@ -7,13 +7,13 @@ _multipath() {
 	for intf in `ls -1 /sys/class/net`; do
 		if [ "$intf" != "bonding_masters" ]; then
 			if ([ "$(ip a show dev lo | grep -v inet6 | grep global)" != "" ] && [ "$intf" = "lo" ]) || ([ "$intf" = "$NET_IFACE" ] && [ "$(ip a show dev lo | grep -v inet6 | grep global)" = "" ]); then
-				[ -f /proc/sys/net/mptcp/mptcp_enabled ] && [ "$(multipath $intf | tr -d '\n')" != "$intf is in default mode" ] && multipath $intf on
+				[ -f /proc/sys/net/mptcp/mptcp_enabled ] && [ "$(multipath $intf | tr -d '\n')" != "$intf is in default mode" ] && multipath $intf on 2>&1 >/dev/null
 				[ -f /proc/sys/net/mptcp/enabled ] && [ "$(multipath $intf | tr -d '\n')" != "$intf is in signal mode" ] && {
-					multipath $intf signal
+					multipath $intf signal 2>&1 >/dev/null
 					ip mptcp limits set subflows 8 add_addr_accepted 8 2>&1 >/dev/null
 				}
 			else
-				[ "$(multipath $intf | tr -d '\n')" != "$intf is deactivated" ] && multipath $intf off
+				[ "$(multipath $intf | tr -d '\n')" != "$intf is deactivated" ] && multipath $intf off 2>&1 >/dev/null
 			fi
 		fi
 	done
@@ -29,7 +29,7 @@ _glorytun_udp() {
 		for intf in /etc/glorytun-udp/tun*; do
 			[ "$(echo $intf | grep key)" = "" ] && /etc/glorytun-udp/post.sh ${intf}
 		done
-		ip link set mtu 9000 dev gt-udp-tun0 2>&1 >/dev/null
+		#ip link set mtu 9000 dev gt-udp-tun0 2>&1 >/dev/null
 	fi
 }
 
@@ -48,7 +48,7 @@ _glorytun_tcp() {
 				sleep 10
 			fi
 		fi
-		ip link set mtu 9000 dev gt-tun0 2>&1 >/dev/null
+		#ip link set mtu 9000 dev gt-tun0 2>&1 >/dev/null
 	fi
 }
 
@@ -62,7 +62,7 @@ _dsvpn() {
 			logger -t "OMR-Service" "No answer from VPN client end, restart DSVPN"
 			systemctl restart dsvpn@dsvpn0
 		fi
-		ip link set mtu 9000 dev dsvpn0 2>&1 >/dev/null
+		#ip link set mtu 9000 dev dsvpn0 2>&1 >/dev/null
 	fi
 }
 

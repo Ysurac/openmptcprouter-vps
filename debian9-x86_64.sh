@@ -739,9 +739,17 @@ fi
 
 # Get shadowsocks optimization
 if [ "$LOCALFILES" = "no" ]; then
-	wget -O /etc/sysctl.d/90-shadowsocks.conf ${VPSURL}${VPSPATH}/shadowsocks.conf
+	if [ "$UPSTREAM6" = "yes" ]; then
+		wget -O /etc/sysctl.d/90-shadowsocks.conf ${VPSURL}${VPSPATH}/shadowsocks.6.1.conf
+	else
+		wget -O /etc/sysctl.d/90-shadowsocks.conf ${VPSURL}${VPSPATH}/shadowsocks.conf
+	fi
 else
-	cp ${DIR}/shadowsocks.conf /etc/sysctl.d/90-shadowsocks.conf
+	if [ "$UPSTREAM6" = "yes" ]; then
+		cp ${DIR}/shadowsocks.6.1.conf /etc/sysctl.d/90-shadowsocks.conf
+	else
+		cp ${DIR}/shadowsocks.conf /etc/sysctl.d/90-shadowsocks.conf
+	fi
 fi
 
 if [ "$update" != 0 ]; then

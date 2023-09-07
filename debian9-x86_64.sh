@@ -553,7 +553,7 @@ if ! grep -q bbr /etc/modules ; then
 	echo tcp_bbr >> /etc/modules
 fi
 
-if [ "$UPSTREAM" = "yes" ] || [ "$UPSTREAM6" = "yes" ]; then
+if [ "$UPSTREAM" != "yes" ] && [ "$UPSTREAM6" != "yes" ]; then
 	# Load OLIA Congestion module at boot time
 	if ! grep -q olia /etc/modules ; then
 		echo mptcp_olia >> /etc/modules

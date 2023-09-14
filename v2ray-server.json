@@ -92,8 +92,7 @@
 						"pass": "V2RAY_UUID",
 						"user": "openmptcprouter"
 					}
-				],
-				"udp": true
+				]
 			},
 			"streamSettings": {
 				"sockopt": {

@@ -61,8 +61,8 @@ MLVPN_BINARY_VERSION="3.0.0+20211028.git.ddafba3"
 UBOND_VERSION="31af0f69ebb6d07ed9348dca2fced33b956cedee"
 OBFS_VERSION="486bebd9208539058e57e23a12f23103016e09b4"
 OBFS_BINARY_VERSION="0.0.5-1"
-OMR_ADMIN_VERSION="80ff9621748ec198b3a81660539a144ef443a531"
-OMR_ADMIN_BINARY_VERSION="0.3+20230901"
+OMR_ADMIN_VERSION="488cc5346dbfe8bcbee4413013dc22b698f1d15c"
+OMR_ADMIN_BINARY_VERSION="0.3+20230911"
 #OMR_ADMIN_BINARY_VERSION="0.3+20220827"
 DSVPN_VERSION="3b99d2ef6c02b2ef68b5784bec8adfdd55b29b1a"
 DSVPN_BINARY_VERSION="0.1.4-2"
@@ -816,6 +816,7 @@ else
 	cp ${DIR}/omr-update /usr/bin/omr-update
 	chmod 755 /usr/bin/omr-update
 fi
+chmod 644 /lib/systemd/system/omr-update.service
 
 # Install simple-obfs
 if [ "$OBFS" = "yes" ]; then
@@ -940,9 +941,15 @@ if [ "$V2RAY" = "yes" ]; then
 	fi
 	rm -f /etc/v2ray/config.json
 	ln -s /etc/v2ray/v2ray-server.json /etc/v2ray/config.json
-	if [ -f /etc/systemd/system/v2ray.service.dpkg-dist ]; then
-		mv -f /etc/systemd/system/v2ray.service.dpkg-dist /etc/systemd/system/v2ray.service
+	#if [ -f /etc/systemd/system/v2ray.service.dpkg-dist ]; then
+	#	mv -f /etc/systemd/system/v2ray.service.dpkg-dist /etc/systemd/system/v2ray.service
+	#fi
+	if [ "$LOCALFILES" = "no" ]; then
+		wget -O /lib/systemd/system/v2ray.service ${VPSURL}${VPSPATH}/v2ray.service
+	else
+		cp ${DIR}/v2ray.service /lib/systemd/system/v2ray.service
 	fi
+	chmod 644 /lib/systemd/system/v2ray.service
 	systemctl daemon-reload
 	systemctl enable v2ray.service
 	#if [ "$UPSTREAM" = "yes" ] || [ "$UPSTREAM6" = "yes" ]; then
@@ -1671,13 +1678,13 @@ if [ "$update" = "0" ]; then
 	fi
 	if [ "$MLVPN" = "yes" ]; then
 		cat >> /root/openmptcprouter_config.txt <<-EOF
-		MLVPN first port: 65201'
+		MLVPN first port: 65201
 		Your MLVPN password: $MLVPN_PASS
 		EOF
 	fi
 	if [ "$UBOND" = "yes" ]; then
 		cat >> /root/openmptcprouter_config.txt <<-EOF
-		UBOND first port: 65251'
+		UBOND first port: 65251
 		Your UBOND password: $UBOND_PASS
 		EOF
 	fi

@@ -98,7 +98,7 @@ _lan_route() {
 				while IFS=$"\n" read -r d; do
 					if [ "$d" != "" ]; then
 						network=$(ipcalc -n $d | grep Network | awk '{print $2}')
-						[ -n "$network" ] && [ -z "$(ip r show $network via $vpnremoteip)" ] && ip r replace $network via $vpnremoteip onlink 2>&1 >/dev/null
+						[ -n "$network" ] && [ -z "$(ip r show $network via $vpnremoteip)" ] && ip r replace $network via $vpnremoteip 2>&1 >/dev/null
 					fi
 				done
 			fi
@@ -146,7 +146,7 @@ _openvpn_bonding() {
 		ip link set ovpnbonding8 up 2>&1 >/dev/null
 		ip link set omr-bonding up mtu 1440 2>&1 >/dev/null
 		ip a add 10.255.248.1 dev omr-bonding 2>&1 >/dev/null
-		ip r add 10.255.248.0/24 dev omr-bonding onlink 2>&1 >/dev/null
+		ip r add 10.255.248.0/24 dev omr-bonding 2>&1 >/dev/null
 		ip r add 10.255.248.2 dev omr-bonding src 10.255.248.1 2>&1 >/dev/null
 	fi
 }

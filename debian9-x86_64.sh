@@ -17,6 +17,11 @@ OBFS=${OBFS:-yes}
 V2RAY_PLUGIN=${V2RAY_PLUGIN:-no}
 V2RAY=${V2RAY:-yes}
 V2RAY_UUID=${V2RAY_UUID:-$(cat /proc/sys/kernel/random/uuid | tr -d "\n")}
+XRAY=${XRAY:-yes}
+XRAY_UUID=${XRAY_UUID:-$V2RAY_UUID}
+SHADOWSOCKS_GO=${SHADOWSOCKS_GO:-yes}
+PSK=${PSK:-$(head -c 32 /dev/urandom | base64 -w0)}
+UPSK=${UPSK:-$(head -c 32 /dev/urandom | base64 -w0)}
 UPDATE_OS=${UPDATE_OS:-yes}
 UPDATE=${UPDATE:-yes}
 TLS=${TLS:-yes}
@@ -61,13 +66,14 @@ MLVPN_BINARY_VERSION="3.0.0+20211028.git.ddafba3"
 UBOND_VERSION="31af0f69ebb6d07ed9348dca2fced33b956cedee"
 OBFS_VERSION="486bebd9208539058e57e23a12f23103016e09b4"
 OBFS_BINARY_VERSION="0.0.5-1"
-OMR_ADMIN_VERSION="488cc5346dbfe8bcbee4413013dc22b698f1d15c"
-OMR_ADMIN_BINARY_VERSION="0.3+20230911"
+OMR_ADMIN_VERSION="d560968d43850c48119c1b72372d6f341878ffa6"
+OMR_ADMIN_BINARY_VERSION="0.4+20231009"
 #OMR_ADMIN_BINARY_VERSION="0.3+20220827"
 DSVPN_VERSION="3b99d2ef6c02b2ef68b5784bec8adfdd55b29b1a"
 DSVPN_BINARY_VERSION="0.1.4-2"
 V2RAY_VERSION="5.7.0"
 V2RAY_PLUGIN_VERSION="4.43.0"
+XRAY_VERSION="1.8.5"
 EASYRSA_VERSION="3.0.6"
 #SHADOWSOCKS_VERSION="7407b214f335f0e2068a8622ef3674d868218e17"
 #if [ "$UPSTREAM" = "yes" ] || [ "$UPSTREAM6" = "yes" ]; then
@@ -75,6 +81,7 @@ EASYRSA_VERSION="3.0.6"
 #fi
 IPROUTE2_VERSION="29da83f89f6e1fe528c59131a01f5d43bcd0a000"
 SHADOWSOCKS_BINARY_VERSION="3.3.5-3"
+SHADOWSOCKS_GO_VERSION="1.8.0"
 DEFAULT_USER="openmptcprouter"
 VPS_DOMAIN=${VPS_DOMAIN:-$(wget -4 -qO- -T 2 http://hostname.openmptcprouter.com)}
 VPSPATH="server-test"
@@ -888,6 +895,48 @@ if [ "$OBFS" = "no" ] && [ "$V2RAY_PLUGIN" = "no" ]; then
 	sed -i -e '/plugin/d' -e 's/,,//' /etc/shadowsocks-libev/config.json
 fi
 
+if systemctl -q is-active shadowsocks-go.service; then
+	systemctl -q stop shadowsocks-go > /dev/null 2>&1
+	systemctl -q disable shadowsocks-go > /dev/null 2>&1
+fi
+
+if [ "$SHADOWSOCKS_GO" = "yes" ]; then
+	if [ "$SOURCES" = "yes" ] || [ "$ARCH" = "arm64" ]; then
+		if [ "$ARCH" = "amd64" ]; then
+			wget -O /tmp/shadowsocks-go-${SHADOWSOCKS_GO_VERSION}-amd64.deb ${VPSURL}/debian/shadowsocks-go-${SHADOWSOCKS_GO_VERSION}-amd64.deb
+			rm -f /var/lib/dpkg/lock
+			rm -f /var/lib/dpkg/lock-frontend
+			dpkg --force-all -i -B /tmp/shadowsocks-go-${SHADOWSOCKS_GO_VERSION}-amd64.deb
+			rm -f /tmp/shadowsocks-go-${SHADOWSOCKS_GO_VERSION}-amd64.deb
+		elif [ "$ARCH" = "arm64" ]; then
+			wget -O /tmp/shadowsocks-go-${SHADOWSOCKS_GO_VERSION}-arm64.deb ${VPSURL}/debian/shadowsocks-go-${SHADOWSOCKS_GO_VERSION}-arm64.deb
+			rm -f /var/lib/dpkg/lock
+			rm -f /var/lib/dpkg/lock-frontend
+			dpkg --force-all -i -B /tmp/shadowsocks-go-${SHADOWSOCKS_GO_VERSION}-arm64.deb
+			rm -f /tmp/shadowsocks-go-${SHADOWSOCKS_GO_VERSION}-arm64.deb
+		fi
+	else
+		apt-get -o Dpkg::Options::="--force-confold" -o Dpkg::Options::="--force-confdef" -o Dpkg::Options::="--force-overwrite" -y install shadowsocks-go=${SHADOWSOCKS_GO_VERSION}
+	fi
+	if [ -f /etc/shadowsocks-go/server.json ]; then
+		PSK2=$(grep -Po '"'"psk"'"\s*:\s*"\K([^"]*)' /etc/shadowsocks-go/server.json | head -n 1 | tr -d "\n")
+		[ -n "$PSK2" ] && [ "$PSK2" != "PSK" ] && [ "$PSK2" != "null" ] && PSK="$PSK2"
+		UPSK2=$(grep -Po '"'"openmptcprouter"'"\s*:\s*"\K([^"]*)' /etc/shadowsocks-go/upsks.json | head -n 1 | tr -d "\n")
+		[ -n "$UPSK2" ] && [ "$UPSK2" != "UPSK" ] && [ "$UPSK2" != "null" ] && UPSK="$UPSK2"
+	fi
+	wget -O /etc/shadowsocks-go/server.json ${VPSURL}${VPSPATH}/shadowsocks-go.server.json
+	sed -i "s:\"PSK\":\"$PSK\":g" /etc/shadowsocks-go/server.json
+	sed -i "s:UPSK:$UPSK:g" /etc/shadowsocks-go/upsks.json
+	jq -M 'del(.users[0].openmptcprouter."shadowsocks-go")' /etc/openmptcprouter-vps-admin/omr-admin-config.json > /etc/openmptcprouter-vps-admin/omr-admin-config.json.new
+	mv -f /etc/openmptcprouter-vps-admin/omr-admin-config.json /etc/openmptcprouter-vps-admin/omr-admin-config.json.bak
+	mv -f /etc/openmptcprouter-vps-admin/omr-admin-config.json.new /etc/openmptcprouter-vps-admin/omr-admin-config.json
+
+	chmod 644 /lib/systemd/system/shadowsocks-go.service
+	systemctl daemon-reload
+	systemctl enable shadowsocks-go.service
+fi
+
+
 if systemctl -q is-active v2ray.service; then
 	systemctl -q stop v2ray > /dev/null 2>&1
 	systemctl -q disable v2ray > /dev/null 2>&1
@@ -898,10 +947,14 @@ if [ "$V2RAY" = "yes" ]; then
 	if [ "$SOURCES" = "yes" ] || [ "$ARCH" = "arm64" ]; then
 		if [ "$ARCH" = "amd64" ]; then
 			wget -O /tmp/v2ray-${V2RAY_VERSION}-amd64.deb ${VPSURL}/debian/v2ray-${V2RAY_VERSION}-amd64.deb
+			rm -f /var/lib/dpkg/lock
+			rm -f /var/lib/dpkg/lock-frontend
 			dpkg --force-all -i -B /tmp/v2ray-${V2RAY_VERSION}-amd64.deb
 			rm -f /tmp/v2ray-${V2RAY_VERSION}-amd64.deb
 		elif [ "$ARCH" = "arm64" ]; then
 			wget -O /tmp/v2ray-${V2RAY_VERSION}-arm64.deb ${VPSURL}/debian/v2ray-${V2RAY_VERSION}-arm64.deb
+			rm -f /var/lib/dpkg/lock
+			rm -f /var/lib/dpkg/lock-frontend
 			dpkg --force-all -i -B /tmp/v2ray-${V2RAY_VERSION}-arm64.deb
 			rm -f /tmp/v2ray-${V2RAY_VERSION}-arm64.deb
 		fi
@@ -957,6 +1010,66 @@ if [ "$V2RAY" = "yes" ]; then
 	#fi
 fi
 
+if systemctl -q is-active xray.service; then
+	systemctl -q stop xray > /dev/null 2>&1
+	systemctl -q disable xray > /dev/null 2>&1
+fi
+
+if [ "$XRAY" = "yes" ]; then
+	#apt-get -y -o Dpkg::Options::="--force-overwrite" install xray
+	if [ "$SOURCES" = "yes" ] || [ "$ARCH" = "arm64" ]; then
+		if [ "$ARCH" = "amd64" ]; then
+			wget -O /tmp/xray-${XRAY_VERSION}-amd64.deb ${VPSURL}/debian/xray-${XRAY_VERSION}-amd64.deb
+			rm -f /var/lib/dpkg/lock
+			rm -f /var/lib/dpkg/lock-frontend
+			dpkg --force-all -i -B /tmp/xray-${XRAY_VERSION}-amd64.deb
+			rm -f /tmp/xray-${XRAY_VERSION}-amd64.deb
+		elif [ "$ARCH" = "arm64" ]; then
+			wget -O /tmp/xray-${XRAY_VERSION}-arm64.deb ${VPSURL}/debian/xray-${XRAY_VERSION}-arm64.deb
+			rm -f /var/lib/dpkg/lock
+			rm -f /var/lib/dpkg/lock-frontend
+			dpkg --force-all -i -B /tmp/xray-${XRAY_VERSION}-arm64.deb
+			rm -f /tmp/xray-${XRAY_VERSION}-arm64.deb
+		fi
+	else
+		apt-get -o Dpkg::Options::="--force-confold" -o Dpkg::Options::="--force-confdef" -o Dpkg::Options::="--force-overwrite" -y install xray=${XRAY_VERSION}
+	fi
+	if [ -f /etc/xray/xray-server.json ]; then
+		XRAY_UUID2=$(grep -Po '"'"id"'"\s*:\s*"\K([^"]*)' /etc/xray/xray-server.json | head -n 1 | tr -d "\n")
+		[ -n "$XRAY_UUID2" ] && [ "$XRAY_UUID2" != "XRAY_UUID" ] && [ "$XRAY_UUID2" != "V2RAY_UUID" ] && XRAY_UUID="$XRAY_UUID2"
+		PSK2=$(jq -r '.inbounds[] | select(.tag=="omrin-shadowsocks-tunnel") | .settings.password' /etc/xray/xray-server.json | tr -d "\n")
+		[ "$PSK2" != "null" ] && [ -n "$PSK2" ] && [ "$PSK2" != "XRAY_PSK" ] && PSK="$PSK2"
+		UPSK2=$(jq -r '.inbounds[] | select(.tag=="omrin-shadowsocks-tunnel") | .settings.clients[] | select(.email=="openmptcprouter") | .password' /etc/xray/xray-server.json | tr -d "\n")
+		[ "$UPSK2" != "null" ] && [ -n "$UPSK2" ] && [ "$UPSK2" != "XRAY_UPSK" ] && UPSK="$UPSK2"
+	fi
+	jq -M 'del(.users[0].openmptcprouter.xray)' /etc/openmptcprouter-vps-admin/omr-admin-config.json > /etc/openmptcprouter-vps-admin/omr-admin-config.json.new
+	mv -f /etc/openmptcprouter-vps-admin/omr-admin-config.json /etc/openmptcprouter-vps-admin/omr-admin-config.json.bak
+	mv -f /etc/openmptcprouter-vps-admin/omr-admin-config.json.new /etc/openmptcprouter-vps-admin/omr-admin-config.json
+	#if [ ! -f /etc/xray/xray-server.json ]; then
+		wget -O /etc/xray/xray-server.json ${VPSURL}${VPSPATH}/xray-server.json
+		sed -i "s:XRAY_UUID:$XRAY_UUID:g" /etc/xray/xray-server.json
+		sed -i "s:V2RAY_UUID:$XRAY_UUID:g" /etc/xray/xray-server.json
+		sed -i "s:XRAY_PSK:$PSK:g" /etc/xray/xray-server.json
+		sed -i "s:XRAY_UPSK:$UPSK:g" /etc/xray/xray-server.json
+	#fi
+	if ([ "$UPSTREAM" = "yes" ] || [ "$UPSTREAM6" = "yes" ]) && [ -z "$(grep mptcp /etc/xray/xray-server.json | grep true)" ]; then
+		sed -i 's/"sockopt": {/&\n                    "mptcp": true,/' /etc/xray/xray-server.json
+	fi
+	rm -f /etc/xray/config.json
+	ln -s /etc/xray/xray-server.json /etc/xray/config.json
+	#if [ -f /etc/systemd/system/xray.service.dpkg-dist ]; then
+	#	mv -f /etc/systemd/system/xray.service.dpkg-dist /etc/systemd/system/xray.service
+	#fi
+	if [ "$LOCALFILES" = "no" ]; then
+		wget -O /lib/systemd/system/xray.service ${VPSURL}${VPSPATH}/xray.service
+	else
+		cp ${DIR}/xray.service /lib/systemd/system/xray.service
+	fi
+	chmod 644 /lib/systemd/system/xray.service
+	systemctl daemon-reload
+	systemctl enable xray.service
+fi
+
 if systemctl -q is-active mlvpn@mlvpn0.service; then
 	systemctl -q stop mlvpn@mlvpn0 > /dev/null 2>&1
 	systemctl -q disable mlvpn@mlvpn0 > /dev/null 2>&1
@@ -1003,6 +1116,8 @@ if [ "$MLVPN" = "yes" ]; then
 			fi
 		fi
 	else
+		rm -f /var/lib/dpkg/lock
+		rm -f /var/lib/dpkg/lock-frontend
 		apt-get -y -o Dpkg::Options::="--force-confold" -o Dpkg::Options::="--force-confdef" install omr-mlvpn=${MLVPN_BINARY_VERSION}
 	fi
 	if [ "$mlvpnupdate" = "0" ]; then
@@ -1620,6 +1735,8 @@ if [ "$update" = "0" ]; then
 	echo 'Shadowsocks encryption: chacha20'
 	echo 'Your shadowsocks key: '
 	echo $SHADOWSOCKS_PASS
+	echo 'Your shadowsocks 2022 key: '
+	echo "${PSK}:${UPSK}"
 	echo 'Glorytun port: 65001'
 	echo 'Glorytun encryption: chacha20'
 	echo 'Your glorytun key: '
@@ -1666,6 +1783,7 @@ if [ "$update" = "0" ]; then
 	Shadowsocks port: 65101
 	Shadowsocks encryption: chacha20
 	Your shadowsocks key: ${SHADOWSOCKS_PASS}
+	Your shadowsocks 2022 key: ${PSK}:${UPSK}
 	Glorytun port: 65001
 	Glorytun encryption: chacha20
 	Your glorytun key: ${GLORYTUN_PASS}

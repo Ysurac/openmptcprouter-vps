@@ -1,0 +1,243 @@
+{
+	"log": {
+		"loglevel": "error",
+		"error": "/tmp/v2rayError.log"
+	},
+	"transport": {
+		"tcpSettings": {},
+		"wsSettings": {},
+		"kcpSettings": {
+			"mtu": 1460,
+			"tti": 10,
+			"uplinkCapacity": 100,
+			"downlinkCapacity": 100,
+			"congestion": false,
+			"readBufferSize": 8,
+			"writeBufferSize": 8
+		}
+	},
+	"inbounds": [
+		{
+			"tag": "omrin-tunnel",
+			"port": 65248,
+			"protocol": "vless",
+			"settings": {
+				"decryption": "none",
+				"clients": [
+					{
+						"id": "V2RAY_UUID",
+						"level": 0,
+						"alterId": 0,
+						"email": "openmptcprouter"
+					}
+				]
+			},
+			"streamSettings": {
+				"sockopt": {
+					"tcpMptcp": true,
+					"mark": 0
+				},
+				"network": "tcp",
+				"security": "tls",
+				"tlsSettings": {
+					"certificates": [
+						{
+							"certificateFile": "/etc/openvpn/ca/pki/issued/server.crt",
+							"keyFile": "/etc/openvpn/ca/pki/private/server.key"
+						}
+					]
+				}
+			}
+		},
+		{
+			"tag": "omrin-vmess-tunnel",
+			"port": 65250,
+			"protocol": "vmess",
+			"settings": {
+				"decryption": "none",
+				"clients": [
+					{
+						"id": "V2RAY_UUID",
+						"level": 0,
+						"alterId": 0,
+						"email": "openmptcprouter"
+					}
+				]
+			},
+			"streamSettings": {
+				"sockopt": {
+					"tcpMptcp": true,
+					"mark": 0
+				},
+				"network": "tcp",
+				"security": "tls",
+				"tlsSettings": {
+					"certificates": [
+						{
+							"certificateFile": "/etc/openvpn/ca/pki/issued/server.crt",
+							"keyFile": "/etc/openvpn/ca/pki/private/server.key"
+						}
+					]
+				}
+			}
+		},
+		{
+			"tag": "omrin-socks-tunnel",
+			"port": 65251,
+			"protocol": "socks",
+			"settings": {
+				"auth": "password",
+				"accounts": [
+					{
+						"pass": "V2RAY_UUID",
+						"user": "openmptcprouter"
+					}
+				]
+			},
+			"streamSettings": {
+				"sockopt": {
+					"tcpMptcp": true,
+					"mark": 0
+				},
+				"network": "tcp",
+				"security": "tls",
+				"tlsSettings": {
+					"certificates": [
+						{
+							"certificateFile": "/etc/openvpn/ca/pki/issued/server.crt",
+							"keyFile": "/etc/openvpn/ca/pki/private/server.key"
+						}
+					]
+				}
+			}
+		},
+		{
+			"tag": "omrin-trojan-tunnel",
+			"port": 65249,
+			"protocol": "trojan",
+			"settings": {
+				"clients": [
+					{
+						"password": "V2RAY_UUID",
+						"email": "openmptcprouter",
+						"level": 0
+					}
+				]
+			},
+			"streamSettings": {
+				"sockopt": {
+					"tcpMptcp": true,
+					"mark": 0
+				},
+				"network": "tcp",
+				"security": "tls",
+				"tlsSettings": {
+				"certificates": [
+						{
+							"certificateFile": "/etc/openvpn/ca/pki/issued/server.crt",
+							"keyFile": "/etc/openvpn/ca/pki/private/server.key"
+						}
+					]
+				}
+			}
+		},
+		{
+			"tag": "omrin-shadowsocks-tunnel",
+			"port": 65252,
+			"protocol": "shadowsocks",
+			"settings": {
+				"password": "XRAY_PSK",
+				"method": "2022-blake3-aes-256-gcm",
+				"network": "tcp,udp",
+				"clients": [
+					{
+						"password": "XRAY_UPSK",
+						"email": "openmptcprouter"
+					}
+				]
+			},
+			"streamSettings": {
+				"sockopt": {
+					"tcpMptcp": true,
+					"mark": 0
+				},
+				"network": "tcp"
+			}
+		},
+		{
+			"listen": "127.0.0.1",
+			"port": 10086,
+			"protocol": "dokodemo-door",
+			"settings": {
+				"address": "127.0.0.1"
+			},
+			"tag": "api"
+		}
+	],
+	"outbounds": [
+		{
+			"protocol": "freedom",
+			"settings": {
+				"userLevel": 0
+			},
+			"tag": "direct"
+		}
+	],
+	"routing": {
+		"rules": [
+			{
+				"type": "field",
+				"inboundTag": [
+					"omrin-tunnel",
+					"omrin-vmess-tunnel",
+					"omrin-socks-tunnel",
+					"omrin-trojan-tunnel"
+				],
+				"outboundTag": "OMRLan",
+				"domain": [
+					"full:omr.lan"
+				]
+			},
+			{
+				"inboundTag": [
+					"api"
+				],
+				"outboundTag": "api",
+				"type": "field"
+			}
+		]
+	},
+	"reverse": {
+		"portals": [
+			{
+				"tag": "OMRLan",
+				"domain": "omr.lan"
+			}
+		]
+	},
+	"stats": {},
+	"api": {
+		"tag": "api",
+		"services": [
+			"HandlerService",
+			"LoggerService",
+			"StatsService"
+		]
+	},
+	"policy": {
+		"levels": {
+			"0": {
+				"uplinkOnly": 0,
+				"downlinkOnly": 0,
+				"bufferSize": 512,
+				"connIdle": 2400,
+				"statsUserUplink": true,
+				"statsUserDownlink": true
+			}
+		},
+		"system": {
+			"statsInboundUplink": true,
+			"statsInboundDownlink": true
+		}
+	}
+}

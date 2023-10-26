@@ -60,7 +60,7 @@ _dsvpn() {
 		remoteip="$(echo $localip | sed 's/\.1/\.2/')"
 		if [ "$(ping -c 5 -w 5 $remoteip | grep '100%')" != "" ] && [ "$(expr $(date +%s) - $(stat -c %Y /proc/$(pgrep dsvpn)/exe ))" -gt "300" ]; then
 			logger -t "OMR-Service" "No answer from VPN client end, restart DSVPN"
-			systemctl restart dsvpn@dsvpn0
+			systemctl restart dsvpn-server@dsvpn0
 		fi
 		#ip link set mtu 9000 dev dsvpn0 2>&1 >/dev/null
 	fi

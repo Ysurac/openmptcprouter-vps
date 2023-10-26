@@ -189,6 +189,7 @@
 				"type": "field",
 				"inboundTag": [
 					"omrin-tunnel",
+					"omrin-vless-reality",
 					"omrin-vmess-tunnel",
 					"omrin-socks-tunnel",
 					"omrin-trojan-tunnel"

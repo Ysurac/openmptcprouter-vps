@@ -66,8 +66,8 @@ MLVPN_BINARY_VERSION="3.0.0+20211028.git.ddafba3"
 UBOND_VERSION="31af0f69ebb6d07ed9348dca2fced33b956cedee"
 OBFS_VERSION="486bebd9208539058e57e23a12f23103016e09b4"
 OBFS_BINARY_VERSION="0.0.5-1"
-OMR_ADMIN_VERSION="afbcb55ef352a77c5f50a1b7e402ec515f5944b0"
-OMR_ADMIN_BINARY_VERSION="0.5+20231021"
+OMR_ADMIN_VERSION="a671b9171edeb82fc8ff8bb150ca6ffd6f57ee6a"
+OMR_ADMIN_BINARY_VERSION="0.7+20231206"
 #OMR_ADMIN_BINARY_VERSION="0.3+20220827"
 DSVPN_VERSION="3b99d2ef6c02b2ef68b5784bec8adfdd55b29b1a"
 DSVPN_BINARY_VERSION="0.1.4-2"
@@ -302,24 +302,24 @@ else
 		Pin: origin ${REPO}
 		Pin-Priority: 1001
 	EOF
+	if [ -n "$(echo $OMR_VERSION | grep test)" ]; then
+		echo "deb [arch=amd64] https://${REPO} next main" > /etc/apt/sources.list.d/openmptcprouter-test.list
+#		cat <<-EOF | tee -a /etc/apt/preferences.d/openmptcprouter.pref
+#			Explanation: Prefer OpenMPTCProuter provided packages over the Debian native ones
+#			Package: *
+#			Pin: origin ${REPO}
+#			Pin-Priority: 1002
+#		EOF
+	else
+		rm -f /etc/apt/sources.list.d/openmptcprouter-test.list
+	fi
 	if [ "$ID" = "debian" ] && ([ "$VERSION_ID" = "11" ] || [ "$VERSION_ID" = "12" ]); then
-		cat <<-EOF | tee /etc/apt/preferences.d/openmptcprouter.pref
+		cat <<-EOF | tee -a /etc/apt/preferences.d/openmptcprouter.pref
 			Explanation: Prefer libuv1 Debian native package
 			Package: libuv1
 			Pin: version *
 			Pin-Priority: 1003
 		EOF
-	fi
-	if [ -n "$(echo $OMR_VERSION | grep test)" ]; then
-		echo "deb [arch=amd64] https://${REPO} next main" > /etc/apt/sources.list.d/openmptcprouter-test.list
-		cat <<-EOF | tee /etc/apt/preferences.d/openmptcprouter.pref
-			Explanation: Prefer OpenMPTCProuter provided packages over the Debian native ones
-			Package: *
-			Pin: origin ${REPO}
-			Pin-Priority: 1002
-		EOF
-	else
-		rm -f /etc/apt/sources.list.d/openmptcprouter-test.list
 	fi
 	wget -O - https://${REPO}/openmptcprouter.gpg.key | apt-key add -
 fi

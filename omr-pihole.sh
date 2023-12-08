@@ -31,7 +31,7 @@ $SERVER["socket"] == "10.255.252.1:80" { }
 $SERVER["socket"] == "10.255.251.1:80" { }
 $SERVER["socket"] == "10.255.253.1:80" { }
 EOF
-systemctl -q restart lighttpd
+systemctl list-unit-files lighttpd.service &>/dev/null && systemctl -q restart lighttpd
 grep -v -e PIHOLE_INTERFACE -e IPV4_ADDRESS -e IPV6_ADDRESS /etc/pihole/setupVars.conf > /etc/pihole/setupVars.new.conf
 mv /etc/pihole/setupVars.new.conf /etc/pihole/setupVars.conf
 cat >> /etc/pihole/setupVars.conf <<-EOF

@@ -1,6 +1,6 @@
 [Unit]
 Description=XRay Service
-Documentation=https://www.v2fly.org/
+Documentation=https://xtls.github.io/
 After=network.target nss-lookup.target
 Wants=network-online.target
 

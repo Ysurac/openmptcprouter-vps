@@ -67,9 +67,30 @@ _dsvpn() {
 }
 
 _shadowsocks() {
-	[ -n "$(systemctl -a | grep 'shadowsocks')" ] && [ -z "$(pgrep ss-server)" ] && {
-		logger -t "OMR-Service" "ss-server not detected, restart Shadowsocks"
+	[ -n "$(systemctl -a | grep 'shadowsocks-libev')" ] && [ -z "$(pgrep ss-server)" ] && {
+		logger -t "OMR-Service" "ss-server not detected, restart Shadowsocks libev"
 		systemctl restart shadowsocks-libev-manager@manager
+	}
+}
+
+_shadowsocks_go() {
+	[ -n "$(systemctl -a | grep 'shadowsocks-go')" ] && [ -z "$(pgrep shadowsocks-go)" ] && {
+		logger -t "OMR-Service" "ss-server not detected, restart Shadowsocks go"
+		systemctl restart shadowsocks-go
+	}
+}
+
+_xray() {
+	[ -n "$(systemctl -a | grep 'xray')" ] && [ -z "$(pgrep xray)" ] && {
+		logger -t "OMR-Service" "ss-server not detected, restart XRay"
+		systemctl restart xray
+	}
+}
+
+_v2ray() {
+	[ -n "$(systemctl -a | grep 'v2ray')" ] && [ -z "$(pgrep v2ray)" ] && {
+		logger -t "OMR-Service" "ss-server not detected, restart V2Ray"
+		systemctl restart v2ray
 	}
 }
 
@@ -161,6 +182,9 @@ while true; do
 	_glorytun_udp
 	_glorytun_tcp
 	_shadowsocks
+	_shadowsocks_go
+	_xray
+	_v2ray
 	_dsvpn
 	_wireguard
 	_multipath

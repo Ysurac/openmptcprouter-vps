@@ -42,6 +42,7 @@ fi
 NOINTERNET=${NOINTERNET:-no}
 REINSTALL=${REINSTALL:-yes}
 SPEEDTEST=${SPEEDTEST:-yes}
+IPERF=${IPERF:-yes}
 LOCALFILES=${LOCALFILES:-no}
 INTERFACE=${INTERFACE:-$(ip -o -4 route show to default | grep -m 1 -Po '(?<=dev )(\S+)' | tr -d "\n")}
 KERNEL_VERSION="5.4.207"
@@ -66,14 +67,14 @@ MLVPN_BINARY_VERSION="3.0.0+20211028.git.ddafba3"
 UBOND_VERSION="31af0f69ebb6d07ed9348dca2fced33b956cedee"
 OBFS_VERSION="486bebd9208539058e57e23a12f23103016e09b4"
 OBFS_BINARY_VERSION="0.0.5-1"
-OMR_ADMIN_VERSION="a671b9171edeb82fc8ff8bb150ca6ffd6f57ee6a"
-OMR_ADMIN_BINARY_VERSION="0.7+20231206"
+OMR_ADMIN_VERSION="70e3403ba4344d5c5006f03f989c8024d0f4708b"
+OMR_ADMIN_BINARY_VERSION="0.8+20231228"
 #OMR_ADMIN_BINARY_VERSION="0.3+20220827"
 DSVPN_VERSION="3b99d2ef6c02b2ef68b5784bec8adfdd55b29b1a"
 DSVPN_BINARY_VERSION="0.1.4-2"
 V2RAY_VERSION="5.7.0"
 V2RAY_PLUGIN_VERSION="4.43.0"
-XRAY_VERSION="1.8.5"
+XRAY_VERSION="1.8.6"
 EASYRSA_VERSION="3.0.6"
 #SHADOWSOCKS_VERSION="7407b214f335f0e2068a8622ef3674d868218e17"
 #if [ "$UPSTREAM" = "yes" ] || [ "$UPSTREAM6" = "yes" ]; then
@@ -174,23 +175,27 @@ if [ "$UPDATE" = "yes" ]; then
 	echo "Update mode"
 fi
 # Force update key
-[ -f /etc/apt/sources.list.d/openmptcprouter.list ] && {
-	echo "Update OpenMPTCProuter repo key"
-	wget -O - http://repo.openmptcprouter.com/openmptcprouter.gpg.key | apt-key add -
-}
+#[ -f /etc/apt/sources.list.d/openmptcprouter.list ] && {
+#	echo "Update OpenMPTCProuter repo key"
+#	#wget -O - http://repo.openmptcprouter.com/openmptcprouter.gpg.key | apt-key add -
+#	wget https://${REPO}/openmptcprouter.gpg.key -O /etc/apt/trusted.gpg.d/openmptcprouter.gpg
+#}
 
 CURRENT_OMR="$(grep -s 'OpenMPTCProuter VPS' /etc/* | awk '{print $4}')"
 if [ "$REINSTALL" = "no" ] && [ "$CURRENT_OMR" = "$OMR_VERSION" ]; then
 	exit 1
 fi
 
+# Force update key
 [ -f /etc/apt/sources.list.d/openmptcprouter.list ] && {
 	echo "Update ${REPO} key"
+	apt-key del '2FDF 70C8 228B 7F04 42FE  59F6 608F D17B 2B24 D936' 2>&1 >/dev/null
 	if [ "$CHINA" = "yes" ]; then
 		#wget -O - https://gitee.com/ysurac/openmptcprouter-vps-debian/raw/main/openmptcprouter.gpg.key | apt-key add -
-		wget -O - https://gitlab.com/ysurac/openmptcprouter-vps-debian/raw/main/openmptcprouter.gpg.key | apt-key add -
+		wget https://gitlab.com/ysurac/openmptcprouter-vps-debian/raw/main/openmptcprouter.gpg.key -O /etc/apt/trusted.gpg.d/openmptcprouter.gpg
 	else
-		wget -O - https://${REPO}/openmptcprouter.gpg.key | apt-key add -
+		#wget -O - https://${REPO}/openmptcprouter.gpg.key | apt-key add -
+		wget https://${REPO}/openmptcprouter.gpg.key -O /etc/apt/trusted.gpg.d/openmptcprouter.gpg
 	fi
 }
 
@@ -321,7 +326,8 @@ else
 			Pin-Priority: 1003
 		EOF
 	fi
-	wget -O - https://${REPO}/openmptcprouter.gpg.key | apt-key add -
+	#wget -O - https://${REPO}/openmptcprouter.gpg.key | apt-key add -
+	wget https://${REPO}/openmptcprouter.gpg.key -O /etc/apt/trusted.gpg.d/openmptcprouter.gpg
 fi
 
 #apt-key adv --keyserver hkp://keys.gnupg.net --recv-keys 379CE192D401AB61
@@ -347,7 +353,7 @@ fi
 echo "Install mptcp kernel and shadowsocks..."
 apt-get update --allow-releaseinfo-change
 sleep 2
-apt-get -y install dirmngr patch rename curl libcurl4 unzip pkg-config
+apt-get -y install dirmngr patch rename curl libcurl4 unzip pkg-config ipset
 
 if [ -z "$(dpkg-query -l | grep grub)" ]; then
 	if [ -d /boot/grub2 ]; then
@@ -425,9 +431,29 @@ fi
 if [ "$ARCH" = "amd64" ]; then
 	echo "Install tracebox OpenMPTCProuter edition"
 	apt-get -y -o Dpkg::Options::="--force-overwrite" install tracebox
-	echo "Install iperf3 OpenMPTCProuter edition"
-	apt-get -y -o Dpkg::Options::="--force-overwrite" install omr-iperf3
-	chmod 644 /lib/systemd/system/iperf3.service
+fi
+if [ "$IPERF" = "yes" ]; then
+	#echo "Install iperf3 OpenMPTCProuter edition"
+	#apt-get -y -o Dpkg::Options::="--force-overwrite" install omr-iperf3
+	#chmod 644 /lib/systemd/system/iperf3.service
+	echo "Install iperf3"
+	[ "$ARCH" = "amd64" ] && apt-get -y remove omr-iperf3 omr-libiperf0 2>&1 >/dev/null
+	apt-get -y install iperf3
+	if [ ! -f "/etc/iperf3/private.pem" ]; then
+		mkdir -p /etc/iperf3
+		openssl genrsa -out /etc/iperf3/private.pem 2048
+		openssl rsa -in /etc/iperf3/private.pem -outform PEM -pubout -out /etc/iperf3/public.pem
+		IPERFPASS=$(echo -n "{openmptcprouter}openmptcprouter" | sha256sum | awk '{ print $1 }')
+		echo "openmptcprouter,$IPERFPASS" > /etc/iperf3/users.csv
+	fi
+	chown -Rf iperf3 /etc/iperf3 || true
+	systemctl enable iperf3.service
+	mkdir -p /etc/systemd/system/iperf3.service.d
+	if [ "$LOCALFILES" = "no" ]; then
+		wget -O /etc/systemd/system/iperf3.service.d/override.conf ${VPSURL}${VPSPATH}/iperf3.override.conf
+	else
+		cp ${DIR}/iperf3.override.conf /etc/systemd/system/iperf3.service.d/override.conf
+	fi
 fi
 
 if [ "$UPSTREAM" = "yes" ] || [ "$UPSTREAM6" = "yes" ]; then
@@ -457,10 +483,10 @@ if [ "$UPSTREAM" = "yes" ] || [ "$UPSTREAM6" = "yes" ]; then
 		cd /tmp
 	fi
 	rm -rf iproute2
-	if [ "$ARCH" = "amd64" ]; then
-		echo "MPTCPize iperf3..."
-		mptcpize enable iperf3
-	fi
+
+	echo "MPTCPize iperf3..."
+	mptcpize enable iperf3 2>&1 >/dev/null
+
 	#if [ "$UPSTREAM6" = "yes" ]; then
 	#	apt-get -y install $(dpkg --get-selections | grep linux-image-6.1 | grep -v dbg | cut -f1)-dbg
 	#	apt-get -y install systemtap
@@ -739,8 +765,8 @@ if [ "$OMR_ADMIN" = "yes" ]; then
 	}
 	systemctl enable omr-admin.service
 	if [ "$UPSTREAM" = "yes" ] || [ "$UPSTREAM6" = "yes" ]; then
-		mptcpize enable omr-admin.service
-		[ "$(ip -6 a)" != "" ] && mptcpize enable omr-admin-ipv6.service
+		mptcpize enable omr-admin.service 2>&1 >/dev/null
+		[ "$(ip -6 a)" != "" ] && mptcpize enable omr-admin-ipv6.service 2>&1 >/dev/null
 	fi
 fi
 
@@ -1329,8 +1355,13 @@ if [ "$OPENVPN" = "yes" ]; then
 		openssl dhparam -out /etc/openvpn/server/dh2048.pem 2048
 	fi
 	if [ "$LOCALFILES" = "no" ]; then
-		wget -O /etc/openvpn/tun0.conf ${VPSURL}${VPSPATH}/openvpn-tun0.conf
-		wget -O /etc/openvpn/tun1.conf ${VPSURL}${VPSPATH}/openvpn-tun1.conf
+		if [ "$UPSTREAM" = "yes" ] || [ "$UPSTREAM6" = "yes" ]; then
+			wget -O /etc/openvpn/tun0.conf ${VPSURL}${VPSPATH}/openvpn-tun0.6.1.conf
+			wget -O /etc/openvpn/tun1.conf ${VPSURL}${VPSPATH}/openvpn-tun1.6.1.conf
+		else
+			wget -O /etc/openvpn/tun0.conf ${VPSURL}${VPSPATH}/openvpn-tun0.conf
+			wget -O /etc/openvpn/tun1.conf ${VPSURL}${VPSPATH}/openvpn-tun1.conf
+		fi
 		wget -O /etc/openvpn/bonding1.conf ${VPSURL}${VPSPATH}/openvpn-bonding1.conf
 		wget -O /etc/openvpn/bonding2.conf ${VPSURL}${VPSPATH}/openvpn-bonding2.conf
 		wget -O /etc/openvpn/bonding3.conf ${VPSURL}${VPSPATH}/openvpn-bonding3.conf
@@ -1340,8 +1371,13 @@ if [ "$OPENVPN" = "yes" ]; then
 		wget -O /etc/openvpn/bonding7.conf ${VPSURL}${VPSPATH}/openvpn-bonding7.conf
 		wget -O /etc/openvpn/bonding8.conf ${VPSURL}${VPSPATH}/openvpn-bonding8.conf
 	else
-		cp ${DIR}/openvpn-tun0.conf /etc/openvpn/tun0.conf
-		cp ${DIR}/openvpn-tun1.conf /etc/openvpn/tun1.conf
+		if [ "$UPSTREAM" = "yes" ] || [ "$UPSTREAM6" = "yes" ]; then
+			cp ${DIR}/openvpn-tun0.6.1.conf /etc/openvpn/tun0.conf
+			cp ${DIR}/openvpn-tun1.6.1.conf /etc/openvpn/tun1.conf
+		else
+			cp ${DIR}/openvpn-tun0.conf /etc/openvpn/tun0.conf
+			cp ${DIR}/openvpn-tun1.conf /etc/openvpn/tun1.conf
+		fi
 		cp ${DIR}/openvpn-bonding1.conf /etc/openvpn/bonding1.conf
 		cp ${DIR}/openvpn-bonding2.conf /etc/openvpn/bonding2.conf
 		cp ${DIR}/openvpn-bonding3.conf /etc/openvpn/bonding3.conf
@@ -1352,11 +1388,17 @@ if [ "$OPENVPN" = "yes" ]; then
 		cp ${DIR}/openvpn-bonding8.conf /etc/openvpn/bonding8.conf
 	fi
 	mkdir -p /etc/openvpn/ccd
+	if [ ! -f /etc/openvpn/ccd/ipp_tcp.txt ]; then
+		echo 'openmptcprouter,10.255.250.2,' > /etc/openvpn/ccd/ipp_tcp.txt
+	fi
+	if [ ! -f /etc/openvpn/ccd/ipp_udp.txt ]; then
+		echo 'openmptcprouter,10.255.252.2,' > /etc/openvpn/ccd/ipp_udp.txt
+	fi
 	chmod 644 /lib/systemd/system/openvpn*.service
 	systemctl enable openvpn@tun0.service
 	systemctl enable openvpn@tun1.service
 	if [ "$UPSTREAM" = "yes" ] || [ "$UPSTREAM6" = "yes" ]; then
-		mptcpize enable openvpn@tun0
+		mptcpize enable openvpn@tun0 2>&1 >/dev/null
 	fi
 	systemctl enable openvpn@bonding1.service
 	systemctl enable openvpn@bonding2.service
@@ -1474,7 +1516,7 @@ if [ "$DSVPN" = "yes" ]; then
 		DSVPN_PASS=$(cat /etc/dsvpn/dsvpn0.key | tr -d "\n")
 	fi
 	if [ "$UPSTREAM" = "yes" ] || [ "$UPSTREAM6" = "yes" ]; then
-		mptcpize enable dsvpn-server@dsvpn0
+		mptcpize enable dsvpn-server@dsvpn0 2>&1 >/dev/null
 	fi
 fi
 
@@ -1501,7 +1543,7 @@ if [ "$SOURCES" = "yes" ]; then
 	if [ "$UPSTREAM" = "yes" ] || [ "$UPSTREAM6" = "yes" ]; then
 		wget -O /tmp/glorytun-0.0.35.tar.gz https://github.com/Ysurac/glorytun/archive/refs/heads/tcp.tar.gz
 	else
-		wget -O /tmp/glorytun-0.0.35.tar.gz http://github.com/angt/glorytun/releases/download/v0.0.35/glorytun-0.0.35.tar.gz
+		wget -O /tmp/glorytun-0.0.35.tar.gz https://github.com/angt/glorytun/releases/download/v0.0.35/glorytun-0.0.35.tar.gz
 	fi
 	tar xzf glorytun-0.0.35.tar.gz
 	if [ "$UPSTREAM" = "yes" ] || [ "$UPSTREAM6" = "yes" ]; then
@@ -1563,22 +1605,34 @@ if [ "$LOCALFILES" = "no" ]; then
 	wget -O /lib/systemd/system/omr.service ${VPSURL}${VPSPATH}/omr.service.in
 	wget -O /usr/local/bin/omr-6in4-run ${VPSURL}${VPSPATH}/omr-6in4-run
 	wget -O /lib/systemd/system/omr6in4@.service ${VPSURL}${VPSPATH}/omr6in4%40.service.in
+	wget -O /usr/local/bin/omr-bypass ${VPSURL}${VPSPATH}/omr-bypass
+	wget -O /lib/systemd/system/omr-bypass.service ${VPSURL}${VPSPATH}/omr-bypass.service.in
+	wget -O /lib/systemd/system/omr-bypass.timer ${VPSURL}${VPSPATH}/omr-bypass.timer.in
 else
 	cp ${DIR}/omr-service /usr/local/bin/omr-service
 	cp ${DIR}/omr.service.in /lib/systemd/system/omr.service
 	cp ${DIR}/omr-6in4-run /usr/local/bin/omr-6in4-run
 	cp ${DIR}/omr6in4@.service.in /lib/systemd/system/omr6in4@.service
+	cp ${DIR}/omr-bypass /usr/local/bin/omr-bypass
+	cp ${DIR}/omr-bypass.service.in /lib/systemd/system/omr-bypass.service
+	cp ${DIR}/omr-bypass.timer.in /lib/systemd/system/omr-bypass.timer
+
 fi
 chmod 644 /lib/systemd/system/omr.service
 chmod 644 /lib/systemd/system/omr6in4@.service
 chmod 755 /usr/local/bin/omr-service
 chmod 755 /usr/local/bin/omr-6in4-run
+chmod 644 /lib/systemd/system/omr-bypass.service
+chmod 644 /lib/systemd/system/omr-bypass.timer
+systemctl daemon-reload
 if systemctl -q is-active omr-6in4.service; then
 	systemctl -q stop omr-6in4 > /dev/null 2>&1
 	systemctl -q disable omr-6in4 > /dev/null 2>&1
 fi
 systemctl enable omr6in4@user0.service
 systemctl enable omr.service
+systemctl enable omr-bypass.timer
+systemctl enable omr-bypass.service
 
 # Change SSH port to 65222
 sed -i 's:#Port 22:Port 65222:g' /etc/ssh/sshd_config
@@ -1734,7 +1788,7 @@ if [ "$update" = "0" ]; then
 	# Display important info
 	echo '===================================================================================='
 	echo "OpenMPTCProuter Server $OMR_VERSION is now installed !"
-	echo '\033[4m\0331mSSH port: 65222 (instead of port 22)\033[0m'
+	echo '\033[1m SSH port: 65222 (instead of port 22)\033[0m'
 	if [ "$OMR_ADMIN" = "yes" ]; then
 		echo '===================================================================================='
 		echo '!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!'

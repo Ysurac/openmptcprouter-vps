@@ -366,17 +366,6 @@ if [ -z "$(dpkg-query -l | grep grub)" ]; then
 	}
 fi
 
-
-if [ -z "$(dpkg-query -l | grep grub)" ]; then
-	if [ -d /boot/grub2 ]; then
-		apt-get -y install grub2
-	elif [ -d /boot/grub ]; then
-		apt-get -y install grub-legacy
-	fi
-	[ -n "$(grep 'net.ifnames=0' /boot/grub/grub.cfg)" ] && [ ! -f /etc/default/grub ] && {
-		echo 'GRUB_CMDLINE_LINUX="net.ifnames=0 biosdevname=0"' > /etc/default/grub
-	}
-fi
 if [ "$UPSTREAM6" != "yes" ]; then
 	if [ "$SOURCES" = "yes" ]; then
 		wget -O /tmp/linux-image-${KERNEL_RELEASE}_amd64.deb ${VPSURL}kernel/linux-image-${KERNEL_RELEASE}_amd64.deb

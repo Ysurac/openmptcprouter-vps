@@ -67,8 +67,8 @@ MLVPN_BINARY_VERSION="3.0.0+20211028.git.ddafba3"
 UBOND_VERSION="31af0f69ebb6d07ed9348dca2fced33b956cedee"
 OBFS_VERSION="486bebd9208539058e57e23a12f23103016e09b4"
 OBFS_BINARY_VERSION="0.0.5-1"
-OMR_ADMIN_VERSION="8451122349457737523d698579d0b567da4e89b0"
-OMR_ADMIN_BINARY_VERSION="0.8+20240208"
+OMR_ADMIN_VERSION="0780292d156cd8c00cbc83e1ca7d1ff3fde7cf5c"
+OMR_ADMIN_BINARY_VERSION="0.8+20240213"
 #OMR_ADMIN_BINARY_VERSION="0.3+20220827"
 DSVPN_VERSION="3b99d2ef6c02b2ef68b5784bec8adfdd55b29b1a"
 DSVPN_BINARY_VERSION="0.1.4-2"
@@ -237,7 +237,7 @@ if [ "$ID" = "debian" ] && [ "$VERSION_ID" = "10" ] && [ "$UPDATE_OS" = "yes" ] 
 	VERSION_ID="11"
 fi
 if [ "$ID" = "debian" ] && [ "$VERSION_ID" = "11" ] && [ "$UPDATE_OS" = "yes" ] && [ "$UPSTREAM6" = "yes" ]; then
-	echo "Update Debian 10 Stretch to Debian 11 Buster"
+	echo "Update Debian 11 Buster to Debian 12"
 	apt-get -y -f --force-yes upgrade
 	apt-get -y -f --force-yes dist-upgrade
 	sed -i 's:bullseye:bookworm:g' /etc/apt/sources.list

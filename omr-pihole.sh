@@ -37,7 +37,7 @@ mv /etc/pihole/setupVars.new.conf /etc/pihole/setupVars.conf
 cat >> /etc/pihole/setupVars.conf <<-EOF
 PIHOLE_INTERFACE=gt-tun0
 IPV4_ADDRESS=10.255.0.0/16
-IPV6_ADDRESS=fe80::aff:ff01/64
+IPV6_ADDRESS=fd00::a00:/106
 RATE_LIMIT=0/0
 EOF
 

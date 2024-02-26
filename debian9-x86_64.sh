@@ -110,6 +110,12 @@ export DEBIAN_FRONTEND=noninteractive
 echo "Check user..."
 if [ "$(id -u)" -ne 0 ]; then echo 'Please run as root.' >&2; exit 1; fi
 
+# Check Kernel
+if [ "$KERNEL" != "5.4" ] && [ "$KERNEL" != "5.15" ] && [ "$KERNEL" != "6.1" ] && [ "$KERNEL" != "6.6" ]; then
+	echo "Only kernels 5.4, 5.15, 6.1 and 6.6 are currently supported"
+	exit 1
+fi
+
 # Check Linux version
 echo "Check Linux version..."
 if test -f /etc/os-release ; then
@@ -223,8 +229,8 @@ apt-get -y install apt-transport-https gnupg openssh-server
 #if [ "$ID" = "debian" ] && [ "$VERSION_ID" = "9" ] && [ "$UPDATE_DEBIAN" = "yes" ] && [ "$update" = "0" ]; then
 if [ "$ID" = "debian" ] && [ "$VERSION_ID" = "9" ] && [ "$UPDATE_OS" = "yes" ]; then
 	echo "Update Debian 9 Stretch to Debian 10 Buster"
-	apt-get -y -f --force-yes upgrade
-	apt-get -y -f --force-yes dist-upgrade
+	apt-get -y -f --force-yes --allow-downgrades upgrade
+	apt-get -y -f --force-yes --allow-downgrades dist-upgrade
 	sed -i 's:stretch:buster:g' /etc/apt/sources.list
 	apt-get update --allow-releaseinfo-change
 	apt-get -y -o Dpkg::Options::="--force-confdef" -o Dpkg::Options::="--force-confnew" upgrade
@@ -233,8 +239,8 @@ if [ "$ID" = "debian" ] && [ "$VERSION_ID" = "9" ] && [ "$UPDATE_OS" = "yes" ]; 
 fi
 if [ "$ID" = "debian" ] && [ "$VERSION_ID" = "10" ] && [ "$UPDATE_OS" = "yes" ] && ([ "$KERNEL" = "6.1" ] || [ "$KERNEL" = "6.6" ]); then
 	echo "Update Debian 10 Stretch to Debian 11 Buster"
-	apt-get -y -f --force-yes upgrade
-	apt-get -y -f --force-yes dist-upgrade
+	apt-get -y -f --force-yes --allow-downgrades upgrade
+	apt-get -y -f --force-yes --allow-downgrades dist-upgrade
 	sed -i 's:buster:bullseye:g' /etc/apt/sources.list
 	sed -i 's:bullseye/updates:bullseye-security:g' /etc/apt/sources.list
 	apt-get update --allow-releaseinfo-change
@@ -244,8 +250,8 @@ if [ "$ID" = "debian" ] && [ "$VERSION_ID" = "10" ] && [ "$UPDATE_OS" = "yes" ] 
 fi
 if [ "$ID" = "debian" ] && [ "$VERSION_ID" = "11" ] && [ "$UPDATE_OS" = "yes" ] && ([ "$KERNEL" = "6.1" ] || [ "$KERNEL" = "6.6" ]); then
 	echo "Update Debian 11 Buster to Debian 12"
-	apt-get -y -f --force-yes upgrade
-	apt-get -y -f --force-yes dist-upgrade
+	apt-get -y -f --force-yes --allow-downgrades upgrade
+	apt-get -y -f --force-yes --allow-downgrades dist-upgrade
 	sed -i 's:bullseye:bookworm:g' /etc/apt/sources.list
 	apt-get update --allow-releaseinfo-change
 	apt-get -y -o Dpkg::Options::="--force-confdef" -o Dpkg::Options::="--force-confnew" upgrade
@@ -254,8 +260,8 @@ if [ "$ID" = "debian" ] && [ "$VERSION_ID" = "11" ] && [ "$UPDATE_OS" = "yes" ] 
 fi
 if [ "$ID" = "ubuntu" ] && [ "$VERSION_ID" = "18.04" ] && [ "$UPDATE_OS" = "yes" ]; then
 	echo "Update Ubuntu 18.04 to Ubuntu 20.04"
-	apt-get -y -f --force-yes upgrade
-	apt-get -y -f --force-yes dist-upgrade
+	apt-get -y -f --force-yes --allow-downgrades upgrade
+	apt-get -y -f --force-yes --allow-downgrades dist-upgrade
 	sed -i 's:bionic:focal:g' /etc/apt/sources.list
 	apt-get update --allow-releaseinfo-change
 	apt-get -y -o Dpkg::Options::="--force-confdef" -o Dpkg::Options::="--force-confnew" upgrade
@@ -264,8 +270,8 @@ if [ "$ID" = "ubuntu" ] && [ "$VERSION_ID" = "18.04" ] && [ "$UPDATE_OS" = "yes"
 fi
 if [ "$ID" = "ubuntu" ] && [ "$VERSION_ID" = "18.04" ] && [ "$UPDATE_OS" = "yes" ] && ([ "$KERNEL" = "6.1" ] || [ "$KERNEL" = "6.6" ]); then
 	echo "Update Ubuntu 20.04 to Ubuntu 22.04"
-	apt-get -y -f --force-yes upgrade
-	apt-get -y -f --force-yes dist-upgrade
+	apt-get -y -f --force-yes --allow-downgrades upgrade
+	apt-get -y -f --force-yes --allow-downgrades dist-upgrade
 	sed -i 's:focal:jammy:g' /etc/apt/sources.list
 	apt-get update --allow-releaseinfo-change
 	apt-get -y -o Dpkg::Options::="--force-confdef" -o Dpkg::Options::="--force-confnew" upgrade
@@ -691,7 +697,7 @@ if [ "$OMR_ADMIN" = "yes" ]; then
 				pip3 -q install uvloop
 			fi
 		else
-			apt-get -y install python3-passlib python3-jwt python3-netaddr libuv1 python3-uvloop
+			apt-get -y --allow-downgrades install python3-passlib python3-jwt python3-netaddr libuv1 python3-uvloop
 		fi
 	fi
 	apt-get -y --allow-downgrades install python3-uvicorn jq ipcalc python3-netifaces python3-aiofiles python3-psutil python3-requests pwgen
@@ -756,7 +762,7 @@ if [ "$OMR_ADMIN" = "yes" ]; then
 			OMR_ADMIN_PASS_ADMIN2=$(cat /etc/openmptcprouter-vps-admin/omr-admin-config.json | jq -r .users[0].admin.user_password | tr -d "\n")
 			[ -n "$OMR_ADMIN_PASS_ADMIN2" ] && [ "$OMR_ADMIN_PASS_ADMIN2" != "AdminMySecretKey" ] && OMR_ADMIN_PASS_ADMIN=$OMR_ADMIN_PASS_ADMIN2
 		fi
-		apt-get -o Dpkg::Options::="--force-confold" -o Dpkg::Options::="--force-confdef" -o Dpkg::Options::="--force-overwrite" -y install omr-vps-admin=${OMR_ADMIN_BINARY_VERSION}
+		apt-get -o Dpkg::Options::="--force-confold" -o Dpkg::Options::="--force-confdef" -o Dpkg::Options::="--force-overwrite" -y --allow-downgrades install omr-vps-admin=${OMR_ADMIN_BINARY_VERSION}
 		if [ ! -f /etc/openmptcprouter-vps-admin/omr-admin-config.json ]; then
 			cp /usr/share/omr-admin/omr-admin-config.json /etc/openmptcprouter-vps-admin/
 		fi

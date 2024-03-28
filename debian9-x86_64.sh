@@ -73,8 +73,8 @@ MLVPN_BINARY_VERSION="3.0.0+20211028.git.ddafba3"
 UBOND_VERSION="31af0f69ebb6d07ed9348dca2fced33b956cedee"
 OBFS_VERSION="486bebd9208539058e57e23a12f23103016e09b4"
 OBFS_BINARY_VERSION="0.0.5-1"
-OMR_ADMIN_VERSION="7adb6dd1083420fa3bff20f3d58aa36d30e36e3c"
-OMR_ADMIN_BINARY_VERSION="0.9+20240301"
+OMR_ADMIN_VERSION="f974719ddc902246ac0cd559372495ec23b262df"
+OMR_ADMIN_BINARY_VERSION="0.9+20240324"
 #OMR_ADMIN_BINARY_VERSION="0.3+20220827"
 DSVPN_VERSION="3b99d2ef6c02b2ef68b5784bec8adfdd55b29b1a"
 DSVPN_BINARY_VERSION="0.1.4-2"
@@ -1869,8 +1869,9 @@ if [ "$update" = "0" ]; then
 	echo '===================================================================================='
 	echo '\033[1m  /!\ You need to reboot to enable MPTCP, shadowsocks, glorytun and shorewall /!\ \033[0m'
 	echo '------------------------------------------------------------------------------------'
-	echo ' After reboot, check with uname -a that the kernel name contain mptcp.'
+	echo ' For kernel 5.4, after reboot, check with uname -a that the kernel name contain mptcp.'
 	echo ' Else, you may have to modify GRUB_DEFAULT in /etc/default/grub'
+	echo ' For 6.x kernels, check that a 6.x kernel is used, no kernel name changes.'
 	echo '===================================================================================='
 
 	# Save info in file

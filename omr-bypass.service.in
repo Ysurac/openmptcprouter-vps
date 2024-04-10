@@ -1,0 +1,12 @@
+[Unit]
+Description=OMR-ByPass
+After=network.target network-online.target shorewall.service
+
+[Service]
+Type=simple
+ExecStart=/usr/local/bin/omr-bypass
+KillSignal=9
+CapabilityBoundingSet=CAP_NET_ADMIN CAP_NET_RAW
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,82 @@
+#!/bin/sh
+# Copyright (C) 2023 Ycarus (Yannick Chabanois) <ycarus@zugaina.org> for OpenMPTCProuter
+# Released under GPL 3. See LICENSE for the full terms.
+
+[ ! -f /etc/openmptcprouter-vps-admin/omr-bypass.json ] && exit 0
+
+# Configuration
+INTERFACE="$(jq -M -r .bypass_intf /etc/openmptcprouter-vps-admin/omr-admin-config.json | tr -d '\n')"
+[ "$INTERFACE" = "null" ] && INTERFACE="vpn1"
+GATEWAY="$(ip r show dev ${INTERFACE} | awk '/via/ {print $3}' | tr -d '\n')"
+GATEWAY6="$(ip -6 r show dev ${INTERFACE} | awk '/via/ {print $3}' | tr -d '\n')"
+TABLE="991337"
+MARK="0x539"
+
+CHECKSUM="$(md5sum /etc/openmptcprouter-vps-admin/omr-bypass.json | awk '{print $1}' | tr -d '\n')"
+PREVIOUS_CHECKSUM="$(jq -M -r .bypass_checksum /etc/openmptcprouter-vps-admin/omr-admin-config.json | tr -d '\n')"
+[ "$CHECKSUM" = "$PREVIOUS_CHECKSUM" ] && exit 0
+jq -M --arg c "$CHECKSUM" '.bypass_checksum = $c' /etc/openmptcprouter-vps-admin/omr-admin-config.json > /etc/openmptcprouter-vps-admin/omr-admin-config.json.tmp
+mv /etc/openmptcprouter-vps-admin/omr-admin-config.json.tmp /etc/openmptcprouter-vps-admin/omr-admin-config.json
+# Action
+ipset -q flush omr_dst_bypass_srv_${INTERFACE} 2>&1 > /dev/null
+ipset -q flush omr6_dst_bypass_srv_${INTERFACE} 2>&1 > /dev/null
+ipset -q --exist restore <<-EOF
+create omr_dst_bypass_srv_${INTERFACE} hash:net hashsize 64
+create omr6_dst_bypass_srv_${INTERFACE} hash:net family inet6 hashsize 64
+EOF
+ipv4=$(cat /etc/openmptcprouter-vps-admin/omr-bypass.json | jq -r .${INTERFACE}.ipv4[])
+for ip in $ipv4; do
+	ipset -q add omr_dst_bypass_srv_${INTERFACE} $ip
+done
+ipv6=$(cat /etc/openmptcprouter-vps-admin/omr-bypass.json | jq -r .${INTERFACE}.ipv6[])
+for ip in $ipv6; do
+	ipset -q add omr6_dst_bypass_srv_${INTERFACE} $ip
+done
+iptables-save --counters 2>/dev/null | grep -v omr-bypass | iptables-restore -w --counters 2>/dev/null
+iptables-restore -w --wait=60 --noflush <<-EOF
+*mangle
+:omr-bypass -
+-A PREROUTING -j omr-bypass
+COMMIT
+EOF
+iptables-restore -w --wait=60 --noflush <<-EOF
+*mangle
+:omr-bypass-local -
+-A OUTPUT -m addrtype ! --dst-type LOCAL -j omr-bypass-local
+COMMIT
+EOF
+iptables-restore -w --wait=60 --noflush <<-EOF
+*mangle
+-A omr-bypass -m set --match-set omr_dst_bypass_srv_${INTERFACE} dst -j MARK --set-mark ${MARK}
+-A omr-bypass -m mark --mark ${MARK} -j RETURN
+-A omr-bypass-local -m set --match-set omr_dst_bypass_srv_${INTERFACE} dst -j MARK --set-mark ${MARK}
+-A omr-bypass-local -m mark --mark ${MARK} -j RETURN
+COMMIT
+EOF
+ip rule add prio 1 fwmark ${MARK} lookup ${TABLE} > /dev/null 2>&1
+ip route replace default via ${GATEWAY} dev ${INTERFACE} table ${TABLE}
+ip6tables-save --counters 2>/dev/null | grep -v omr-bypass | ip6tables-restore -w --counters 2>/dev/null
+ip6tables-restore -w --wait=60 --noflush <<-EOF
+*mangle
+:omr-bypass -
+-A PREROUTING -j omr-bypass
+COMMIT
+EOF
+ip6tables-restore -w --wait=60 --noflush <<-EOF
+*mangle
+:omr-bypass-local -
+-A OUTPUT -m addrtype ! --dst-type LOCAL -j omr-bypass-local
+COMMIT
+EOF
+ip6tables-restore -w --wait=60 --noflush <<-EOF
+*mangle
+-A omr-bypass -m set --match-set omr6_dst_bypass_srv_${INTERFACE} dst -j MARK --set-mark ${MARK}
+-A omr-bypass -m mark --mark ${MARK} -j RETURN
+-A omr-bypass-local -m set --match-set omr6_dst_bypass_srv_${INTERFACE} dst -j MARK --set-mark ${MARK}
+-A omr-bypass-local -m mark --mark ${MARK} -j RETURN
+COMMIT
+EOF
+if [ -n "$GATEWAY6" ]; then
+	ip rule add prio 1 fwmark ${MARK} lookup ${TABLE} > /dev/null 2>&1
+	ip route replace default via ${GATEWAY6} dev ${INTERFACE} table ${TABLE}
+fi

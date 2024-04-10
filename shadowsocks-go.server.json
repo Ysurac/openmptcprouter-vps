@@ -1,0 +1,39 @@
+{
+    "servers": [
+        {
+            "name": "ss-2022",
+            "protocol": "2022-blake3-aes-256-gcm",
+            "tcpListeners": [
+            {
+                "network": "tcp",
+                "address": ":65280",
+                "fastOpen": false,
+                "reusePort": false,
+                "multipath": true
+            }
+            ],
+            "enableTCP": true,
+            "listenerTFO": false,
+            "enableUDP": true,
+            "mtu": 1500,
+            "psk": "PSK",
+            "uPSKStorePath": "/etc/shadowsocks-go/upsks.json"
+        }
+    ],
+    "stats": {
+        "enabled": true
+    },
+    "api": {
+        "enabled": true,
+        "debugPprof": false,
+        "enableTrustedProxyCheck": false,
+        "trustedProxies": [],
+        "proxyHeader": "X-Forwarded-For",
+        "listen": "127.0.0.1:65279",
+        "certFile": "",
+        "keyFile": "",
+        "clientCertFile": "",
+        "secretPath": "",
+        "fiberConfigPath": ""
+    }
+}

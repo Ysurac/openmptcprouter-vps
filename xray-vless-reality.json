@@ -1,0 +1,47 @@
+{
+    "inbounds": [
+        {
+            "port": 443,
+            "tag": "omrin-vless-reality",
+            "protocol": "vless",
+            "settings": {
+                "clients": [
+                    {
+                        "id": "XRAY_UUID",
+                        "flow": "xtls-rprx-vision"
+                    }
+                ],
+                "decryption": "none"
+            },
+            "streamSettings": {
+                "network": "tcp",
+                "security": "reality",
+                "realitySettings": {
+                    "dest": "1.1.1.1:443",
+                    "serverNames": [
+                        ""
+                    ],
+                    "privateKey": "XRAY_X25519_PRIVATE_KEY",
+                    "publicKey": "XRAY_X25519_PUBLIC_KEY",
+                    "shortIds": [
+                        ""
+                    ]
+                },
+                "sockopt": {
+                    "tcpMptcp": true,
+                    "mark": 0
+                }
+            }
+        }
+    ],
+    "routing": {
+        "rules": [
+            {
+                "type": "field",
+                "inboundTag": [
+                    "omrin-vless-reality"
+                ]
+            }
+        ]
+   }
+}

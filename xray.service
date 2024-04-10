@@ -1,0 +1,18 @@
+[Unit]
+Description=XRay Service
+Documentation=https://xtls.github.io/
+After=network.target nss-lookup.target
+Wants=network-online.target
+
+[Service]
+User=root
+CapabilityBoundingSet=CAP_NET_ADMIN CAP_NET_BIND_SERVICE CAP_NET_RAW
+AmbientCapabilities=CAP_NET_ADMIN CAP_NET_BIND_SERVICE CAP_NET_RAW
+NoNewPrivileges=true
+ExecStart=/usr/bin/xray run -config /etc/xray/xray-server.json
+Restart=always
+RestartPreventExitStatus=23
+StartLimitInterval=0
+
+[Install]
+WantedBy=multi-user.target

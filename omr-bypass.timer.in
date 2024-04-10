@@ -1,0 +1,8 @@
+[Unit]
+Description=Timer for omr-bypass
+
+[Timer]
+OnUnitActiveSec=300
+
+[Install]
+WantedBy=timers.target

@@ -19,7 +19,7 @@
 	"inbounds": [
 		{
 			"tag": "omrin-tunnel",
-			"port": 65228,
+			"port": 65248,
 			"protocol": "vless",
 			"settings": {
 				"decryption": "none",
@@ -34,7 +34,7 @@
 			},
 			"streamSettings": {
 				"sockopt": {
-					"mptcp": true,
+					"tcpMptcp": true,
 					"mark": 0
 				},
 				"network": "tcp",
@@ -51,7 +51,7 @@
 		},
 		{
 			"tag": "omrin-vmess-tunnel",
-			"port": 65230,
+			"port": 65250,
 			"protocol": "vmess",
 			"settings": {
 				"decryption": "none",
@@ -66,7 +66,7 @@
 			},
 			"streamSettings": {
 				"sockopt": {
-					"mptcp": true,
+					"tcpMptcp": true,
 					"mark": 0
 				},
 				"network": "tcp",
@@ -83,7 +83,7 @@
 		},
 		{
 			"tag": "omrin-socks-tunnel",
-			"port": 65231,
+			"port": 65251,
 			"protocol": "socks",
 			"settings": {
 				"auth": "password",
@@ -96,7 +96,7 @@
 			},
 			"streamSettings": {
 				"sockopt": {
-					"mptcp": true,
+					"tcpMptcp": true,
 					"mark": 0
 				},
 				"network": "tcp",
@@ -113,7 +113,7 @@
 		},
 		{
 			"tag": "omrin-trojan-tunnel",
-			"port": 65229,
+			"port": 65249,
 			"protocol": "trojan",
 			"settings": {
 				"clients": [
@@ -126,7 +126,7 @@
 			},
 			"streamSettings": {
 				"sockopt": {
-					"mptcp": true,
+					"tcpMptcp": true,
 					"mark": 0
 				},
 				"network": "tcp",
@@ -142,8 +142,31 @@
 			}
 		},
 		{
+			"tag": "omrin-shadowsocks-tunnel",
+			"port": 65252,
+			"protocol": "shadowsocks",
+			"settings": {
+				"password": "XRAY_PSK",
+				"method": "2022-blake3-aes-256-gcm",
+				"network": "tcp,udp",
+				"clients": [
+					{
+						"password": "XRAY_UPSK",
+						"email": "openmptcprouter"
+					}
+				]
+			},
+			"streamSettings": {
+				"sockopt": {
+					"tcpMptcp": true,
+					"mark": 0
+				},
+				"network": "tcp"
+			}
+		},
+		{
 			"listen": "127.0.0.1",
-			"port": 10085,
+			"port": 10086,
 			"protocol": "dokodemo-door",
 			"settings": {
 				"address": "127.0.0.1"
@@ -166,6 +189,7 @@
 				"type": "field",
 				"inboundTag": [
 					"omrin-tunnel",
+					"omrin-vless-reality",
 					"omrin-vmess-tunnel",
 					"omrin-socks-tunnel",
 					"omrin-trojan-tunnel"

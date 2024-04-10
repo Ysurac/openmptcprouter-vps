@@ -7,13 +7,13 @@ _multipath() {
 	for intf in `ls -1 /sys/class/net`; do
 		if [ "$intf" != "bonding_masters" ]; then
 			if ([ "$(ip a show dev lo | grep -v inet6 | grep global)" != "" ] && [ "$intf" = "lo" ]) || ([ "$intf" = "$NET_IFACE" ] && [ "$(ip a show dev lo | grep -v inet6 | grep global)" = "" ]); then
-				[ -f /proc/sys/net/mptcp/mptcp_enabled ] && [ "$(multipath $intf | tr -d '\n')" != "$intf is in default mode" ] && multipath $intf on
+				[ -f /proc/sys/net/mptcp/mptcp_enabled ] && [ "$(multipath $intf | tr -d '\n')" != "$intf is in default mode" ] && multipath $intf on 2>&1 >/dev/null
 				[ -f /proc/sys/net/mptcp/enabled ] && [ "$(multipath $intf | tr -d '\n')" != "$intf is in signal mode" ] && {
-					multipath $intf signal
+					multipath $intf signal 2>&1 >/dev/null
 					ip mptcp limits set subflows 8 add_addr_accepted 8 2>&1 >/dev/null
 				}
 			else
-				[ "$(multipath $intf | tr -d '\n')" != "$intf is deactivated" ] && multipath $intf off
+				[ "$(multipath $intf | tr -d '\n')" != "$intf is deactivated" ] && multipath $intf off 2>&1 >/dev/null
 			fi
 		fi
 	done
@@ -29,6 +29,7 @@ _glorytun_udp() {
 		for intf in /etc/glorytun-udp/tun*; do
 			[ "$(echo $intf | grep key)" = "" ] && /etc/glorytun-udp/post.sh ${intf}
 		done
+		#ip link set mtu 9000 dev gt-udp-tun0 2>&1 >/dev/null
 	fi
 }
 
@@ -41,12 +42,13 @@ _glorytun_tcp() {
 			localip="$(cat /etc/glorytun-tcp/tun0 | grep LOCALIP | cut -d '=' -f2)"
 			[ -z "$localip" ] && localip="10.255.255.1"
 			remoteip="$(echo $localip | sed 's/\.1/\.2/')"
-			if [ "$(ping -c 5 -w 5 $remoteip | grep '100%')" != "" ] && ([ -z "$(pgrep glorytun-tcp)" ] || [ "$(expr $(date +%s) - $(stat -c %Y /proc/$(pgrep glorytun-tcp)/exe ))" -gt "300" ]); then
+			if [ "$(ping -c 3 -w 10 $remoteip | grep '100%')" != "" ] && ([ -z "$(pgrep glorytun-tcp)" ] || [ "$(expr $(date +%s) - $(stat -c %Y /proc/$(pgrep glorytun-tcp)/exe ))" -gt "300" ]); then
 				logger -t "OMR-Service" "No answer from VPN client end, restart Glorytun-TCP"
 				systemctl restart glorytun-tcp@tun0
 				sleep 10
 			fi
 		fi
+		#ip link set mtu 9000 dev gt-tun0 2>&1 >/dev/null
 	fi
 }
 
@@ -58,15 +60,37 @@ _dsvpn() {
 		remoteip="$(echo $localip | sed 's/\.1/\.2/')"
 		if [ "$(ping -c 5 -w 5 $remoteip | grep '100%')" != "" ] && [ "$(expr $(date +%s) - $(stat -c %Y /proc/$(pgrep dsvpn)/exe ))" -gt "300" ]; then
 			logger -t "OMR-Service" "No answer from VPN client end, restart DSVPN"
-			systemctl restart dsvpn@dsvpn0
+			systemctl restart dsvpn-server@dsvpn0
 		fi
+		#ip link set mtu 9000 dev dsvpn0 2>&1 >/dev/null
 	fi
 }
 
 _shadowsocks() {
-	[ -n "$(systemctl -a | grep 'shadowsocks')" ] && [ -z "$(pgrep ss-server)" ] && {
-		logger -t "OMR-Service" "ss-server not detected, restart Shadowsocks"
+	[ -n "$(systemctl -a | grep 'shadowsocks-libev')" ] && [ -z "$(pgrep ss-server)" ] && {
+		logger -t "OMR-Service" "ss-server not detected, restart Shadowsocks libev"
 		systemctl restart shadowsocks-libev-manager@manager
+	}
+}
+
+_shadowsocks_go() {
+	[ -n "$(systemctl -a | grep 'shadowsocks-go')" ] && [ -z "$(pgrep shadowsocks-go)" ] && {
+		logger -t "OMR-Service" "ss-server not detected, restart Shadowsocks go"
+		systemctl restart shadowsocks-go
+	}
+}
+
+_xray() {
+	[ -n "$(systemctl -a | grep 'xray')" ] && [ -z "$(pgrep xray)" ] && {
+		logger -t "OMR-Service" "ss-server not detected, restart XRay"
+		systemctl restart xray
+	}
+}
+
+_v2ray() {
+	[ -n "$(systemctl -a | grep 'v2ray')" ] && [ -z "$(pgrep v2ray)" ] && {
+		logger -t "OMR-Service" "ss-server not detected, restart V2Ray"
+		systemctl restart v2ray
 	}
 }
 
@@ -80,7 +104,7 @@ _wireguard() {
 
 _omr_api() {
 	[ -z "$(pgrep curl)" ] && [ -z "$(curl -s -k -m 30 https://127.0.0.1:65500/)" ] && {
-		logger -t "OMR-Service" "Restart OMR-Admin"
+		logger -t "OMR-Service" "Can't contact API, restart OMR-Admin"
 		systemctl -q restart omr-admin
 	}
 }
@@ -111,11 +135,11 @@ _gre_tunnels() {
 				. "$(readlink -f "$intf")"
 				iface="$(basename $intf)"
 				if [ "$(ip tunnel show $iface 2>/dev/null | awk '{print $4}')" != "$OMR_ADDR" ]; then
-					ip tunnel del $iface 2>&1 >/dev/null
+					[ -n "$(ip tunnel show $iface 2>/dev/null)" ] && ip tunnel del $iface 2>&1 >/dev/null
 					ip tunnel add $iface mode gre local $INTFADDR remote $OMR_ADDR 2>&1 >/dev/null
 					ip link set $iface up 2>&1 >/dev/null
 					ip addr add $LOCALIP dev $iface 2>&1 >/dev/null
-					ip route add $NETWORK dev $iface 2>&1 >/dev/null
+					ip route add $NETWORK dev $iface onlink 2>&1 >/dev/null
 				fi
 			fi
 		done
@@ -151,10 +175,16 @@ _openvpn_bonding() {
 sysctl -p /etc/sysctl.d/90-shadowsocks.conf 2>&1 >/dev/null
 modprobe bonding 2>&1 >/dev/null
 ip link add omr-bonding type bond 2>&1 >/dev/null
+#[ -n "$(uname -r | grep '6.1')" ] && {
+#	stap -g /usr/share/systemtap-mptcp/mptcp-app.stap 2>&1 &
+#}
 while true; do
 	_glorytun_udp
 	_glorytun_tcp
 	_shadowsocks
+	_shadowsocks_go
+	_xray
+	_v2ray
 	_dsvpn
 	_wireguard
 	_multipath

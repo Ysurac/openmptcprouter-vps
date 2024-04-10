@@ -61,8 +61,10 @@ MLVPN_BINARY_VERSION="3.0.0+20211028.git.ddafba3"
 UBOND_VERSION="f9fb6aa0a65e8e20950977bda970c90012f830d7"
 OBFS_VERSION="486bebd9208539058e57e23a12f23103016e09b4"
 OBFS_BINARY_VERSION="0.0.5-1"
-OMR_ADMIN_VERSION="ef57968ea44020cf693aa671c3e9f51387efb0b4"
-OMR_ADMIN_BINARY_VERSION="0.3+20230709"
+#OMR_ADMIN_VERSION="ef57968ea44020cf693aa671c3e9f51387efb0b4"
+#OMR_ADMIN_BINARY_VERSION="0.3+20230718"
+OMR_ADMIN_VERSION="c4374c28594517231190e320020cb20d9dd1bcb2"
+OMR_ADMIN_BINARY_VERSION="0.3+20230823"
 DSVPN_VERSION="3b99d2ef6c02b2ef68b5784bec8adfdd55b29b1a"
 DSVPN_BINARY_VERSION="0.1.4-2"
 V2RAY_VERSION="4.43.0"
@@ -581,11 +583,11 @@ if [ "$OMR_ADMIN" = "yes" ]; then
 	#pip3 install pyjwt passlib uvicorn fastapi netjsonconfig python-multipart netaddr
 	#pip3 -q install fastapi netjsonconfig python-multipart uvicorn -U
 	pip3 -q install netjsonconfig
-	if [ "$ID" = "ubuntu" ] || ([ "$ID" = "debian" ] && [ "$VERSION_ID" = "10" ]); then
-		pip3 -q install fastapi==0.99.1 -U
-	else
-		pip3 -q install fastapi -U
-	fi
+#	if [ "$ID" = "ubuntu" ] || ([ "$ID" = "debian" ] && ([ "$VERSION_ID" = "10" ] || [ "$VERSION_ID" = "11" ])); then
+	pip3 -q install fastapi==0.99.1 -U
+#	else
+#		pip3 -q install fastapi -U
+#	fi
 	pip3 -q install jsonschema -U
 	pip3 -q install python-multipart jinja2 -U
 	pip3 -q install starlette

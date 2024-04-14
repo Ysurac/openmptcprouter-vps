@@ -91,13 +91,13 @@ SHADOWSOCKS_BINARY_VERSION="3.3.5-3"
 SHADOWSOCKS_GO_VERSION="1.8.0"
 DEFAULT_USER="openmptcprouter"
 VPS_DOMAIN=${VPS_DOMAIN:-$(wget -4 -qO- -T 2 http://hostname.openmptcprouter.com)}
-VPSPATH="server-test"
+VPSPATH="server"
 VPS_PUBLIC_IP=${VPS_PUBLIC_IP:-$(wget -4 -qO- -T 2 http://ip.openmptcprouter.com)}
 VPSURL="https://www.openmptcprouter.com/"
 REPO="repo.openmptcprouter.com"
 CHINA=${CHINA:-no}
 
-OMR_VERSION="0.1029-test"
+OMR_VERSION="0.1030"
 
 DIR=$( pwd )
 #"
@@ -229,33 +229,33 @@ apt-get -y install apt-transport-https gnupg openssh-server
 #if [ "$ID" = "debian" ] && [ "$VERSION_ID" = "9" ] && [ "$UPDATE_DEBIAN" = "yes" ] && [ "$update" = "0" ]; then
 if [ "$ID" = "debian" ] && [ "$VERSION_ID" = "9" ] && [ "$UPDATE_OS" = "yes" ]; then
 	echo "Update Debian 9 Stretch to Debian 10 Buster"
-	apt-get -y -f --force-yes --allow-downgrades upgrade
-	apt-get -y -f --force-yes --allow-downgrades dist-upgrade
+	apt-get -y -f --force-yes -o Dpkg::Options::="--force-confdef" -o Dpkg::Options::="--force-confnew" --allow-downgrades upgrade
+	apt-get -y -f --force-yes -o Dpkg::Options::="--force-confdef" -o Dpkg::Options::="--force-confnew" --allow-downgrades dist-upgrade
 	sed -i 's:stretch:buster:g' /etc/apt/sources.list
 	apt-get update --allow-releaseinfo-change
-	apt-get -y -o Dpkg::Options::="--force-confdef" -o Dpkg::Options::="--force-confnew" upgrade
-	apt-get -y -o Dpkg::Options::="--force-confdef" -o Dpkg::Options::="--force-confnew" dist-upgrade
+	apt-get -y -o Dpkg::Options::="--force-confdef" -o Dpkg::Options::="--force-confnew" --allow-downgrades upgrade
+	apt-get -y -o Dpkg::Options::="--force-confdef" -o Dpkg::Options::="--force-confnew" --allow-downgrades dist-upgrade
 	VERSION_ID="10"
 fi
 if [ "$ID" = "debian" ] && [ "$VERSION_ID" = "10" ] && [ "$UPDATE_OS" = "yes" ] && ([ "$KERNEL" = "6.1" ] || [ "$KERNEL" = "6.6" ]); then
-	echo "Update Debian 10 Stretch to Debian 11 Buster"
-	apt-get -y -f --force-yes --allow-downgrades upgrade
-	apt-get -y -f --force-yes --allow-downgrades dist-upgrade
+	echo "Update Debian 10 Buster to Debian 11 Bullseye"
+	apt-get -y -f --force-yes -o Dpkg::Options::="--force-confdef" -o Dpkg::Options::="--force-confnew" --allow-downgrades upgrade
+	apt-get -y -f --force-yes -o Dpkg::Options::="--force-confdef" -o Dpkg::Options::="--force-confnew" --allow-downgrades dist-upgrade
 	sed -i 's:buster:bullseye:g' /etc/apt/sources.list
 	sed -i 's:bullseye/updates:bullseye-security:g' /etc/apt/sources.list
 	apt-get update --allow-releaseinfo-change
-	apt-get -y -o Dpkg::Options::="--force-confdef" -o Dpkg::Options::="--force-confnew" upgrade
-	apt-get -y -o Dpkg::Options::="--force-confdef" -o Dpkg::Options::="--force-confnew" dist-upgrade
+	apt-get -y -o Dpkg::Options::="--force-confdef" -o Dpkg::Options::="--force-confnew" --allow-downgrades upgrade
+	apt-get -y -o Dpkg::Options::="--force-confdef" -o Dpkg::Options::="--force-confnew" --allow-downgrades dist-upgrade
 	VERSION_ID="11"
 fi
 if [ "$ID" = "debian" ] && [ "$VERSION_ID" = "11" ] && [ "$UPDATE_OS" = "yes" ] && ([ "$KERNEL" = "6.1" ] || [ "$KERNEL" = "6.6" ]); then
-	echo "Update Debian 11 Buster to Debian 12"
-	apt-get -y -f --force-yes --allow-downgrades upgrade
-	apt-get -y -f --force-yes --allow-downgrades dist-upgrade
+	echo "Update Debian 11 Bullseye to Debian 12 Bookworm"
+	apt-get -y -f --force-yes -o Dpkg::Options::="--force-confdef" -o Dpkg::Options::="--force-confnew" --allow-downgrades upgrade
+	apt-get -y -f --force-yes -o Dpkg::Options::="--force-confdef" -o Dpkg::Options::="--force-confnew" --allow-downgrades dist-upgrade
 	sed -i 's:bullseye:bookworm:g' /etc/apt/sources.list
 	apt-get update --allow-releaseinfo-change
-	apt-get -y -o Dpkg::Options::="--force-confdef" -o Dpkg::Options::="--force-confnew" upgrade
-	apt-get -y -o Dpkg::Options::="--force-confdef" -o Dpkg::Options::="--force-confnew" dist-upgrade
+	apt-get -y -o Dpkg::Options::="--force-confdef" -o Dpkg::Options::="--force-confnew" --allow-downgrades upgrade
+	apt-get -y -o Dpkg::Options::="--force-confdef" -o Dpkg::Options::="--force-confnew" --allow-downgrades dist-upgrade
 	VERSION_ID="12"
 fi
 if [ "$ID" = "ubuntu" ] && [ "$VERSION_ID" = "18.04" ] && [ "$UPDATE_OS" = "yes" ]; then
@@ -349,7 +349,7 @@ if [ "$ID" = "debian" ]; then
 		echo 'deb http://deb.debian.org/debian stretch-backports main' > /etc/apt/sources.list.d/stretch-backports.list
 	fi
 	# Add buster-backports repo
-	echo 'deb http://deb.debian.org/debian buster-backports main' > /etc/apt/sources.list.d/buster-backports.list
+	echo 'deb http://archive.debian.org/debian buster-backports main' > /etc/apt/sources.list.d/buster-backports.list
 	if [ "$VERSION_ID" = "12" ]; then
 		echo 'deb http://deb.debian.org/debian bullseye main' > /etc/apt/sources.list.d/bullseye.list
 	fi

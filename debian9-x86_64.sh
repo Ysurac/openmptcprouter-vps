@@ -49,6 +49,7 @@ SPEEDTEST=${SPEEDTEST:-yes}
 IPERF=${IPERF:-yes}
 LOCALFILES=${LOCALFILES:-no}
 INTERFACE=${INTERFACE:-$(ip -o -4 route show to default | grep -m 1 -Po '(?<=dev )(\S+)' | tr -d "\n")}
+INTERFACE6=${INTERFACE6:-$(ip -o -6 route show to default | grep -m 1 -Po '(?<=dev )(\S+)' | tr -d "\n")}
 KERNEL_VERSION="5.4.207"
 KERNEL_PACKAGE_VERSION="1.22"
 KERNEL_RELEASE="${KERNEL_VERSION}-mptcp_${KERNEL_PACKAGE_VERSION}"
@@ -1699,7 +1700,7 @@ if [ "$update" = "0" ]; then
 	fi
 	tar xzf /etc/shorewall6/openmptcprouter-shorewall6.tar.gz -C /etc/shorewall6
 	rm /etc/shorewall6/openmptcprouter-shorewall6.tar.gz
-	sed -i "s:eth0:$INTERFACE:g" /etc/shorewall6/*
+	sed -i "s:eth0:$INTERFACE6:g" /etc/shorewall6/*
 	systemctl enable shorewall6
 else
 	# Update only needed firewall files
@@ -1731,7 +1732,7 @@ else
 	sed -i "s:eth0:$INTERFACE:g" /etc/shorewall/*
 	sed -i 's/^.*#DNAT/#DNAT/g' /etc/shorewall/rules
 	sed -i 's:10.0.0.2:$OMR_ADDR:g' /etc/shorewall/rules
-	sed -i "s:eth0:$INTERFACE:g" /etc/shorewall6/*
+	sed -i "s:eth0:$INTERFACE6:g" /etc/shorewall6/*
 	if [ "$LOCALFILES" = "no" ]; then
 		rm -rf ${DIR}/shorewall4
 		rm -rf ${DIR}/shorewall6

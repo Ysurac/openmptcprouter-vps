@@ -215,6 +215,7 @@ echo "Remove lock and update packages list..."
 rm -f /var/lib/dpkg/lock
 rm -f /var/lib/dpkg/lock-frontend
 rm -f /var/cache/apt/archives/lock
+rm -f /etc/apt/sources.list.d/buster-backports.list
 if [ "$ID" = "debian" ] && [ "$VERSION_ID" = "9" ]; then
 	apt-get update
 else

@@ -7,13 +7,13 @@ _multipath() {
 	for intf in `ls -1 /sys/class/net`; do
 		if [ "$intf" != "bonding_masters" ]; then
 			if ([ "$(ip a show dev lo | grep -v inet6 | grep global)" != "" ] && [ "$intf" = "lo" ]) || ([ "$intf" = "$NET_IFACE" ] && [ "$(ip a show dev lo | grep -v inet6 | grep global)" = "" ]); then
-				[ -f /proc/sys/net/mptcp/mptcp_enabled ] && [ "$(multipath $intf | tr -d '\n')" != "$intf is in default mode" ] && multipath $intf on 2>&1 >/dev/null
+				[ -f /proc/sys/net/mptcp/mptcp_enabled ] && [ "$(multipath $intf | tr -d '\n')" != "$intf is in default mode" ] && multipath $intf on >/dev/null 2>&1
 				[ -f /proc/sys/net/mptcp/enabled ] && [ "$(multipath $intf | tr -d '\n')" != "$intf is in signal mode" ] && {
-					multipath $intf signal 2>&1 >/dev/null
-					ip mptcp limits set subflows 8 add_addr_accepted 8 2>&1 >/dev/null
+					multipath $intf signal >/dev/null 2>&1
+					ip mptcp limits set subflows 8 add_addr_accepted 8 >/dev/null 2>&1
 				}
 			else
-				[ "$(multipath $intf | tr -d '\n')" != "$intf is deactivated" ] && multipath $intf off 2>&1 >/dev/null
+				[ "$(multipath $intf | tr -d '\n')" != "$intf is deactivated" ] && multipath $intf off >/dev/null 2>&1
 			fi
 		fi
 	done
@@ -29,7 +29,7 @@ _glorytun_udp() {
 		for intf in /etc/glorytun-udp/tun*; do
 			[ "$(echo $intf | grep key)" = "" ] && /etc/glorytun-udp/post.sh ${intf}
 		done
-		#ip link set mtu 9000 dev gt-udp-tun0 2>&1 >/dev/null
+		#ip link set mtu 9000 dev gt-udp-tun0 >/dev/null 2>&1
 	fi
 }
 
@@ -48,12 +48,12 @@ _glorytun_tcp() {
 				sleep 10
 			fi
 		fi
-		#ip link set mtu 9000 dev gt-tun0 2>&1 >/dev/null
+		#ip link set mtu 9000 dev gt-tun0 >/dev/null 2>&1
 	fi
 }
 
 _dsvpn() {
-	[ -n "$(ip -6 r show 64:ff9b::/96 dev dsvpn0)" ] && ip -6 r del 64:ff9b::/96 dev dsvpn0 2>&1 >/dev/null
+	[ -n "$(ip -6 r show 64:ff9b::/96 dev dsvpn0)" ] && ip -6 r del 64:ff9b::/96 dev dsvpn0 >/dev/null 2>&1
 	if [ -f /etc/openmptcprouter-vps-admin/current-vpn ] && [ "$(cat /etc/openmptcprouter-vps-admin/current-vpn)" = "dsvpn" ]; then
 		localip="$(cat /etc/dsvpn/dsvpn0 | grep LOCALTUNIP | cut -d '=' -f2)"
 		[ -z "$localip" ] && localip="10.255.251.1"
@@ -62,7 +62,7 @@ _dsvpn() {
 			logger -t "OMR-Service" "No answer from VPN client end, restart DSVPN"
 			systemctl restart dsvpn-server@dsvpn0
 		fi
-		#ip link set mtu 9000 dev dsvpn0 2>&1 >/dev/null
+		#ip link set mtu 9000 dev dsvpn0 >/dev/null 2>&1
 	fi
 }
 
@@ -96,8 +96,8 @@ _v2ray() {
 
 _wireguard() {
 	if [ -n "$(systemctl -a | grep 'wg')" ]; then
-		[ -z "$(ip a show dev wg0 | grep '10.255.247.1')" ] && ip a add 10.255.247.1/24 dev wg0 2>&1 >/dev/null
-		[ -z "$(ip a show dev client-wg0 | grep '10.255.246.1')" ] && ip a add 10.255.246.1/24 dev client-wg0 2>&1 >/dev/null
+		[ -z "$(ip a show dev wg0 | grep '10.255.247.1')" ] && ip a add 10.255.247.1/24 dev wg0 >/dev/null 2>&1
+		[ -z "$(ip a show dev client-wg0 | grep '10.255.246.1')" ] && ip a add 10.255.246.1/24 dev client-wg0 >/dev/null 2>&1
 	fi
 }
 
@@ -119,7 +119,7 @@ _lan_route() {
 				while IFS=$"\n" read -r d; do
 					if [ "$d" != "" ]; then
 						network=$(ipcalc -n $d | grep Network | awk '{print $2}')
-						[ -n "$network" ] && [ -z "$(ip r show $network via $vpnremoteip)" ] && ip r replace $network via $vpnremoteip 2>&1 >/dev/null
+						[ -n "$network" ] && [ -z "$(ip r show $network via $vpnremoteip)" ] && ip r replace $network via $vpnremoteip >/dev/null 2>&1
 					fi
 				done
 			fi
@@ -135,11 +135,11 @@ _gre_tunnels() {
 				. "$(readlink -f "$intf")"
 				iface="$(basename $intf)"
 				if [ "$(ip tunnel show $iface 2>/dev/null | awk '{print $4}')" != "$OMR_ADDR" ]; then
-					[ -n "$(ip tunnel show $iface 2>/dev/null)" ] && ip tunnel del $iface 2>&1 >/dev/null
-					ip tunnel add $iface mode gre local $INTFADDR remote $OMR_ADDR 2>&1 >/dev/null
-					ip link set $iface up 2>&1 >/dev/null
-					ip addr add $LOCALIP dev $iface 2>&1 >/dev/null
-					ip route add $NETWORK dev $iface onlink 2>&1 >/dev/null
+					[ -n "$(ip tunnel show $iface 2>/dev/null)" ] && ip tunnel del $iface >/dev/null 2>&1
+					ip tunnel add $iface mode gre local $INTFADDR remote $OMR_ADDR >/dev/null 2>&1
+					ip link set $iface up >/dev/null 2>&1
+					ip addr add $LOCALIP dev $iface >/dev/null 2>&1
+					ip route add $NETWORK dev $iface onlink >/dev/null 2>&1
 				fi
 			fi
 		done
@@ -148,33 +148,33 @@ _gre_tunnels() {
 
 _openvpn_bonding() {
 	if [ "$(ip link show ovpnbonding1)" != "" ] && ([ "$(ip link show ovpnbonding1 | grep SLAVE)" = "" ] || [ "$(ip link show omr-bonding | grep DOWN)" != "" ] || [ "$(ip link show | grep ovpnbonding | grep -c SLAVE | tr -d '\n')" != "8" ]); then
-		echo 0 > /sys/class/net/omr-bonding/bonding/mode 2>&1 >/dev/null
-		ip link set ovpnbonding1 master omr-bonding 2>&1 >/dev/null
-		ip link set ovpnbonding1 up 2>&1 >/dev/null
-		ip link set ovpnbonding2 master omr-bonding 2>&1 >/dev/null
-		ip link set ovpnbonding2 up 2>&1 >/dev/null
-		ip link set ovpnbonding3 master omr-bonding 2>&1 >/dev/null
-		ip link set ovpnbonding3 up 2>&1 >/dev/null
-		ip link set ovpnbonding4 master omr-bonding 2>&1 >/dev/null
-		ip link set ovpnbonding4 up 2>&1 >/dev/null
-		ip link set ovpnbonding5 master omr-bonding 2>&1 >/dev/null
-		ip link set ovpnbonding5 up 2>&1 >/dev/null
-		ip link set ovpnbonding6 master omr-bonding 2>&1 >/dev/null
-		ip link set ovpnbonding6 up 2>&1 >/dev/null
-		ip link set ovpnbonding7 master omr-bonding 2>&1 >/dev/null
-		ip link set ovpnbonding7 up 2>&1 >/dev/null
-		ip link set ovpnbonding8 master omr-bonding 2>&1 >/dev/null
-		ip link set ovpnbonding8 up 2>&1 >/dev/null
-		ip link set omr-bonding up mtu 1440 2>&1 >/dev/null
-		ip a add 10.255.248.1 dev omr-bonding 2>&1 >/dev/null
-		ip r add 10.255.248.0/24 dev omr-bonding 2>&1 >/dev/null
-		ip r add 10.255.248.2 dev omr-bonding src 10.255.248.1 2>&1 >/dev/null
+		echo 0 > /sys/class/net/omr-bonding/bonding/mode >/dev/null 2>&1
+		ip link set ovpnbonding1 master omr-bonding >/dev/null 2>&1
+		ip link set ovpnbonding1 up >/dev/null 2>&1
+		ip link set ovpnbonding2 master omr-bonding >/dev/null 2>&1
+		ip link set ovpnbonding2 up >/dev/null 2>&1
+		ip link set ovpnbonding3 master omr-bonding >/dev/null 2>&1
+		ip link set ovpnbonding3 up >/dev/null 2>&1
+		ip link set ovpnbonding4 master omr-bonding >/dev/null 2>&1
+		ip link set ovpnbonding4 up >/dev/null 2>&1
+		ip link set ovpnbonding5 master omr-bonding >/dev/null 2>&1
+		ip link set ovpnbonding5 up >/dev/null 2>&1
+		ip link set ovpnbonding6 master omr-bonding >/dev/null 2>&1
+		ip link set ovpnbonding6 up >/dev/null 2>&1
+		ip link set ovpnbonding7 master omr-bonding >/dev/null 2>&1
+		ip link set ovpnbonding7 up >/dev/null 2>&1
+		ip link set ovpnbonding8 master omr-bonding >/dev/null 2>&1
+		ip link set ovpnbonding8 up >/dev/null 2>&1
+		ip link set omr-bonding up mtu 1440 >/dev/null 2>&1
+		ip a add 10.255.248.1 dev omr-bonding >/dev/null 2>&1
+		ip r add 10.255.248.0/24 dev omr-bonding >/dev/null 2>&1
+		ip r add 10.255.248.2 dev omr-bonding src 10.255.248.1 >/dev/null 2>&1
 	fi
 }
 
-sysctl -p /etc/sysctl.d/90-shadowsocks.conf 2>&1 >/dev/null
-modprobe bonding 2>&1 >/dev/null
-ip link add omr-bonding type bond 2>&1 >/dev/null
+sysctl -p /etc/sysctl.d/90-shadowsocks.conf >/dev/null 2>&1
+modprobe bonding >/dev/null 2>&1
+ip link add omr-bonding type bond >/dev/null 2>&1
 #[ -n "$(uname -r | grep '6.1')" ] && {
 #	stap -g /usr/share/systemtap-mptcp/mptcp-app.stap 2>&1 &
 #}

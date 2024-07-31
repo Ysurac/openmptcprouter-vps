@@ -1,6 +1,6 @@
 #!/bin/sh
 #
-# Copyright (C) 2018-2021 Ycarus (Yannick Chabanois) <ycarus@zugaina.org> for OpenMPTCProuter
+# Copyright (C) 2018-2024 Ycarus (Yannick Chabanois) <ycarus@zugaina.org> for OpenMPTCProuter
 #
 # This is free software, licensed under the GNU General Public License v3 or later.
 # See /LICENSE for more information.
@@ -8,7 +8,7 @@
 
 KERNEL=${KERNEL:-5.4}
 UPSTREAM=${UPSTREAM:-no}
-[ "$UPSTREAM" = "yes" ] && KERNEL="5.15"
+[ "$UPSTREAM" = "yes" ] && KERNEL="6.1"
 UPSTREAM6=${UPSTREAM6:-no}
 [ "$UPSTREAM6" = "yes" ] && KERNEL="6.1"
 SHADOWSOCKS_PASS=${SHADOWSOCKS_PASS:-$(head -c 32 /dev/urandom | base64 -w0)}
@@ -37,8 +37,10 @@ MLVPN_PASS=${MLVPN_PASS:-$(head -c 32 /dev/urandom | base64 -w0)}
 UBOND=${UBOND:-no}
 UBOND_PASS=${UBOND_PASS:-$(head -c 32 /dev/urandom | base64 -w0)}
 OPENVPN=${OPENVPN:-yes}
+OPENVPN_BONDING=${OPENVPN_BONDING:-yes}
 DSVPN=${DSVPN:-yes}
 WIREGUARD=${WIREGUARD:-yes}
+FAIL2BAN=${FAIL2BAN:-yes}
 SOURCES=${SOURCES:-no}
 if [ "$KERNEL" != "5.4" ]; then
 	SOURCES="yes"
@@ -54,11 +56,11 @@ INTERFACE6=${INTERFACE6:-$(ip -o -6 route show to default | grep -m 1 -Po '(?<=d
 KERNEL_VERSION="5.4.207"
 KERNEL_PACKAGE_VERSION="1.22"
 KERNEL_RELEASE="${KERNEL_VERSION}-mptcp_${KERNEL_PACKAGE_VERSION}"
-if [ "$KERNEL" = "5.15" ]; then
-	KERNEL_VERSION="5.15.57"
-	KERNEL_PACKAGE_VERSION="1.6"
-	KERNEL_RELEASE="${KERNEL_VERSION}-mptcp_${KERNEL_VERSION}-${KERNEL_PACKAGE_VERSION}"
-fi
+#if [ "$KERNEL" = "5.15" ]; then
+#	KERNEL_VERSION="5.15.57"
+#	KERNEL_PACKAGE_VERSION="1.6"
+#	KERNEL_RELEASE="${KERNEL_VERSION}-mptcp_${KERNEL_VERSION}-${KERNEL_PACKAGE_VERSION}"
+#fi
 if [ "$KERNEL" = "6.1" ]; then
 	KERNEL_VERSION="6.1.0"
 	KERNEL_PACKAGE_VERSION="1.30"
@@ -75,8 +77,8 @@ MLVPN_BINARY_VERSION="3.0.0+20211028.git.ddafba3"
 UBOND_VERSION="31af0f69ebb6d07ed9348dca2fced33b956cedee"
 OBFS_VERSION="486bebd9208539058e57e23a12f23103016e09b4"
 OBFS_BINARY_VERSION="0.0.5-1"
-OMR_ADMIN_VERSION="21d071ebece556f3114c18ed9e86414ea6c85e1c"
-OMR_ADMIN_BINARY_VERSION="0.11+20240704"
+OMR_ADMIN_VERSION="9e86294e416ad7bdc812a941c7cc89f97b90315d"
+OMR_ADMIN_BINARY_VERSION="0.12+20240725"
 #OMR_ADMIN_BINARY_VERSION="0.3+20220827"
 DSVPN_VERSION="3b99d2ef6c02b2ef68b5784bec8adfdd55b29b1a"
 DSVPN_BINARY_VERSION="0.1.4-2"
@@ -113,8 +115,8 @@ echo "Check user..."
 if [ "$(id -u)" -ne 0 ]; then echo 'Please run as root.' >&2; exit 1; fi
 
 # Check Kernel
-if [ "$KERNEL" != "5.4" ] && [ "$KERNEL" != "5.15" ] && [ "$KERNEL" != "6.1" ] && [ "$KERNEL" != "6.6" ]; then
-	echo "Only kernels 5.4, 5.15, 6.1 and 6.6 are currently supported"
+if [ "$KERNEL" != "5.4" ] && [ "$KERNEL" != "6.1" ] && [ "$KERNEL" != "6.6" ] && [ "$KERNEL" != "6.10" ]; then
+	echo "Only kernels 5.4, 6.1, 6.6 and 6.10 are currently supported"
 	exit 1
 fi
 
@@ -240,7 +242,7 @@ if [ "$ID" = "debian" ] && [ "$VERSION_ID" = "9" ] && [ "$UPDATE_OS" = "yes" ]; 
 	apt-get -y -o Dpkg::Options::="--force-confdef" -o Dpkg::Options::="--force-confnew" --allow-downgrades dist-upgrade
 	VERSION_ID="10"
 fi
-if [ "$ID" = "debian" ] && [ "$VERSION_ID" = "10" ] && [ "$UPDATE_OS" = "yes" ] && ([ "$KERNEL" = "6.1" ] || [ "$KERNEL" = "6.6" ]); then
+if [ "$ID" = "debian" ] && [ "$VERSION_ID" = "10" ] && [ "$UPDATE_OS" = "yes" ] && [ "$KERNEL" != "5.4" ]; then
 	echo "Update Debian 10 Buster to Debian 11 Bullseye"
 	apt-get -y -f --force-yes -o Dpkg::Options::="--force-confdef" -o Dpkg::Options::="--force-confnew" --allow-downgrades upgrade
 	apt-get -y -f --force-yes -o Dpkg::Options::="--force-confdef" -o Dpkg::Options::="--force-confnew" --allow-downgrades dist-upgrade
@@ -251,7 +253,7 @@ if [ "$ID" = "debian" ] && [ "$VERSION_ID" = "10" ] && [ "$UPDATE_OS" = "yes" ] 
 	apt-get -y -o Dpkg::Options::="--force-confdef" -o Dpkg::Options::="--force-confnew" --allow-downgrades dist-upgrade
 	VERSION_ID="11"
 fi
-if [ "$ID" = "debian" ] && [ "$VERSION_ID" = "11" ] && [ "$UPDATE_OS" = "yes" ] && ([ "$KERNEL" = "6.1" ] || [ "$KERNEL" = "6.6" ]); then
+if [ "$ID" = "debian" ] && [ "$VERSION_ID" = "11" ] && [ "$UPDATE_OS" = "yes" ] && [ "$KERNEL" != "5.4" ]; then
 	echo "Update Debian 11 Bullseye to Debian 12 Bookworm"
 	apt-get -y -f --force-yes -o Dpkg::Options::="--force-confdef" -o Dpkg::Options::="--force-confnew" --allow-downgrades upgrade
 	apt-get -y -f --force-yes -o Dpkg::Options::="--force-confdef" -o Dpkg::Options::="--force-confnew" --allow-downgrades dist-upgrade
@@ -271,7 +273,7 @@ if [ "$ID" = "ubuntu" ] && [ "$VERSION_ID" = "18.04" ] && [ "$UPDATE_OS" = "yes"
 	apt-get -y -o Dpkg::Options::="--force-confdef" -o Dpkg::Options::="--force-confnew" dist-upgrade
 	VERSION_ID="20.04"
 fi
-if [ "$ID" = "ubuntu" ] && [ "$VERSION_ID" = "18.04" ] && [ "$UPDATE_OS" = "yes" ] && ([ "$KERNEL" = "6.1" ] || [ "$KERNEL" = "6.6" ]); then
+if [ "$ID" = "ubuntu" ] && [ "$VERSION_ID" = "18.04" ] && [ "$UPDATE_OS" = "yes" ] && [ "$KERNEL" != "5.4" ]; then
 	echo "Update Ubuntu 20.04 to Ubuntu 22.04"
 	apt-get -y -f --force-yes --allow-downgrades upgrade
 	apt-get -y -f --force-yes --allow-downgrades dist-upgrade
@@ -438,6 +440,29 @@ elif [ "$KERNEL" = "6.6" ] && [ "$ARCH" = "amd64" ]; then
 	PSABI=$(awk 'BEGIN { while (!/flags/) if (getline < "/proc/cpuinfo" != 1) exit 1; if (/lm/&&/cmov/&&/cx8/&&/fpu/&&/fxsr/&&/mmx/&&/syscall/&&/sse2/) level = 1; if (level == 1 && /cx16/&&/lahf/&&/popcnt/&&/sse4_1/&&/sse4_2/&&/ssse3/) level = 2; if (level == 2 && /avx/&&/avx2/&&/bmi1/&&/bmi2/&&/f16c/&&/fma/&&/abm/&&/movbe/&&/xsave/) level = 3; if (level == 3 && /avx512f/&&/avx512bw/&&/avx512cd/&&/avx512dq/&&/avx512vl/) level = 4; if (level > 0) { print "x64v" level; exit level + 1 }; exit 1;}' | tr -d "\n")
 	KERNEL_VERSION="6.6.36"
 	KERNEL_REV="0~20240628.g36640c1"
+	wget -O /tmp/linux-image-${KERNEL_VERSION}-${PSABI}-xanmod1_${KERNEL_VERSION}-${PSABI}-xanmod1-${KERNEL_REV}_amd64.deb ${VPSURL}kernel/linux-image-${KERNEL_VERSION}-${PSABI}-xanmod1_${KERNEL_VERSION}-${PSABI}-xanmod1-${KERNEL_REV}_amd64.deb
+	wget -O /tmp/linux-headers-${KERNEL_VERSION}-${PSABI}-xanmod1_${KERNEL_VERSION}-${PSABI}-xanmod1-${KERNEL_REV}_amd64.deb ${VPSURL}kernel/linux-headers-${KERNEL_VERSION}-${PSABI}-xanmod1_${KERNEL_VERSION}-${PSABI}-xanmod1-${KERNEL_REV}_amd64.deb
+	echo "Install kernel linux-image-${KERNEL_VERSION}-${PSABI}-xanmod1 source release"
+	dpkg --force-all -i -B /tmp/linux-headers-${KERNEL_VERSION}-${PSABI}-xanmod1_${KERNEL_VERSION}-${PSABI}-xanmod1-${KERNEL_REV}_amd64.deb
+	dpkg --force-all -i -B /tmp/linux-image-${KERNEL_VERSION}-${PSABI}-xanmod1_${KERNEL_VERSION}-${PSABI}-xanmod1-${KERNEL_REV}_amd64.deb
+
+#	wget -qO - https://dl.xanmod.org/archive.key | gpg --batch --yes --dearmor -vo /usr/share/keyrings/xanmod-archive-keyring.gpg
+#	echo 'deb [signed-by=/usr/share/keyrings/xanmod-archive-keyring.gpg] http://deb.xanmod.org releases main' | tee /etc/apt/sources.list.d/xanmod-release.list
+#	apt-get update
+#	apt-get -y install linux-xanmod-lts-x64v3
+	[ -f /etc/default/grub ] && {
+		sed -i "s@^\(GRUB_DEFAULT=\).*@\1\"0\"@" /etc/default/grub >/dev/null 2>&1
+		[ -f /boot/grub/grub.cfg ] && grub-mkconfig -o /boot/grub/grub.cfg >/dev/null 2>&1
+	}
+elif [ "$KERNEL" = "6.10" ] && [ "$ARCH" = "amd64" ]; then
+	# awk command from xanmod website
+	PSABI=$(awk 'BEGIN { while (!/flags/) if (getline < "/proc/cpuinfo" != 1) exit 1; if (/lm/&&/cmov/&&/cx8/&&/fpu/&&/fxsr/&&/mmx/&&/syscall/&&/sse2/) level = 1; if (level == 1 && /cx16/&&/lahf/&&/popcnt/&&/sse4_1/&&/sse4_2/&&/ssse3/) level = 2; if (level == 2 && /avx/&&/avx2/&&/bmi1/&&/bmi2/&&/f16c/&&/fma/&&/abm/&&/movbe/&&/xsave/) level = 3; if (level == 3 && /avx512f/&&/avx512bw/&&/avx512cd/&&/avx512dq/&&/avx512vl/) level = 4; if (level > 0) { print "x64v" level; exit level + 1 }; exit 1;}' | tr -d "\n")
+	if [ "$PSABI" = "x64v1" ]; then
+		echo "psABI x86-64-v1 not supported by Xanmod kernel 6.10, use an older kernel"
+		exit 0
+	fi
+	KERNEL_VERSION="6.10.2"
+	KERNEL_REV="0~20240728.gae7b555"
 	wget -O /tmp/linux-image-${KERNEL_VERSION}-${PSABI}-xanmod1_${KERNEL_VERSION}-${PSABI}-xanmod1-${KERNEL_REV}_amd64.deb ${VPSURL}kernel/linux-image-${KERNEL_VERSION}-${PSABI}-xanmod1_${KERNEL_VERSION}-${PSABI}-xanmod1-${KERNEL_REV}_amd64.deb
 	wget -O /tmp/linux-headers-${KERNEL_VERSION}-${PSABI}-xanmod1_${KERNEL_VERSION}-${PSABI}-xanmod1-${KERNEL_REV}_amd64.deb ${VPSURL}kernel/linux-headers-${KERNEL_VERSION}-${PSABI}-xanmod1_${KERNEL_VERSION}-${PSABI}-xanmod1-${KERNEL_REV}_amd64.deb
 	echo "Install kernel linux-image-${KERNEL_VERSION}-${PSABI}-xanmod1 source release"
@@ -681,6 +706,10 @@ fi
 if systemctl -q is-active omr-admin.service; then
 	systemctl -q stop omr-admin > /dev/null 2>&1
 fi
+if systemctl -q is-active omr-admin-ipv6.service; then
+	systemctl -q stop omr-admin-ipv6 > /dev/null 2>&1
+	systemctl -q disable omr-admin-ipv6 > /dev/null 2>&1
+fi
 
 if [ "$OMR_ADMIN" = "yes" ]; then
 	echo 'Install OpenMPTCProuter VPS Admin'
@@ -735,14 +764,14 @@ if [ "$OMR_ADMIN" = "yes" ]; then
 	#pip3 install pyjwt passlib uvicorn fastapi netjsonconfig python-multipart netaddr
 	#pip3 -q install fastapi netjsonconfig python-multipart uvicorn -U
 	if [ "$ID" = "debian" ] && [ "$VERSION_ID" = "12" ]; then
-		pip3 -q install netjsonconfig --break-system-packages
+		#pip3 -q install netjsonconfig --break-system-packages
 		pip3 -q install fastapi -U --break-system-packages
 		pip3 -q install jsonschema -U --break-system-packages
 		pip3 -q install python-multipart jinja2 -U --break-system-packages
 		pip3 -q install starlette --break-system-packages
 		pip3 -q install starlette --break-system-packages
 	else
-		pip3 -q install netjsonconfig
+		#pip3 -q install netjsonconfig
 		if [ "$ID" = "ubuntu" ] || ([ "$ID" = "debian" ] && [ "$VERSION_ID" = "10" ]); then
 			pip3 -q install fastapi==0.99.1 -U
 		else
@@ -761,7 +790,7 @@ if [ "$OMR_ADMIN" = "yes" ]; then
 	mkdir -p /var/opt/openmptcprouter
 	if [ "$SOURCES" = "yes" ]; then
 		wget -O /lib/systemd/system/omr-admin.service ${VPSURL}${VPSPATH}/omr-admin.service.in
-		wget -O /lib/systemd/system/omr-admin-ipv6.service ${VPSURL}${VPSPATH}/omr-admin-ipv6.service.in
+		#wget -O /lib/systemd/system/omr-admin-ipv6.service ${VPSURL}${VPSPATH}/omr-admin-ipv6.service.in
 		wget -O /tmp/openmptcprouter-vps-admin.zip https://github.com/Ysurac/openmptcprouter-vps-admin/archive/${OMR_ADMIN_VERSION}.zip
 		cd /tmp
 		unzip -q -o openmptcprouter-vps-admin.zip
@@ -812,27 +841,31 @@ if [ "$OMR_ADMIN" = "yes" ]; then
 		sed -i 's/"port": 65500,/"port": 65500,\n    "gre_tunnels": false,/' /etc/openmptcprouter-vps-admin/omr-admin-config.json
 	}
 	chmod 644 /lib/systemd/system/omr-admin.service
-	chmod 644 /lib/systemd/system/omr-admin-ipv6.service
+	#chmod 644 /lib/systemd/system/omr-admin-ipv6.service
 	#[ "$(ip -6 a)" != "" ] && sed -i 's/0.0.0.0/::/g' /usr/local/bin/omr-admin.py
-	[ "$(ip -6 a)" != "" ] && {
-		systemctl enable omr-admin-ipv6.service
-	}
+	#[ "$(ip -6 a)" != "" ] && {
+	#	systemctl enable omr-admin-ipv6.service
+	#}
 	systemctl enable omr-admin.service
 	if [ "$KERNEL" != "5.4" ]; then
 		mptcpize enable omr-admin.service >/dev/null 2>&1
-		[ "$(ip -6 a)" != "" ] && mptcpize enable omr-admin-ipv6.service >/dev/null 2>&1
+		#[ "$(ip -6 a)" != "" ] && mptcpize enable omr-admin-ipv6.service >/dev/null 2>&1
+	fi
+	if systemctl -q is-active omr-admin-ipv6.service; then
+		systemctl -q stop omr-admin-ipv6 >/dev/null 2>&1
+		systemctl -q disable omr-admin-ipv6 >/dev/null 2>&1
 	fi
 fi
 
 # Get shadowsocks optimization
 if [ "$LOCALFILES" = "no" ]; then
-	if [ "$KERNEL" = "6.1" ] || [ "$KERNEL" = "6.6" ]; then
+	if [ "$KERNEL" != "5.4" ]; then
 		wget -O /etc/sysctl.d/90-shadowsocks.conf ${VPSURL}${VPSPATH}/shadowsocks.6.1.conf
 	else
 		wget -O /etc/sysctl.d/90-shadowsocks.conf ${VPSURL}${VPSPATH}/shadowsocks.conf
 	fi
 else
-	if [ "$KERNEL" = "6.1" ] || [ "$KERNEL" = "6.6" ]; then
+	if [ "$KERNEL" != "5.4" ]; then
 		cp ${DIR}/shadowsocks.6.1.conf /etc/sysctl.d/90-shadowsocks.conf
 	else
 		cp ${DIR}/shadowsocks.conf /etc/sysctl.d/90-shadowsocks.conf
@@ -1336,6 +1369,20 @@ if [ "$WIREGUARD" = "yes" ]; then
 	echo "Install wireguard done"
 fi
 
+if systemctl -q is-active fail2ban.service; then
+	systemctl -q stop fail2ban > /dev/null 2>&1
+	systemctl -q disable fail2ban > /dev/null 2>&1
+fi
+if [ "$FAIL2BAN" = "yes" ]; then
+	echo "Install Fail2ban"
+	rm -f /var/lib/dpkg/lock
+	rm -f /var/lib/dpkg/lock-frontend
+	apt-get -y install fail2ban
+	systemctl enable fail2ban
+	wget -O /etc/fail2ban/jail.d/openmptcprouter.conf ${VPSURL}${VPSPATH}/fail2ban-jail-openmptcprouter.conf
+	echo "Install Fail2ban done"
+fi
+
 if systemctl -q is-active openvpn-server@tun0.service; then
 	systemctl -q stop openvpn-server@tun0 > /dev/null 2>&1
 	systemctl -q disable openvpn-server@tun0 > /dev/null 2>&1
@@ -1417,14 +1464,16 @@ if [ "$OPENVPN" = "yes" ]; then
 			wget -O /etc/openvpn/tun0.conf ${VPSURL}${VPSPATH}/openvpn-tun0.conf
 			wget -O /etc/openvpn/tun1.conf ${VPSURL}${VPSPATH}/openvpn-tun1.conf
 		fi
-		wget -O /etc/openvpn/bonding1.conf ${VPSURL}${VPSPATH}/openvpn-bonding1.conf
-		wget -O /etc/openvpn/bonding2.conf ${VPSURL}${VPSPATH}/openvpn-bonding2.conf
-		wget -O /etc/openvpn/bonding3.conf ${VPSURL}${VPSPATH}/openvpn-bonding3.conf
-		wget -O /etc/openvpn/bonding4.conf ${VPSURL}${VPSPATH}/openvpn-bonding4.conf
-		wget -O /etc/openvpn/bonding5.conf ${VPSURL}${VPSPATH}/openvpn-bonding5.conf
-		wget -O /etc/openvpn/bonding6.conf ${VPSURL}${VPSPATH}/openvpn-bonding6.conf
-		wget -O /etc/openvpn/bonding7.conf ${VPSURL}${VPSPATH}/openvpn-bonding7.conf
-		wget -O /etc/openvpn/bonding8.conf ${VPSURL}${VPSPATH}/openvpn-bonding8.conf
+		if [ "$OPENVPN_BONDING" = "yes" ]; then
+			wget -O /etc/openvpn/bonding1.conf ${VPSURL}${VPSPATH}/openvpn-bonding1.conf
+			wget -O /etc/openvpn/bonding2.conf ${VPSURL}${VPSPATH}/openvpn-bonding2.conf
+			wget -O /etc/openvpn/bonding3.conf ${VPSURL}${VPSPATH}/openvpn-bonding3.conf
+			wget -O /etc/openvpn/bonding4.conf ${VPSURL}${VPSPATH}/openvpn-bonding4.conf
+			wget -O /etc/openvpn/bonding5.conf ${VPSURL}${VPSPATH}/openvpn-bonding5.conf
+			wget -O /etc/openvpn/bonding6.conf ${VPSURL}${VPSPATH}/openvpn-bonding6.conf
+			wget -O /etc/openvpn/bonding7.conf ${VPSURL}${VPSPATH}/openvpn-bonding7.conf
+			wget -O /etc/openvpn/bonding8.conf ${VPSURL}${VPSPATH}/openvpn-bonding8.conf
+		fi
 	else
 		if [ "$KERNEL" != "5.4" ]; then
 			cp ${DIR}/openvpn-tun0.6.1.conf /etc/openvpn/tun0.conf
@@ -1433,14 +1482,16 @@ if [ "$OPENVPN" = "yes" ]; then
 			cp ${DIR}/openvpn-tun0.conf /etc/openvpn/tun0.conf
 			cp ${DIR}/openvpn-tun1.conf /etc/openvpn/tun1.conf
 		fi
-		cp ${DIR}/openvpn-bonding1.conf /etc/openvpn/bonding1.conf
-		cp ${DIR}/openvpn-bonding2.conf /etc/openvpn/bonding2.conf
-		cp ${DIR}/openvpn-bonding3.conf /etc/openvpn/bonding3.conf
-		cp ${DIR}/openvpn-bonding4.conf /etc/openvpn/bonding4.conf
-		cp ${DIR}/openvpn-bonding5.conf /etc/openvpn/bonding5.conf
-		cp ${DIR}/openvpn-bonding6.conf /etc/openvpn/bonding6.conf
-		cp ${DIR}/openvpn-bonding7.conf /etc/openvpn/bonding7.conf
-		cp ${DIR}/openvpn-bonding8.conf /etc/openvpn/bonding8.conf
+		if [ "$OPENVPN_BONDING" = "yes" ]; then
+			cp ${DIR}/openvpn-bonding1.conf /etc/openvpn/bonding1.conf
+			cp ${DIR}/openvpn-bonding2.conf /etc/openvpn/bonding2.conf
+			cp ${DIR}/openvpn-bonding3.conf /etc/openvpn/bonding3.conf
+			cp ${DIR}/openvpn-bonding4.conf /etc/openvpn/bonding4.conf
+			cp ${DIR}/openvpn-bonding5.conf /etc/openvpn/bonding5.conf
+			cp ${DIR}/openvpn-bonding6.conf /etc/openvpn/bonding6.conf
+			cp ${DIR}/openvpn-bonding7.conf /etc/openvpn/bonding7.conf
+			cp ${DIR}/openvpn-bonding8.conf /etc/openvpn/bonding8.conf
+		fi
 	fi
 	mkdir -p /etc/openvpn/ccd
 	if [ ! -f /etc/openvpn/ccd/ipp_tcp.txt ]; then
@@ -1455,14 +1506,16 @@ if [ "$OPENVPN" = "yes" ]; then
 	if [ "$KERNEL" != "5.4" ]; then
 		mptcpize enable openvpn@tun0 >/dev/null 2>&1
 	fi
-	systemctl enable openvpn@bonding1.service
-	systemctl enable openvpn@bonding2.service
-	systemctl enable openvpn@bonding3.service
-	systemctl enable openvpn@bonding4.service
-	systemctl enable openvpn@bonding5.service
-	systemctl enable openvpn@bonding6.service
-	systemctl enable openvpn@bonding7.service
-	systemctl enable openvpn@bonding8.service
+	if [ "$OPENVPN_BONDING" = "yes" ]; then
+		systemctl enable openvpn@bonding1.service
+		systemctl enable openvpn@bonding2.service
+		systemctl enable openvpn@bonding3.service
+		systemctl enable openvpn@bonding4.service
+		systemctl enable openvpn@bonding5.service
+		systemctl enable openvpn@bonding6.service
+		systemctl enable openvpn@bonding7.service
+		systemctl enable openvpn@bonding8.service
+	fi
 fi
 
 echo 'Glorytun UDP'

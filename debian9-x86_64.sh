@@ -47,6 +47,7 @@ if [ "$KERNEL" != "5.4" ]; then
 fi
 NOINTERNET=${NOINTERNET:-no}
 GRETUNNELS=${GRETUNNELS:-yes}
+LANROUTES=${LANROUTES:-yes}
 REINSTALL=${REINSTALL:-yes}
 SPEEDTEST=${SPEEDTEST:-yes}
 IPERF=${IPERF:-yes}
@@ -77,8 +78,8 @@ MLVPN_BINARY_VERSION="3.0.0+20211028.git.ddafba3"
 UBOND_VERSION="31af0f69ebb6d07ed9348dca2fced33b956cedee"
 OBFS_VERSION="486bebd9208539058e57e23a12f23103016e09b4"
 OBFS_BINARY_VERSION="0.0.5-1"
-OMR_ADMIN_VERSION="9e86294e416ad7bdc812a941c7cc89f97b90315d"
-OMR_ADMIN_BINARY_VERSION="0.12+20240725"
+OMR_ADMIN_VERSION="24030b76868296c5869cfa8a032fd43c7d60df39"
+OMR_ADMIN_BINARY_VERSION="0.12+20240802"
 #OMR_ADMIN_BINARY_VERSION="0.3+20220827"
 DSVPN_VERSION="3b99d2ef6c02b2ef68b5784bec8adfdd55b29b1a"
 DSVPN_BINARY_VERSION="0.1.4-2"
@@ -835,10 +836,18 @@ if [ "$OMR_ADMIN" = "yes" ]; then
 	sed -i "s:AdminMySecretKey:$OMR_ADMIN_PASS_ADMIN:g" /etc/openmptcprouter-vps-admin/omr-admin-config.json
 	sed -i "s:MySecretKey:$OMR_ADMIN_PASS:g" /etc/openmptcprouter-vps-admin/omr-admin-config.json
 	[ "$NOINTERNET" = "yes" ] && {
-		sed -i 's/"port": 65500,/"port": 65500,\n    "internet": false,/' /etc/openmptcprouter-vps-admin/omr-admin-config.json
+		jq '. + {internet: false}' omr-admin-config.json > omr-admin-config.json.tmp
+		mv omr-admin-config.json.tmp omr-admin-config.json
+		#sed -i 's/"port": 65500,/"port": 65500,\n    "internet": false,/' /etc/openmptcprouter-vps-admin/omr-admin-config.json
 	}
 	[ "$GRETUNNELS" = "no" ] && {
-		sed -i 's/"port": 65500,/"port": 65500,\n    "gre_tunnels": false,/' /etc/openmptcprouter-vps-admin/omr-admin-config.json
+		jq '. + {gre_tunnels: false}' omr-admin-config.json > omr-admin-config.json.tmp
+		mv omr-admin-config.json.tmp omr-admin-config.json
+		#sed -i 's/"port": 65500,/"port": 65500,\n    "gre_tunnels": false,/' /etc/openmptcprouter-vps-admin/omr-admin-config.json
+	}
+	[ "$LANROUTES" = "no" ] && {
+		jq '. + {lan_routes: false}' omr-admin-config.json > omr-admin-config.json.tmp
+		mv omr-admin-config.json.tmp omr-admin-config.json
 	}
 	chmod 644 /lib/systemd/system/omr-admin.service
 	#chmod 644 /lib/systemd/system/omr-admin-ipv6.service
@@ -1380,6 +1389,7 @@ if [ "$FAIL2BAN" = "yes" ]; then
 	apt-get -y install fail2ban
 	systemctl enable fail2ban
 	wget -O /etc/fail2ban/jail.d/openmptcprouter.conf ${VPSURL}${VPSPATH}/fail2ban-jail-openmptcprouter.conf
+	wget -O /etc/fail2ban/filter.d/openmptcprouter.conf ${VPSURL}${VPSPATH}/fail2ban-filter-openvpn.conf
 	echo "Install Fail2ban done"
 fi
 
@@ -1767,8 +1777,10 @@ if [ "$update" = "0" ]; then
 	fi
 	tar xzf /etc/shorewall/openmptcprouter-shorewall.tar.gz -C /etc/shorewall
 	rm /etc/shorewall/openmptcprouter-shorewall.tar.gz
-	sed -i "s:eth0:$INTERFACE:g" /etc/shorewall/*
-	systemctl enable shorewall
+	if [ -n "$INTERFACE" ]; then
+		sed -i "s:eth0:$INTERFACE:g" /etc/shorewall/*
+		systemctl enable shorewall
+	fi
 	if [ "$LOCALFILES" = "no" ]; then
 		wget -O /etc/shorewall6/openmptcprouter-shorewall6.tar.gz ${VPSURL}${VPSPATH}/openmptcprouter-shorewall6.tar.gz
 	else
@@ -1776,8 +1788,10 @@ if [ "$update" = "0" ]; then
 	fi
 	tar xzf /etc/shorewall6/openmptcprouter-shorewall6.tar.gz -C /etc/shorewall6
 	rm /etc/shorewall6/openmptcprouter-shorewall6.tar.gz
-	sed -i "s:eth0:$INTERFACE6:g" /etc/shorewall6/*
-	systemctl enable shorewall6
+	if [ -n "$INTERFACE6" ]; then
+		sed -i "s:eth0:$INTERFACE6:g" /etc/shorewall6/*
+		systemctl enable shorewall6
+	fi
 else
 	# Update only needed firewall files
 	if [ "$LOCALFILES" = "no" ]; then
@@ -2117,10 +2131,11 @@ else
 #	fi
 	echo 'done'
 	echo 'Restarting shorewall...'
-	systemctl -q restart shorewall
-	systemctl -q restart shorewall6
+	[ -n "$INTERFACE" ] && systemctl -q restart shorewall >/dev/null 2>&1 || true
+	[ -n "$INTERFACE6" ] && systemctl -q restart shorewall6 >/dev/null 2>&1 || true
 	echo 'done'
 	echo '===================================================================================='
 	echo '\033[1m  /!\ You need to reboot to use latest MPTCP kernel /!\ \033[0m'
 	echo '===================================================================================='
 fi
+exit 0

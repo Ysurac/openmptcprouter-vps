@@ -114,12 +114,15 @@ _lan_route() {
 	while IFS=$"\n" read -r c; do
 		if [ -n "$c" ]; then
 			vpnremoteip=$(echo "$c" | jq -r '.vpnremoteip')
+			username=$(echo "$c" | jq -r '.username')
 			if [ -n "$vpnremoteip" ] && [ "$vpnremoteip" != "null" ]; then
 				echo "$c" | jq -c -r '.lanips[]? //empty' | 
 				while IFS=$"\n" read -r d; do
 					if [ "$d" != "" ]; then
 						network=$(ipcalc -n $d | grep Network | awk '{print $2}')
+						netmask=$(ipcalc -n $d | grep Netmask | awk '{print $2}')
 						[ -n "$network" ] && [ -z "$(ip r show $network via $vpnremoteip)" ] && ip r replace $network via $vpnremoteip >/dev/null 2>&1
+						[ -n "$network" ] && [ -n "$netmask" ] && [ -z "$(grep ${network} /etc/openvpn/cdd/${username})" ] && echo "iroute $network $netmask" >> /etc/openvpn/ccd/${username}
 					fi
 				done
 			fi
@@ -178,6 +181,10 @@ ip link add omr-bonding type bond >/dev/null 2>&1
 #[ -n "$(uname -r | grep '6.1')" ] && {
 #	stap -g /usr/share/systemtap-mptcp/mptcp-app.stap 2>&1 &
 #}
+
+gre_tunnels="$(jq -c '.gre_tunnels' /etc/openmptcprouter-vps-admin/omr-admin-config.json)"
+lan_routes="$(jq -c '.lan_routes' /etc/openmptcprouter-vps-admin/omr-admin-config.json)"
+
 while true; do
 	_glorytun_udp
 	_glorytun_tcp
@@ -189,8 +196,8 @@ while true; do
 	_wireguard
 	_multipath
 	_omr_api
-	_lan_route
-	_gre_tunnels
+	[ "$lan_routes" != "false" ] && _lan_route
+	[ "$gre_tunnels" != "false" ] && _gre_tunnels
 	_openvpn_bonding
 	sleep 10
 done

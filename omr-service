@@ -20,7 +20,8 @@ _multipath() {
 }
 
 _glorytun_udp() {
-	if [ -n "$(systemctl -a | grep 'glorytun-udp')" ]; then
+	#if [ -n "$(systemctl -a | grep 'glorytun-udp')" ]; then
+	if systemctl list-unit-files glorytun-udp@.service >/dev/null; then
 		[ -z "$(glorytun show dev gt-udp-tun0 2>/dev/null | grep tunnel)" ] && {
 			logger -t "OMR-Service" "Restart Glorytun-UDP"
 			systemctl -q restart 'glorytun-udp@*'
@@ -34,7 +35,8 @@ _glorytun_udp() {
 }
 
 _glorytun_tcp() {
-	if [ -n "$(systemctl -a | grep 'glorytun-tcp')" ]; then
+	#if [ -n "$(systemctl -a | grep 'glorytun-tcp')" ]; then
+	if systemctl list-unit-files glorytun-tcp@.service >/dev/null; then
 		for intf in /etc/glorytun-tcp/tun*; do
 			[ "$(echo $intf | grep key)" = "" ] && /etc/glorytun-tcp/post.sh ${intf}
 		done
@@ -53,49 +55,61 @@ _glorytun_tcp() {
 }
 
 _dsvpn() {
-	[ -n "$(ip -6 r show 64:ff9b::/96 dev dsvpn0)" ] && ip -6 r del 64:ff9b::/96 dev dsvpn0 >/dev/null 2>&1
-	if [ -f /etc/openmptcprouter-vps-admin/current-vpn ] && [ "$(cat /etc/openmptcprouter-vps-admin/current-vpn)" = "dsvpn" ]; then
-		localip="$(cat /etc/dsvpn/dsvpn0 | grep LOCALTUNIP | cut -d '=' -f2)"
-		[ -z "$localip" ] && localip="10.255.251.1"
-		remoteip="$(echo $localip | sed 's/\.1/\.2/')"
-		if [ "$(ping -c 5 -w 5 $remoteip | grep '100%')" != "" ] && [ "$(expr $(date +%s) - $(stat -c %Y /proc/$(pgrep dsvpn)/exe ))" -gt "300" ]; then
-			logger -t "OMR-Service" "No answer from VPN client end, restart DSVPN"
-			systemctl restart dsvpn-server@dsvpn0
+	#if [ -n "$(systemctl -a | grep 'dsvpn')" ]; then
+	if systemctl list-unit-files dsvpn-server@.service >/dev/null; then
+		[ -n "$(ip -6 r show 64:ff9b::/96 dev dsvpn0)" ] && ip -6 r del 64:ff9b::/96 dev dsvpn0 >/dev/null 2>&1
+		if [ -f /etc/openmptcprouter-vps-admin/current-vpn ] && [ "$(cat /etc/openmptcprouter-vps-admin/current-vpn)" = "dsvpn" ]; then
+			localip="$(cat /etc/dsvpn/dsvpn0 | grep LOCALTUNIP | cut -d '=' -f2)"
+			[ -z "$localip" ] && localip="10.255.251.1"
+			remoteip="$(echo $localip | sed 's/\.1/\.2/')"
+			if [ "$(ping -c 5 -w 5 $remoteip | grep '100%')" != "" ] && [ "$(expr $(date +%s) - $(stat -c %Y /proc/$(pgrep dsvpn)/exe ))" -gt "300" ]; then
+				logger -t "OMR-Service" "No answer from VPN client end, restart DSVPN"
+				systemctl restart dsvpn-server@dsvpn0
+			fi
+			#ip link set mtu 9000 dev dsvpn0 >/dev/null 2>&1
 		fi
-		#ip link set mtu 9000 dev dsvpn0 >/dev/null 2>&1
 	fi
 }
 
 _shadowsocks() {
-	[ -n "$(systemctl -a | grep 'shadowsocks-libev')" ] && [ -z "$(pgrep ss-server)" ] && {
-		logger -t "OMR-Service" "ss-server not detected, restart Shadowsocks libev"
-		systemctl restart shadowsocks-libev-manager@manager
-	}
+	if systemctl list-unit-files shadowsocks-libev-manager@.service >/dev/null; then
+		[ -z "$(pgrep ss-server)" ] && {
+			logger -t "OMR-Service" "ss-server not detected, restart Shadowsocks libev"
+			systemctl restart shadowsocks-libev-manager@manager
+		}
+	fi
 }
 
 _shadowsocks_go() {
-	[ -n "$(systemctl -a | grep 'shadowsocks-go')" ] && [ -z "$(pgrep shadowsocks-go)" ] && {
-		logger -t "OMR-Service" "ss-server not detected, restart Shadowsocks go"
-		systemctl restart shadowsocks-go
-	}
+	if systemctl list-unit-files shadowsocks-go.service >/dev/null; then
+		[ -z "$(pgrep shadowsocks-go)" ] && {
+			logger -t "OMR-Service" "ss-server not detected, restart Shadowsocks go"
+			systemctl restart shadowsocks-go
+		}
+	fi
 }
 
 _xray() {
-	[ -n "$(systemctl -a | grep 'xray')" ] && [ -z "$(pgrep xray)" ] && {
-		logger -t "OMR-Service" "ss-server not detected, restart XRay"
-		systemctl restart xray
-	}
+	if systemctl list-unit-files xray.service >/dev/null; then
+		[ -z "$(pgrep xray)" ] && {
+			logger -t "OMR-Service" "ss-server not detected, restart XRay"
+			systemctl restart xray
+		}
+	fi
 }
 
 _v2ray() {
-	[ -n "$(systemctl -a | grep 'v2ray')" ] && [ -z "$(pgrep v2ray)" ] && {
-		logger -t "OMR-Service" "ss-server not detected, restart V2Ray"
-		systemctl restart v2ray
-	}
+	if systemctl list-unit-files v2ray.service >/dev/null; then
+		[ -z "$(pgrep v2ray)" ] && {
+			logger -t "OMR-Service" "ss-server not detected, restart V2Ray"
+			systemctl restart v2ray
+		}
+	fi
 }
 
 _wireguard() {
-	if [ -n "$(systemctl -a | grep 'wg')" ]; then
+	#if [ -n "$(systemctl -a | grep 'wg')" ]; then
+	if systemctl list-unit-files wg-quick@.service >/dev/null; then
 		[ -z "$(ip a show dev wg0 | grep '10.255.247.1')" ] && ip a add 10.255.247.1/24 dev wg0 >/dev/null 2>&1
 		[ -z "$(ip a show dev client-wg0 | grep '10.255.246.1')" ] && ip a add 10.255.246.1/24 dev client-wg0 >/dev/null 2>&1
 	fi
@@ -120,9 +134,10 @@ _lan_route() {
 				while IFS=$"\n" read -r d; do
 					if [ "$d" != "" ]; then
 						network=$(ipcalc -n $d | grep Network | awk '{print $2}')
+						networkonly=$(ipcalc -n $d | grep Network | awk '{print $2}' | cut -d/ -f1)
 						netmask=$(ipcalc -n $d | grep Netmask | awk '{print $2}')
 						[ -n "$network" ] && [ -z "$(ip r show $network via $vpnremoteip)" ] && ip r replace $network via $vpnremoteip >/dev/null 2>&1
-						[ -n "$network" ] && [ -n "$netmask" ] && [ -z "$(grep ${network} /etc/openvpn/cdd/${username})" ] && echo "iroute $network $netmask" >> /etc/openvpn/ccd/${username}
+						[ -n "$networkonly" ] && [ -n "$netmask" ] && [ -z "$(grep $networkonly /etc/openvpn/ccd/${username})" ] && echo "iroute $networkonly $netmask" >> /etc/openvpn/ccd/${username}
 					fi
 				done
 			fi
@@ -150,7 +165,7 @@ _gre_tunnels() {
 }
 
 _openvpn_bonding() {
-	if [ "$(ip link show ovpnbonding1)" != "" ] && ([ "$(ip link show ovpnbonding1 | grep SLAVE)" = "" ] || [ "$(ip link show omr-bonding | grep DOWN)" != "" ] || [ "$(ip link show | grep ovpnbonding | grep -c SLAVE | tr -d '\n')" != "8" ]); then
+	if [ "$(ip link show ovpnbonding1 2>/dev/null)" != "" ] && ([ "$(ip link show ovpnbonding1 2>/dev/null | grep SLAVE)" = "" ] || [ "$(ip link show omr-bonding 2>/dev/null | grep DOWN)" != "" ] || [ "$(ip link show | grep ovpnbonding | grep -c SLAVE | tr -d '\n')" != "8" ]); then
 		echo 0 > /sys/class/net/omr-bonding/bonding/mode >/dev/null 2>&1
 		ip link set ovpnbonding1 master omr-bonding >/dev/null 2>&1
 		ip link set ovpnbonding1 up >/dev/null 2>&1

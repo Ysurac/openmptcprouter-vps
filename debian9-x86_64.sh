@@ -78,14 +78,14 @@ MLVPN_BINARY_VERSION="3.0.0+20211028.git.ddafba3"
 UBOND_VERSION="31af0f69ebb6d07ed9348dca2fced33b956cedee"
 OBFS_VERSION="486bebd9208539058e57e23a12f23103016e09b4"
 OBFS_BINARY_VERSION="0.0.5-1"
-OMR_ADMIN_VERSION="f98c362de5ee224e125378ee641b6c5d5db0e7e9"
-OMR_ADMIN_BINARY_VERSION="0.12+20240827"
+OMR_ADMIN_VERSION="b31e764e7b6159b748b3b176bc26395e051a1f38"
+OMR_ADMIN_BINARY_VERSION="0.12+20240920"
 #OMR_ADMIN_BINARY_VERSION="0.3+20220827"
 DSVPN_VERSION="3b99d2ef6c02b2ef68b5784bec8adfdd55b29b1a"
 DSVPN_BINARY_VERSION="0.1.4-2"
 V2RAY_VERSION="5.7.0"
 V2RAY_PLUGIN_VERSION="4.43.0"
-XRAY_VERSION="1.8.6"
+XRAY_VERSION="1.8.24"
 EASYRSA_VERSION="3.0.6"
 #SHADOWSOCKS_VERSION="7407b214f335f0e2068a8622ef3674d868218e17"
 #if [ "$UPSTREAM" = "yes" ] || [ "$UPSTREAM6" = "yes" ]; then
@@ -116,8 +116,8 @@ echo "Check user..."
 if [ "$(id -u)" -ne 0 ]; then echo 'Please run as root.' >&2; exit 1; fi
 
 # Check Kernel
-if [ "$KERNEL" != "5.4" ] && [ "$KERNEL" != "6.1" ] && [ "$KERNEL" != "6.6" ] && [ "$KERNEL" != "6.10" ]; then
-	echo "Only kernels 5.4, 6.1, 6.6 and 6.10 are currently supported"
+if [ "$KERNEL" != "5.4" ] && [ "$KERNEL" != "6.1" ] && [ "$KERNEL" != "6.6" ] && [ "$KERNEL" != "6.10" ] && [ "$KERNEL" != "6.11" ]; then
+	echo "Only kernels 5.4, 6.1, 6.6, 6.10 and 6.11 are currently supported"
 	exit 1
 fi
 
@@ -217,6 +217,9 @@ fi
 }
 
 echo "Remove lock and update packages list..."
+rm -f /etc/apt/sources.list.d/xanmod*
+rm -f /etc/apt/trusted.gpg.d/xanmod*
+
 rm -f /var/lib/dpkg/lock
 rm -f /var/lib/dpkg/lock-frontend
 rm -f /var/cache/apt/archives/lock
@@ -464,6 +467,29 @@ elif [ "$KERNEL" = "6.10" ] && [ "$ARCH" = "amd64" ]; then
 	fi
 	KERNEL_VERSION="6.10.2"
 	KERNEL_REV="0~20240728.gae7b555"
+	wget -O /tmp/linux-image-${KERNEL_VERSION}-${PSABI}-xanmod1_${KERNEL_VERSION}-${PSABI}-xanmod1-${KERNEL_REV}_amd64.deb ${VPSURL}kernel/linux-image-${KERNEL_VERSION}-${PSABI}-xanmod1_${KERNEL_VERSION}-${PSABI}-xanmod1-${KERNEL_REV}_amd64.deb
+	wget -O /tmp/linux-headers-${KERNEL_VERSION}-${PSABI}-xanmod1_${KERNEL_VERSION}-${PSABI}-xanmod1-${KERNEL_REV}_amd64.deb ${VPSURL}kernel/linux-headers-${KERNEL_VERSION}-${PSABI}-xanmod1_${KERNEL_VERSION}-${PSABI}-xanmod1-${KERNEL_REV}_amd64.deb
+	echo "Install kernel linux-image-${KERNEL_VERSION}-${PSABI}-xanmod1 source release"
+	dpkg --force-all -i -B /tmp/linux-headers-${KERNEL_VERSION}-${PSABI}-xanmod1_${KERNEL_VERSION}-${PSABI}-xanmod1-${KERNEL_REV}_amd64.deb
+	dpkg --force-all -i -B /tmp/linux-image-${KERNEL_VERSION}-${PSABI}-xanmod1_${KERNEL_VERSION}-${PSABI}-xanmod1-${KERNEL_REV}_amd64.deb
+
+#	wget -qO - https://dl.xanmod.org/archive.key | gpg --batch --yes --dearmor -vo /usr/share/keyrings/xanmod-archive-keyring.gpg
+#	echo 'deb [signed-by=/usr/share/keyrings/xanmod-archive-keyring.gpg] http://deb.xanmod.org releases main' | tee /etc/apt/sources.list.d/xanmod-release.list
+#	apt-get update
+#	apt-get -y install linux-xanmod-lts-x64v3
+	[ -f /etc/default/grub ] && {
+		sed -i "s@^\(GRUB_DEFAULT=\).*@\1\"0\"@" /etc/default/grub >/dev/null 2>&1
+		[ -f /boot/grub/grub.cfg ] && grub-mkconfig -o /boot/grub/grub.cfg >/dev/null 2>&1
+	}
+elif [ "$KERNEL" = "6.11" ] && [ "$ARCH" = "amd64" ]; then
+	# awk command from xanmod website
+	PSABI=$(awk 'BEGIN { while (!/flags/) if (getline < "/proc/cpuinfo" != 1) exit 1; if (/lm/&&/cmov/&&/cx8/&&/fpu/&&/fxsr/&&/mmx/&&/syscall/&&/sse2/) level = 1; if (level == 1 && /cx16/&&/lahf/&&/popcnt/&&/sse4_1/&&/sse4_2/&&/ssse3/) level = 2; if (level == 2 && /avx/&&/avx2/&&/bmi1/&&/bmi2/&&/f16c/&&/fma/&&/abm/&&/movbe/&&/xsave/) level = 3; if (level == 3 && /avx512f/&&/avx512bw/&&/avx512cd/&&/avx512dq/&&/avx512vl/) level = 4; if (level > 0) { print "x64v" level; exit level + 1 }; exit 1;}' | tr -d "\n")
+	if [ "$PSABI" = "x64v1" ]; then
+		echo "psABI x86-64-v1 not supported by Xanmod kernel 6.11, use an older kernel"
+		exit 0
+	fi
+	KERNEL_VERSION="6.11.0"
+	KERNEL_REV="0~20240916.g9c60408"
 	wget -O /tmp/linux-image-${KERNEL_VERSION}-${PSABI}-xanmod1_${KERNEL_VERSION}-${PSABI}-xanmod1-${KERNEL_REV}_amd64.deb ${VPSURL}kernel/linux-image-${KERNEL_VERSION}-${PSABI}-xanmod1_${KERNEL_VERSION}-${PSABI}-xanmod1-${KERNEL_REV}_amd64.deb
 	wget -O /tmp/linux-headers-${KERNEL_VERSION}-${PSABI}-xanmod1_${KERNEL_VERSION}-${PSABI}-xanmod1-${KERNEL_REV}_amd64.deb ${VPSURL}kernel/linux-headers-${KERNEL_VERSION}-${PSABI}-xanmod1_${KERNEL_VERSION}-${PSABI}-xanmod1-${KERNEL_REV}_amd64.deb
 	echo "Install kernel linux-image-${KERNEL_VERSION}-${PSABI}-xanmod1 source release"
@@ -904,7 +930,7 @@ if [ "$SHADOWSOCKS" = "yes" ]; then
 		fi
 		#sed -i "s:MySecretKey:$SHADOWSOCKS_PASS_JSON:g" /etc/shadowsocks-libev/config.json
 		sed -i "s:MySecretKey:$SHADOWSOCKS_PASS_JSON:g" /etc/shadowsocks-libev/manager.json
-		[ "$(ip -6 a)" = "" ] && sed -i '/"\[::0\]"/d' /etc/shadowsocks-libev/manager.json
+		[ "$(ip -6 a 2>/dev/null)" = "" ] && sed -i '/"\[::0\]"/d' /etc/shadowsocks-libev/manager.json
 	elif [ "$update" != "0" ] && [ -f /etc/shadowsocks-libev/manager.json ] && [ "$(grep -c '65101' /etc/shadowsocks-libev/manager.json | tr -d '\n')" != "$NBCPU" ] && [ -z "$(grep port_conf /etc/shadowsocks-libev/manager.json)" ]; then
 		for i in $(seq 2 $NBCPU); do
 			sed -i '0,/65101/ s/        "65101.*/&\n&/' /etc/shadowsocks-libev/manager.json
@@ -1386,7 +1412,7 @@ if [ "$FAIL2BAN" = "yes" ]; then
 	echo "Install Fail2ban"
 	rm -f /var/lib/dpkg/lock
 	rm -f /var/lib/dpkg/lock-frontend
-	apt-get -y install fail2ban
+	apt-get -y install fail2ban python3-systemd
 	systemctl enable fail2ban
 	wget -O /etc/fail2ban/jail.d/openmptcprouter.conf ${VPSURL}${VPSPATH}/fail2ban-jail-openmptcprouter.conf
 	wget -O /etc/fail2ban/filter.d/openmptcprouter.conf ${VPSURL}${VPSPATH}/fail2ban-filter-openvpn.conf
@@ -1503,6 +1529,20 @@ if [ "$OPENVPN" = "yes" ]; then
 			cp ${DIR}/openvpn-bonding8.conf /etc/openvpn/bonding8.conf
 		fi
 	fi
+	if [ "$(ip -6 a 2>/dev/null)" = "" ]; then
+		sed -i 's/proto tcp6-server//' /etc/openvpn.tun0.conf
+		sed -i 's/proto udp6//' /etc/openvpn.tun1.conf
+		if [ "$OPENVPN_BONDING" = "yes" ]; then
+			sed -i 's/proto udp6//' /etc/openvpn.bonding1.conf
+			sed -i 's/proto udp6//' /etc/openvpn.bonding2.conf
+			sed -i 's/proto udp6//' /etc/openvpn.bonding3.conf
+			sed -i 's/proto udp6//' /etc/openvpn.bonding4.conf
+			sed -i 's/proto udp6//' /etc/openvpn.bonding5.conf
+			sed -i 's/proto udp6//' /etc/openvpn.bonding6.conf
+			sed -i 's/proto udp6//' /etc/openvpn.bonding7.conf
+			sed -i 's/proto udp6//' /etc/openvpn.bonding8.conf
+		fi
+	fi
 	mkdir -p /etc/openvpn/ccd
 	if [ ! -f /etc/openvpn/ccd/ipp_tcp.txt ]; then
 		echo 'openmptcprouter,10.255.250.2,' > /etc/openvpn/ccd/ipp_tcp.txt
@@ -1588,7 +1628,7 @@ if [ "$GLORYTUN_UDP" = "yes" ]; then
 		chmod 644 /lib/systemd/system/glorytun-udp@.service
 		GLORYTUN_PASS="$(cat /etc/glorytun-udp/tun0.key | tr -d '\n')"
 	fi
-	[ "$(ip -6 a)" != "" ] && sed -i 's/0.0.0.0/::/g' /etc/glorytun-udp/tun0
+	[ "$(ip -6 a 2>/dev/null)" != "" ] && sed -i 's/0.0.0.0/::/g' /etc/glorytun-udp/tun0
 fi
 
 

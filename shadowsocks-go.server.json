@@ -7,13 +7,13 @@
             {
                 "network": "tcp",
                 "address": ":65280",
-                "fastOpen": false,
+                "fastOpen": true,
                 "reusePort": false,
                 "multipath": true
             }
             ],
             "enableTCP": true,
-            "listenerTFO": false,
+            "listenerTFO": true,
             "enableUDP": true,
             "mtu": 1500,
             "psk": "PSK",

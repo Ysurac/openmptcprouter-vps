@@ -124,7 +124,7 @@ _omr_api() {
 }
 
 _lan_route() {
-	cat /etc/openmptcprouter-vps-admin/omr-admin-config.json | jq -c '.users[0][]?' |
+	jq -c '.users[0][]?' /etc/openmptcprouter-vps-admin/omr-admin-config.json |
 	while IFS=$"\n" read -r c; do
 		if [ -n "$c" ]; then
 			vpnremoteip=$(echo "$c" | jq -r '.vpnremoteip')

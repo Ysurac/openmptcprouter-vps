@@ -85,7 +85,7 @@ DSVPN_VERSION="3b99d2ef6c02b2ef68b5784bec8adfdd55b29b1a"
 DSVPN_BINARY_VERSION="0.1.4-2"
 V2RAY_VERSION="5.7.0"
 V2RAY_PLUGIN_VERSION="4.43.0"
-XRAY_VERSION="1.8.24"
+XRAY_VERSION="24.11.5"
 EASYRSA_VERSION="3.0.6"
 #SHADOWSOCKS_VERSION="7407b214f335f0e2068a8622ef3674d868218e17"
 #if [ "$UPSTREAM" = "yes" ] || [ "$UPSTREAM6" = "yes" ]; then
@@ -864,18 +864,18 @@ if [ "$OMR_ADMIN" = "yes" ]; then
 	sed -i "s:AdminMySecretKey:$OMR_ADMIN_PASS_ADMIN:g" /etc/openmptcprouter-vps-admin/omr-admin-config.json
 	sed -i "s:MySecretKey:$OMR_ADMIN_PASS:g" /etc/openmptcprouter-vps-admin/omr-admin-config.json
 	[ "$NOINTERNET" = "yes" ] && {
-		jq '. + {internet: false}' omr-admin-config.json > omr-admin-config.json.tmp
-		mv omr-admin-config.json.tmp omr-admin-config.json
+		jq '. + {internet: false}' /etc/openmptcprouter-vps-admin/omr-admin-config.json > /etc/openmptcprouter-vps-admin/omr-admin-config.json.tmp
+		mv /etc/openmptcprouter-vps-admin/omr-admin-config.json.tmp /etc/openmptcprouter-vps-admin/omr-admin-config.json
 		#sed -i 's/"port": 65500,/"port": 65500,\n    "internet": false,/' /etc/openmptcprouter-vps-admin/omr-admin-config.json
 	}
 	[ "$GRETUNNELS" = "no" ] && {
-		jq '. + {gre_tunnels: false}' omr-admin-config.json > omr-admin-config.json.tmp
-		mv omr-admin-config.json.tmp omr-admin-config.json
+		jq '. + {gre_tunnels: false}' /etc/openmptcprouter-vps-admin/omr-admin-config.json > /etc/openmptcprouter-vps-admin/omr-admin-config.json.tmp
+		mv /etc/openmptcprouter-vps-admin/omr-admin-config.json.tmp /etc/openmptcprouter-vps-admin/omr-admin-config.json
 		#sed -i 's/"port": 65500,/"port": 65500,\n    "gre_tunnels": false,/' /etc/openmptcprouter-vps-admin/omr-admin-config.json
 	}
 	[ "$LANROUTES" = "no" ] && {
-		jq '. + {lan_routes: false}' omr-admin-config.json > omr-admin-config.json.tmp
-		mv omr-admin-config.json.tmp omr-admin-config.json
+		jq '. + {lan_routes: false}' /etc/openmptcprouter-vps-admin/omr-admin-config.json > /etc/openmptcprouter-vps-admin/omr-admin-config.json.tmp
+		mv /etc/openmptcprouter-vps-admin/omr-admin-config.json.tmp /etc/openmptcprouter-vps-admin/omr-admin-config.json
 	}
 	chmod 644 /lib/systemd/system/omr-admin.service
 	#chmod 644 /lib/systemd/system/omr-admin-ipv6.service
@@ -1196,6 +1196,9 @@ if [ "$XRAY" = "yes" ]; then
 		[ -n "$XRAY_X25519_PRIVATE_KEY2" ] && [ "$XRAY_X25519_PRIVATE_KEY2" != "XRAY_X25519_PRIVATE_KEY" ] && XRAY_X25519_PRIVATE_KEY="$XRAY_X25519_PRIVATE_KEY2"
 		XRAY_X25519_PUBLIC_KEY2=$(grep -Po '"'"publicKey"'"\s*:\s*"\K([^"]*)' /etc/xray/xray-vless_reality.json | head -n 1 | tr -d "\n")
 		[ -n "$XRAY_X25519_PUBLIC_KEY2" ] && [ "$XRAY_X25519_PUBLIC_KEY2" != "XRAY_X25519_PUBLIC_KEY" ] && XRAY_X25519_PUBLIC_KEY="$XRAY_X25519_PUBLIC_KEY2"
+		#jq -M 'del(.transport)' /etc/xray/xray-server.json > /etc/xray/xray-server.json.tmp
+		#mv -f /etc/xray/xray-server.json.tmp /etc/xray/xray-server.json
+
 	fi
 	jq -M 'del(.users[0].openmptcprouter.xray)' /etc/openmptcprouter-vps-admin/omr-admin-config.json > /etc/openmptcprouter-vps-admin/omr-admin-config.json.new
 	mv -f /etc/openmptcprouter-vps-admin/omr-admin-config.json /etc/openmptcprouter-vps-admin/omr-admin-config.json.bak

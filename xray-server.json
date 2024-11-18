@@ -3,19 +3,6 @@
 		"loglevel": "error",
 		"error": "/tmp/v2rayError.log"
 	},
-	"transport": {
-		"tcpSettings": {},
-		"wsSettings": {},
-		"kcpSettings": {
-			"mtu": 1460,
-			"tti": 10,
-			"uplinkCapacity": 100,
-			"downlinkCapacity": 100,
-			"congestion": false,
-			"readBufferSize": 8,
-			"writeBufferSize": 8
-		}
-	},
 	"inbounds": [
 		{
 			"tag": "omrin-tunnel",

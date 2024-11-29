@@ -137,7 +137,7 @@ _lan_route() {
 						networkonly=$(ipcalc -n $d | grep Network | awk '{print $2}' | cut -d/ -f1)
 						netmask=$(ipcalc -n $d | grep Netmask | awk '{print $2}')
 						[ -n "$network" ] && [ -z "$(ip r show $network via $vpnremoteip)" ] && ip r replace $network via $vpnremoteip >/dev/null 2>&1
-						[ -n "$networkonly" ] && [ -n "$netmask" ] && [ -z "$(grep $networkonly /etc/openvpn/ccd/${username})" ] && echo "iroute $networkonly $netmask" >> /etc/openvpn/ccd/${username}
+						[ -n "$networkonly" ] && [ -n "$netmask" ] && ([ ! -f /etc/openvpn/ccd/${username} ] || [ -z "$(grep $networkonly /etc/openvpn/ccd/${username})" ]) && echo "iroute $networkonly $netmask" >> /etc/openvpn/ccd/${username}
 					fi
 				done
 			fi

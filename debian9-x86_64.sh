@@ -54,6 +54,7 @@ IPERF=${IPERF:-yes}
 LOCALFILES=${LOCALFILES:-no}
 INTERFACE=${INTERFACE:-$(ip -o -4 route show to default | grep -m 1 -Po '(?<=dev )(\S+)' | tr -d "\n")}
 INTERFACE6=${INTERFACE6:-$(ip -o -6 route show to default | grep -m 1 -Po '(?<=dev )(\S+)' | tr -d "\n")}
+[ -z "$INTERFACE6" ] && INTERFACE6="$INTERFACE"
 KERNEL_VERSION="5.4.207"
 KERNEL_PACKAGE_VERSION="1.22"
 KERNEL_RELEASE="${KERNEL_VERSION}-mptcp_${KERNEL_PACKAGE_VERSION}"
@@ -71,6 +72,7 @@ GLORYTUN_UDP=${GLORYTUN_UDP:-yes}
 GLORYTUN_UDP_VERSION="23100474922259d00a8c0c4b00a0c8de89202cf9"
 GLORYTUN_UDP_BINARY_VERSION="0.3.4-5"
 GLORYTUN_TCP=${GLORYTUN_TCP:-yes}
+# Old Glorytun TCP version if sources is not enabled...
 GLORYTUN_TCP_BINARY_VERSION="0.0.35-6"
 #MLVPN_VERSION="8f9720978b28c1954f9f229525333547283316d2"
 MLVPN_VERSION="8aa1b16d843ea68734e2520e39a34cb7f3d61b2b"
@@ -78,8 +80,8 @@ MLVPN_BINARY_VERSION="3.0.0+20211028.git.ddafba3"
 UBOND_VERSION="31af0f69ebb6d07ed9348dca2fced33b956cedee"
 OBFS_VERSION="486bebd9208539058e57e23a12f23103016e09b4"
 OBFS_BINARY_VERSION="0.0.5-1"
-OMR_ADMIN_VERSION="be866bf752119b3460d907f92572fcac773c1a97"
-OMR_ADMIN_BINARY_VERSION="0.14+20241125"
+OMR_ADMIN_VERSION="530d20c6b482d491accfa4ea5dd44afa5d1eccdc"
+OMR_ADMIN_BINARY_VERSION="0.14+20241216"
 #OMR_ADMIN_BINARY_VERSION="0.3+20220827"
 DSVPN_VERSION="3b99d2ef6c02b2ef68b5784bec8adfdd55b29b1a"
 DSVPN_BINARY_VERSION="0.1.4-2"
@@ -224,6 +226,7 @@ rm -f /var/lib/dpkg/lock
 rm -f /var/lib/dpkg/lock-frontend
 rm -f /var/cache/apt/archives/lock
 rm -f /etc/apt/sources.list.d/buster-backports.list
+rm -f /etc/apt/sources.list.d/stretch-backports.list
 if [ "$ID" = "debian" ] && [ "$VERSION_ID" = "9" ]; then
 	apt-get update
 else
@@ -509,15 +512,11 @@ elif [ "$KERNEL" = "6.11" ] && [ "$ARCH" = "amd64" ]; then
 elif [ "$KERNEL" = "6.12" ] && [ "$ARCH" = "amd64" ]; then
 	# awk command from xanmod website
 	PSABI=$(awk 'BEGIN { while (!/flags/) if (getline < "/proc/cpuinfo" != 1) exit 1; if (/lm/&&/cmov/&&/cx8/&&/fpu/&&/fxsr/&&/mmx/&&/syscall/&&/sse2/) level = 1; if (level == 1 && /cx16/&&/lahf/&&/popcnt/&&/sse4_1/&&/sse4_2/&&/ssse3/) level = 2; if (level == 2 && /avx/&&/avx2/&&/bmi1/&&/bmi2/&&/f16c/&&/fma/&&/abm/&&/movbe/&&/xsave/) level = 3; if (level == 3 && /avx512f/&&/avx512bw/&&/avx512cd/&&/avx512dq/&&/avx512vl/) level = 4; if (level > 0) { print "x64v" level; exit level + 1 }; exit 1;}' | tr -d "\n")
-	if [ "$PSABI" = "x64v1" ]; then
-		echo "psABI x86-64-v1 not supported by Xanmod kernel 6.11, use an older kernel"
-		exit 0
-	fi
 	if [ "$PSABI" = "x64v4" ]; then
 		PSABI="x64v3"
 	fi
-	KERNEL_VERSION="6.12.1"
-	KERNEL_REV="0~20241122.ge695ae7"
+	KERNEL_VERSION="6.12.10"
+	KERNEL_REV="0~20250117.g773b57f"
 	wget -O /tmp/linux-image-${KERNEL_VERSION}-${PSABI}-xanmod1_${KERNEL_VERSION}-${PSABI}-xanmod1-${KERNEL_REV}_amd64.deb ${VPSURL}kernel/linux-image-${KERNEL_VERSION}-${PSABI}-xanmod1_${KERNEL_VERSION}-${PSABI}-xanmod1-${KERNEL_REV}_amd64.deb
 	wget -O /tmp/linux-headers-${KERNEL_VERSION}-${PSABI}-xanmod1_${KERNEL_VERSION}-${PSABI}-xanmod1-${KERNEL_REV}_amd64.deb ${VPSURL}kernel/linux-headers-${KERNEL_VERSION}-${PSABI}-xanmod1_${KERNEL_VERSION}-${PSABI}-xanmod1-${KERNEL_REV}_amd64.deb
 	echo "Install kernel linux-image-${KERNEL_VERSION}-${PSABI}-xanmod1 source release"
@@ -614,7 +613,7 @@ if [ "$KERNEL" != "5.4" ]; then
 
 	if [ "$ID" = "debian" ]; then
 		echo "MPTCPize iperf3..."
-		mptcpize enable iperf3 >/dev/null 2>&1
+		mptcpize enable iperf3 >/dev/null 2>&1 || true
 	fi
 
 	#if [ "$UPSTREAM6" = "yes" ]; then
@@ -625,8 +624,10 @@ if [ "$KERNEL" != "5.4" ]; then
 	#fi
 fi
 
-apt-get -y remove shadowsocks-libev >/dev/null 2>&1
+echo "Remove Shadowsocks-libev..."
+apt-get -y remove shadowsocks-libev >/dev/null 2>&1 || true
 if [ "$SHADOWSOCKS" = "yes" ]; then
+	echo "Install Shadowsocks-libev..."
 	if [ "$SOURCES" = "yes" ]; then
 		#apt -t stretch-backports -y install shadowsocks-libev
 		## Compile Shadowsocks
@@ -1229,7 +1230,7 @@ if [ "$XRAY" = "yes" ]; then
 	jq -M 'del(.users[0].openmptcprouter.xray)' /etc/openmptcprouter-vps-admin/omr-admin-config.json > /etc/openmptcprouter-vps-admin/omr-admin-config.json.new
 	mv -f /etc/openmptcprouter-vps-admin/omr-admin-config.json /etc/openmptcprouter-vps-admin/omr-admin-config.json.bak
 	mv -f /etc/openmptcprouter-vps-admin/omr-admin-config.json.new /etc/openmptcprouter-vps-admin/omr-admin-config.json
-	if [ ! -f /etc/xray/xray-server.json ] || [ -z "$(grep -i mptcp /etc/xray/xray-server.json | grep true)" ]; then
+	if [ ! -f /etc/xray/xray-server.json ] || [ -z "$(grep -i mptcp /etc/xray/xray-server.json | grep true)" ] || [ -z "$(grep -i transport /etc/xray/xray-server.json)" ]; then
 		wget -O /etc/xray/xray-server.json ${VPSURL}${VPSPATH}/xray-server.json
 		sed -i "s:XRAY_UUID:$XRAY_UUID:g" /etc/xray/xray-server.json
 		sed -i "s:V2RAY_UUID:$XRAY_UUID:g" /etc/xray/xray-server.json
@@ -1244,12 +1245,23 @@ if [ "$XRAY" = "yes" ]; then
 		sed -i "s:XRAY_UUID:$XRAY_UUID:g" /etc/xray/xray-vless-reality.json
 		sed -i "s:XRAY_X25519_PRIVATE_KEY:$XRAY_X25519_PRIVATE_KEY:g" /etc/xray/xray-vless-reality.json
 		sed -i "s:XRAY_X25519_PUBLIC_KEY:$XRAY_X25519_PUBLIC_KEY:g" /etc/xray/xray-vless-reality.json
-		#for xrayuser in $(cat /etc/openmptcprouter-vps-admin/omr-admin-config.json | jq -r '.users[0][].username'); do
-		#	if [ "$xrayuser" != "admin" ] && [ "$xrayuser" != "openmptcprouter" ]; then
-		#		jq '. + {"level": 0, "alterId": 0, "email": $xrayuser,"id": $xrayid}' /etc/xray/xray-server.json > /etc/xray/xray-server.json.tmp
-		#		mv /etc/xray/xray-server.json.tmp /etc/xray/xray-server.json
-		#	fi
-		#done
+		for xrayuser in $(cat /etc/openmptcprouter-vps-admin/omr-admin-config.json | jq -r '.users[0][].username'); do
+			if [ "$xrayuser" != "admin" ] && [ "$xrayuser" != "openmptcprouter" ]; then
+				xrayid="$(/usr/bin/xray uuid)"
+				jq --arg xrayuser "$xrayuser" --arg xrayid "$xrayid" '(.inbounds[] | select(.tag=="omrin-tunnel") | .settings.clients) += [{"level": 0, "alterId": 0, "email": $xrayuser,"id": $xrayid}]' /etc/xray/xray-server.json > /etc/xray/xray-server.json.tmp
+				mv /etc/xray/xray-server.json.tmp /etc/xray/xray-server.json
+				jq --arg xrayuser "$xrayuser" --arg xrayid "$xrayid" '(.inbounds[] | select(.tag=="omrin-vmess-tunnel") | .settings.clients) += [{"level": 0, "alterId": 0, "email": $xrayuser,"id": $xrayid}]' /etc/xray/xray-server.json > /etc/xray/xray-server.json.tmp
+				mv /etc/xray/xray-server.json.tmp /etc/xray/xray-server.json
+				jq --arg xrayuser "$xrayuser" --arg xrayid "$xrayid" '(.inbounds[] | select(.tag=="omrin-socks-tunnel") | .settings.accounts) += [{"user": $xrayuser,"pass": $xrayid}]' /etc/xray/xray-server.json > /etc/xray/xray-server.json.tmp
+				mv /etc/xray/xray-server.json.tmp /etc/xray/xray-server.json
+				jq --arg xrayuser "$xrayuser" --arg xrayid "$xrayid" '(.inbounds[] | select(.tag=="omrin-trojan-tunnel") | .settings.clients) += [{"level": 0, "alterId": 0, "email": $xrayuser,"id": $xrayid}]' /etc/xray/xray-server.json > /etc/xray/xray-server.json.tmp
+				mv /etc/xray/xray-server.json.tmp /etc/xray/xray-server.json
+				[ -e /etc/shadowsocks-go/upsks.json ] && shadowsockspass="$(jq --arg xrayuser $xrayuser -r '.[$xrayuser]' /etc/shadowsocks-go/upsks.json)"
+				[ -z "$shadowsockspass" ] && shadowsockspass=$(head -c 32 /dev/urandom | base64 -w0)
+				jq --arg xrayuser "$xrayuser" --arg shadowsockspass "$shadowsockspass" '(.inbounds[] | select(.tag=="omrin-shadowsocks-tunnel") | .settings.clients) += [{"email": $xrayuser,"password": $shadowsockspass}]' /etc/xray/xray-server.json > /etc/xray/xray-server.json.tmp
+				mv /etc/xray/xray-server.json.tmp /etc/xray/xray-server.json
+			fi
+		done
 	fi
 	#if ([ "$UPSTREAM" = "yes" ] || [ "$UPSTREAM6" = "yes" ]) && [ -z "$(grep mptcp /etc/xray/xray-server.json | grep true)" ]; then
 	#	sed -i 's/"sockopt": {/&\n                    "mptcp": true,/' /etc/xray/xray-server.json
@@ -1451,7 +1463,7 @@ if [ "$FAIL2BAN" = "yes" ]; then
 	apt-get -y install fail2ban python3-systemd
 	systemctl enable fail2ban
 	wget -O /etc/fail2ban/jail.d/openmptcprouter.conf ${VPSURL}${VPSPATH}/fail2ban-jail-openmptcprouter.conf
-	wget -O /etc/fail2ban/filter.d/openmptcprouter.conf ${VPSURL}${VPSPATH}/fail2ban-filter-openvpn.conf
+	wget -O /etc/fail2ban/filter.d/openvpn.conf ${VPSURL}${VPSPATH}/fail2ban-filter-openvpn.conf
 	echo "Install Fail2ban done"
 fi
 

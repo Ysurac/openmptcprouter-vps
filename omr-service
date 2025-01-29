@@ -190,6 +190,19 @@ _openvpn_bonding() {
 	fi
 }
 
+_vpn1() {
+	vpn1route=$(ip r show dev vpn1 2>/dev/null | grep '0.0.0.0')
+	[ -z "$vpn1route" ] && vpn1route=$(ip r show dev vpn1 2>/dev/null | grep 'default')
+	if [ -n "$vpn1route" ]; then
+		ip r del $vpn1route
+		vpn1gw="$(echo \"$vpn1route\" | awk '{ print $3 }')"
+		ip r a default via $vpngw dev vpn1 table 991337
+		for route in $(ip r show dev vpn1); do
+			ip r a $route table 991337
+		done
+	fi
+}
+
 sysctl -p /etc/sysctl.d/90-shadowsocks.conf >/dev/null 2>&1
 modprobe bonding >/dev/null 2>&1
 ip link add omr-bonding type bond >/dev/null 2>&1
@@ -214,5 +227,6 @@ while true; do
 	[ "$lan_routes" != "false" ] && _lan_route
 	[ "$gre_tunnels" != "false" ] && _gre_tunnels
 	_openvpn_bonding
+	_vpn1
 	sleep 10
 done

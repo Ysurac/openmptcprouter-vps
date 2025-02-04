@@ -515,8 +515,8 @@ elif [ "$KERNEL" = "6.12" ] && [ "$ARCH" = "amd64" ]; then
 	if [ "$PSABI" = "x64v4" ]; then
 		PSABI="x64v3"
 	fi
-	KERNEL_VERSION="6.12.10"
-	KERNEL_REV="0~20250117.g773b57f"
+	KERNEL_VERSION="6.12.12"
+	KERNEL_REV="0~20250202.ga815caa"
 	wget -O /tmp/linux-image-${KERNEL_VERSION}-${PSABI}-xanmod1_${KERNEL_VERSION}-${PSABI}-xanmod1-${KERNEL_REV}_amd64.deb ${VPSURL}kernel/linux-image-${KERNEL_VERSION}-${PSABI}-xanmod1_${KERNEL_VERSION}-${PSABI}-xanmod1-${KERNEL_REV}_amd64.deb
 	wget -O /tmp/linux-headers-${KERNEL_VERSION}-${PSABI}-xanmod1_${KERNEL_VERSION}-${PSABI}-xanmod1-${KERNEL_REV}_amd64.deb ${VPSURL}kernel/linux-headers-${KERNEL_VERSION}-${PSABI}-xanmod1_${KERNEL_VERSION}-${PSABI}-xanmod1-${KERNEL_REV}_amd64.deb
 	echo "Install kernel linux-image-${KERNEL_VERSION}-${PSABI}-xanmod1 source release"
@@ -561,7 +561,33 @@ if [ "$IPERF" = "yes" ]; then
 	#chmod 644 /lib/systemd/system/iperf3.service
 	echo "Install iperf3"
 	[ "$ARCH" = "amd64" ] && apt-get -y remove omr-iperf3 omr-libiperf0 >/dev/null 2>&1
-	apt-get -y install iperf3
+	if [ "$SOURCES" = "yes" ]; then
+		apt-get -y remove iperf3 libiperf0
+		cd /tmp
+		rm -rf iperf-3.18
+		wget https://github.com/esnet/iperf/releases/download/3.18/iperf-3.18.tar.gz
+		tar xzf iperf-3.18.tar.gz
+		cd iperf-3.18
+		wget http://deb.debian.org/debian/pool/main/i/iperf3/iperf3_3.18-1.debian.tar.xz
+		tar xJf iperf3_3.18-1.debian.tar.xz
+		echo "Install iperf3 dependencies..."
+		rm -f /var/lib/dpkg/lock
+		rm -f /var/lib/dpkg/lock-frontend
+		mk-build-deps --install --tool "apt-get -o Debug::pkgProblemResolver=yes --no-install-recommends -y" >/dev/null 2>&1
+		rm -f /var/lib/dpkg/lock
+		rm -f /var/lib/dpkg/lock-frontend
+		echo "Build iperf3 package...."
+		dpkg-buildpackage -b -us -uc >/dev/null 2>&1
+		rm -f /var/lib/dpkg/lock
+		rm -f /var/lib/dpkg/lock-frontend
+		cd /tmp
+		echo "Install iperf3 package..."
+		dpkg -i iperf3_3.18-1_amd64.deb libiperf0_3.18-1_amd64.deb >/dev/null 2>&1
+		rm -rf iperf-3.18
+		rm -f iperf* libiperf*
+	else
+		apt-get -y install iperf3 libiperf0
+	fi
 	if [ ! -f "/etc/iperf3/private.pem" ]; then
 		mkdir -p /etc/iperf3
 		openssl genrsa -out /etc/iperf3/private.pem 2048
@@ -577,11 +603,11 @@ if [ "$IPERF" = "yes" ]; then
 	else
 		cp ${DIR}/iperf3.override.conf /etc/systemd/system/iperf3.service.d/override.conf
 	fi
+	echo "iperf3 installed"
 fi
 
 rm -f /var/lib/dpkg/lock
 rm -f /var/lib/dpkg/lock-frontend
-
 
 if [ "$KERNEL" != "5.4" ]; then
 	echo "Compile and install mptcpize..."
@@ -712,6 +738,7 @@ if [ "$SHADOWSOCKS" = "yes" ]; then
 	fi
 fi
 
+echo "Add modules on server start..."
 # Load BBR Congestion module at boot time
 if ! grep -q bbr /etc/modules ; then
 	echo tcp_bbr >> /etc/modules
@@ -759,12 +786,14 @@ if [ "$KERNEL" = "5.4" ]; then
 		echo mptcp_blest >> /etc/modules
 	fi
 fi
+
+echo "Stop OpenMPTCProuter VPS admin"
 if systemctl -q is-active omr-admin.service 2>/dev/null; then
-	systemctl -q stop omr-admin > /dev/null 2>&1
+	systemctl -q stop omr-admin > /dev/null 2>&1 || true
 fi
 if systemctl -q is-active omr-admin-ipv6.service 2>/dev/null; then
-	systemctl -q stop omr-admin-ipv6 > /dev/null 2>&1
-	systemctl -q disable omr-admin-ipv6 > /dev/null 2>&1
+	systemctl -q stop omr-admin-ipv6 > /dev/null 2>&1 || true
+	systemctl -q disable omr-admin-ipv6 > /dev/null 2>&1 || true
 fi
 
 if [ "$OMR_ADMIN" = "yes" ]; then

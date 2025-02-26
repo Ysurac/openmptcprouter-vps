@@ -38,7 +38,7 @@ _glorytun_tcp() {
 	#if [ -n "$(systemctl -a | grep 'glorytun-tcp')" ]; then
 	if systemctl list-unit-files glorytun-tcp@.service >/dev/null; then
 		for intf in /etc/glorytun-tcp/tun*; do
-			[ "$(echo $intf | grep key)" = "" ] && /etc/glorytun-tcp/post.sh ${intf}
+			[ "$(echo $intf | grep key)" = "" ] && timeout 10 /etc/glorytun-tcp/post.sh ${intf}
 		done
 		if [ -f /etc/openmptcprouter-vps-admin/current-vpn ] && [ "$(cat /etc/openmptcprouter-vps-admin/current-vpn)" = "glorytun_tcp" ]; then
 			localip="$(cat /etc/glorytun-tcp/tun0 | grep LOCALIP | cut -d '=' -f2)"
@@ -157,7 +157,7 @@ _gre_tunnels() {
 					ip tunnel add $iface mode gre local $INTFADDR remote $OMR_ADDR >/dev/null 2>&1
 					ip link set $iface up >/dev/null 2>&1
 					ip addr add $LOCALIP dev $iface >/dev/null 2>&1
-					ip route add $NETWORK dev $iface onlink >/dev/null 2>&1
+					ip route add $NETWORK dev $iface >/dev/null 2>&1
 				fi
 			fi
 		done

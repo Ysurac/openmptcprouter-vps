@@ -80,8 +80,8 @@ MLVPN_BINARY_VERSION="3.0.0+20211028.git.ddafba3"
 UBOND_VERSION="31af0f69ebb6d07ed9348dca2fced33b956cedee"
 OBFS_VERSION="486bebd9208539058e57e23a12f23103016e09b4"
 OBFS_BINARY_VERSION="0.0.5-1"
-OMR_ADMIN_VERSION="530d20c6b482d491accfa4ea5dd44afa5d1eccdc"
-OMR_ADMIN_BINARY_VERSION="0.14+20241216"
+OMR_ADMIN_VERSION="7e98b32ebf549f87e9d20072acc80a87a562cb7d"
+OMR_ADMIN_BINARY_VERSION="0.14+20250220"
 #OMR_ADMIN_BINARY_VERSION="0.3+20220827"
 DSVPN_VERSION="3b99d2ef6c02b2ef68b5784bec8adfdd55b29b1a"
 DSVPN_BINARY_VERSION="0.1.4-2"
@@ -166,10 +166,11 @@ fi
 #	exit 1
 #fi
 echo "Check about broken packages..."
-apt-get check >/dev/null 2>&1
-if [ "$?" -ne 0 ]; then
-	echo "E: \`apt-get check\` failed, you may have broken packages. Aborting..."
-	exit 1
+if ! eval apt-get check >/dev/null 2>&1 ; then
+	if ! eval apt-get -f install -y 2>&1 ; then
+		echo "E: \`apt-get check\` failed, you may have broken packages. Aborting..."
+		exit 1
+	fi
 fi
 
 # Fix old string...
@@ -227,6 +228,9 @@ rm -f /var/lib/dpkg/lock-frontend
 rm -f /var/cache/apt/archives/lock
 rm -f /etc/apt/sources.list.d/buster-backports.list
 rm -f /etc/apt/sources.list.d/stretch-backports.list
+[ ! -f /etc/apt/sources.list ] && touch /etc/apt/sources.list
+sed -i '/buster-backports/d' /etc/apt/sources.list
+sed -i '/stretch-backports/d' /etc/apt/sources.list
 if [ "$ID" = "debian" ] && [ "$VERSION_ID" = "9" ]; then
 	apt-get update
 else
@@ -236,7 +240,7 @@ rm -f /var/lib/dpkg/lock
 rm -f /var/lib/dpkg/lock-frontend
 rm -f /var/cache/apt/archives/lock
 echo "Install apt-transport-https, gnupg and openssh-server..."
-apt-get -y install apt-transport-https gnupg openssh-server
+apt-get -y install apt-transport-https gnupg openssh-server libcrypt1 zstd
 
 #if [ "$ID" = "debian" ] && [ "$VERSION_ID" = "9" ] && [ "$UPDATE_DEBIAN" = "yes" ] && [ "$update" = "0" ]; then
 if [ "$ID" = "debian" ] && [ "$VERSION_ID" = "9" ] && [ "$UPDATE_OS" = "yes" ]; then
@@ -515,8 +519,8 @@ elif [ "$KERNEL" = "6.12" ] && [ "$ARCH" = "amd64" ]; then
 	if [ "$PSABI" = "x64v4" ]; then
 		PSABI="x64v3"
 	fi
-	KERNEL_VERSION="6.12.12"
-	KERNEL_REV="0~20250202.ga815caa"
+	KERNEL_VERSION="6.12.15"
+	KERNEL_REV="0~20250219.g6e42b4c"
 	wget -O /tmp/linux-image-${KERNEL_VERSION}-${PSABI}-xanmod1_${KERNEL_VERSION}-${PSABI}-xanmod1-${KERNEL_REV}_amd64.deb ${VPSURL}kernel/linux-image-${KERNEL_VERSION}-${PSABI}-xanmod1_${KERNEL_VERSION}-${PSABI}-xanmod1-${KERNEL_REV}_amd64.deb
 	wget -O /tmp/linux-headers-${KERNEL_VERSION}-${PSABI}-xanmod1_${KERNEL_VERSION}-${PSABI}-xanmod1-${KERNEL_REV}_amd64.deb ${VPSURL}kernel/linux-headers-${KERNEL_VERSION}-${PSABI}-xanmod1_${KERNEL_VERSION}-${PSABI}-xanmod1-${KERNEL_REV}_amd64.deb
 	echo "Install kernel linux-image-${KERNEL_VERSION}-${PSABI}-xanmod1 source release"
@@ -563,17 +567,19 @@ if [ "$IPERF" = "yes" ]; then
 	[ "$ARCH" = "amd64" ] && apt-get -y remove omr-iperf3 omr-libiperf0 >/dev/null 2>&1
 	if [ "$SOURCES" = "yes" ]; then
 		apt-get -y remove iperf3 libiperf0
+		apt-get -y install xz-utils devscripts
 		cd /tmp
 		rm -rf iperf-3.18
 		wget https://github.com/esnet/iperf/releases/download/3.18/iperf-3.18.tar.gz
 		tar xzf iperf-3.18.tar.gz
 		cd iperf-3.18
-		wget http://deb.debian.org/debian/pool/main/i/iperf3/iperf3_3.18-1.debian.tar.xz
+		wget --waitretry=1 --read-timeout=20 --timeout=15 -t 5 --continue --no-dns-cache http://deb.debian.org/debian/pool/main/i/iperf3/iperf3_3.18-1.debian.tar.xz
 		tar xJf iperf3_3.18-1.debian.tar.xz
+		sleep 1
 		echo "Install iperf3 dependencies..."
 		rm -f /var/lib/dpkg/lock
 		rm -f /var/lib/dpkg/lock-frontend
-		mk-build-deps --install --tool "apt-get -o Debug::pkgProblemResolver=yes --no-install-recommends -y" >/dev/null 2>&1
+		mk-build-deps --install --tool "apt-get -o Debug::pkgProblemResolver=yes --no-install-recommends -y"
 		rm -f /var/lib/dpkg/lock
 		rm -f /var/lib/dpkg/lock-frontend
 		echo "Build iperf3 package...."

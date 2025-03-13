@@ -12,7 +12,6 @@
                 "multipath": true
             }
             ],
-            "enableTCP": true,
             "listenerTFO": true,
             "enableUDP": true,
             "mtu": 1500,
@@ -27,11 +26,6 @@
         "enabled": true,
         "debugPprof": false,
         "trustedProxies": [],
-        "listeners": [
-        {
-                "network": "tcp",
-                "address": "127.0.0.1:65279"
-        }
-        ]
+	"listen": "127.0.0.1:65279"
     }
 }

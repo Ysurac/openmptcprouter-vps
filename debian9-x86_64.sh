@@ -1262,9 +1262,11 @@ if [ "$XRAY" = "yes" ]; then
 		#mv -f /etc/xray/xray-server.json.tmp /etc/xray/xray-server.json
 
 	fi
-	jq -M 'del(.users[0].openmptcprouter.xray)' /etc/openmptcprouter-vps-admin/omr-admin-config.json > /etc/openmptcprouter-vps-admin/omr-admin-config.json.new
-	mv -f /etc/openmptcprouter-vps-admin/omr-admin-config.json /etc/openmptcprouter-vps-admin/omr-admin-config.json.bak
-	mv -f /etc/openmptcprouter-vps-admin/omr-admin-config.json.new /etc/openmptcprouter-vps-admin/omr-admin-config.json
+	if [ -f /etc/openmptcprouter-vps-admin/omr-admin-config.json ]; then
+		jq -M 'del(.users[0].openmptcprouter.xray)' /etc/openmptcprouter-vps-admin/omr-admin-config.json > /etc/openmptcprouter-vps-admin/omr-admin-config.json.new
+		mv -f /etc/openmptcprouter-vps-admin/omr-admin-config.json /etc/openmptcprouter-vps-admin/omr-admin-config.json.bak
+		mv -f /etc/openmptcprouter-vps-admin/omr-admin-config.json.new /etc/openmptcprouter-vps-admin/omr-admin-config.json
+	fi
 	if [ ! -f /etc/xray/xray-server.json ] || [ -z "$(grep -i mptcp /etc/xray/xray-server.json | grep true)" ] || [ -z "$(grep -i transport /etc/xray/xray-server.json)" ]; then
 		wget -O /etc/xray/xray-server.json ${VPSURL}${VPSPATH}/xray-server.json
 		sed -i "s:XRAY_UUID:$XRAY_UUID:g" /etc/xray/xray-server.json

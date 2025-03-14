@@ -102,7 +102,7 @@ VPSURL="https://www.openmptcprouter.com/"
 REPO="repo.openmptcprouter.com"
 CHINA=${CHINA:-no}
 
-OMR_VERSION="0.1031-test"
+OMR_VERSION="0.1031"
 
 DIR=$( pwd )
 #"
@@ -1530,17 +1530,17 @@ if [ "$OPENVPN" = "yes" ]; then
 		fi
 	fi
 	if [ "$(ip -6 a 2>/dev/null)" = "" ]; then
-		sed -i 's/proto tcp6-server//' /etc/openvpn.tun0.conf
-		sed -i 's/proto udp6//' /etc/openvpn.tun1.conf
+		sed -i 's/proto tcp6-server//' /etc/openvpn/tun0.conf
+		sed -i 's/proto udp6//' /etc/openvpn/tun1.conf
 		if [ "$OPENVPN_BONDING" = "yes" ]; then
-			sed -i 's/proto udp6//' /etc/openvpn.bonding1.conf
-			sed -i 's/proto udp6//' /etc/openvpn.bonding2.conf
-			sed -i 's/proto udp6//' /etc/openvpn.bonding3.conf
-			sed -i 's/proto udp6//' /etc/openvpn.bonding4.conf
-			sed -i 's/proto udp6//' /etc/openvpn.bonding5.conf
-			sed -i 's/proto udp6//' /etc/openvpn.bonding6.conf
-			sed -i 's/proto udp6//' /etc/openvpn.bonding7.conf
-			sed -i 's/proto udp6//' /etc/openvpn.bonding8.conf
+			sed -i 's/proto udp6//' /etc/openvpn/bonding1.conf
+			sed -i 's/proto udp6//' /etc/openvpn/bonding2.conf
+			sed -i 's/proto udp6//' /etc/openvpn/bonding3.conf
+			sed -i 's/proto udp6//' /etc/openvpn/bonding4.conf
+			sed -i 's/proto udp6//' /etc/openvpn/bonding5.conf
+			sed -i 's/proto udp6//' /etc/openvpn/bonding6.conf
+			sed -i 's/proto udp6//' /etc/openvpn/bonding7.conf
+			sed -i 's/proto udp6//' /etc/openvpn/bonding8.conf
 		fi
 	fi
 	mkdir -p /etc/openvpn/ccd

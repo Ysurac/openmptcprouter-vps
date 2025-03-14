@@ -7,7 +7,7 @@
             {
                 "network": "tcp",
                 "address": ":65280",
-                "fastOpen": true,
+                "fastOpen": false,
                 "reusePort": false,
                 "multipath": true
             }

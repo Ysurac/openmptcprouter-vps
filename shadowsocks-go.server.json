@@ -12,7 +12,6 @@
                 "multipath": true
             }
             ],
-            "enableTCP": true,
             "listenerTFO": true,
             "enableUDP": true,
             "mtu": 1500,
@@ -26,14 +25,7 @@
     "api": {
         "enabled": true,
         "debugPprof": false,
-        "enableTrustedProxyCheck": false,
         "trustedProxies": [],
-        "proxyHeader": "X-Forwarded-For",
-        "listen": "127.0.0.1:65279",
-        "certFile": "",
-        "keyFile": "",
-        "clientCertFile": "",
-        "secretPath": "",
-        "fiberConfigPath": ""
+	"listen": "127.0.0.1:65279"
     }
 }

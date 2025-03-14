@@ -573,8 +573,8 @@ if [ "$IPERF" = "yes" ]; then
 		wget https://github.com/esnet/iperf/releases/download/3.18/iperf-3.18.tar.gz
 		tar xzf iperf-3.18.tar.gz
 		cd iperf-3.18
-		wget --waitretry=1 --read-timeout=20 --timeout=15 -t 5 --continue --no-dns-cache http://deb.debian.org/debian/pool/main/i/iperf3/iperf3_3.18-1.debian.tar.xz
-		tar xJf iperf3_3.18-1.debian.tar.xz
+		wget --waitretry=1 --read-timeout=20 --timeout=15 -t 5 --continue --no-dns-cache http://deb.debian.org/debian/pool/main/i/iperf3/iperf3_3.18-2.debian.tar.xz
+		tar xJf iperf3_3.18-2.debian.tar.xz
 		sleep 1
 		echo "Install iperf3 dependencies..."
 		rm -f /var/lib/dpkg/lock
@@ -588,7 +588,7 @@ if [ "$IPERF" = "yes" ]; then
 		rm -f /var/lib/dpkg/lock-frontend
 		cd /tmp
 		echo "Install iperf3 package..."
-		dpkg -i iperf3_3.18-1_amd64.deb libiperf0_3.18-1_amd64.deb >/dev/null 2>&1
+		dpkg -i iperf3_3.18-2_amd64.deb libiperf0_3.18-2_amd64.deb >/dev/null 2>&1
 		rm -rf iperf-3.18
 		rm -f iperf* libiperf*
 	else
@@ -605,6 +605,8 @@ if [ "$IPERF" = "yes" ]; then
 	systemctl enable iperf3.service || true
 	mkdir -p /etc/systemd/system/iperf3.service.d
 	if [ "$LOCALFILES" = "no" ]; then
+		sleep 2
+		echo "Download iperf3 service override"
 		wget -O /etc/systemd/system/iperf3.service.d/override.conf ${VPSURL}${VPSPATH}/iperf3.override.conf
 	else
 		cp ${DIR}/iperf3.override.conf /etc/systemd/system/iperf3.service.d/override.conf

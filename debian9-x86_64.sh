@@ -567,7 +567,7 @@ if [ "$IPERF" = "yes" ]; then
 	[ "$ARCH" = "amd64" ] && apt-get -y remove omr-iperf3 omr-libiperf0 >/dev/null 2>&1
 	if [ "$SOURCES" = "yes" ]; then
 		apt-get -y remove iperf3 libiperf0
-		apt-get -y install xz-utils devscripts
+		apt-get -y install xz-utils devscripts equivs
 		cd /tmp
 		rm -rf iperf-3.18
 		wget https://github.com/esnet/iperf/releases/download/3.18/iperf-3.18.tar.gz

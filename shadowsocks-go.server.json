@@ -26,6 +26,11 @@
         "enabled": true,
         "debugPprof": false,
         "trustedProxies": [],
-	"listen": "127.0.0.1:65279"
+	 "listeners": [
+            {
+                "network": "tcp",
+                "address": ":65279"
+	    }
+	]
     }
 }

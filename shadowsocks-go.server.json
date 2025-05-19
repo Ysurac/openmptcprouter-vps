@@ -29,7 +29,7 @@
 	 "listeners": [
             {
                 "network": "tcp",
-                "address": ":65279"
+                "address": "127.0.0.1:65279"
 	    }
 	]
     }

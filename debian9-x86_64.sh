@@ -1784,7 +1784,7 @@ if [ "$DSVPN" = "yes" ]; then
 			wget -O /etc/dsvpn/dsvpn0 ${VPSURL}${VPSPATH}/dsvpn0-config
 		else
 			cp ${DIR}/dsvpn-run /usr/local/bin/dsvpn-run
-			cp ${DIR}/dsvpn-server%40.service.in /lib/systemd/system/dsvpn-server@.service
+			cp ${DIR}/dsvpn-server@.service.in /lib/systemd/system/dsvpn-server@.service
 			cp ${DIR}/dsvpn0-config /etc/dsvpn/dsvpn0
 		fi
 		chmod 755 /usr/local/bin/dsvpn-run
@@ -1846,16 +1846,22 @@ if [ "$GLORYTUN_TCP" = "yes" ]; then
 		./configure
 		make
 		cp glorytun /usr/local/bin/glorytun-tcp
-		wget -O /usr/local/bin/glorytun-tcp-run ${VPSURL}${VPSPATH}/glorytun-tcp-run
+		mkdir -p /etc/glorytun-tcp
+		if [ "$LOCALFILES" = "no" ]; then
+			wget -O /usr/local/bin/glorytun-tcp-run ${VPSURL}${VPSPATH}/glorytun-tcp-run
+			wget -O /lib/systemd/system/glorytun-tcp@.service ${VPSURL}${VPSPATH}/glorytun-tcp%40.service.in
+			wget -O /etc/glorytun-tcp/post.sh ${VPSURL}${VPSPATH}/glorytun-tcp-post.sh
+			wget -O /etc/glorytun-tcp/tun0 ${VPSURL}${VPSPATH}/tun0.glorytun
+		else
+			cp ${DIR}/glorytun-tcp-run /usr/local/bin/glorytun-tcp-run
+			cp ${DIR}/glorytun-tcp@.service.in /lib/systemd/system/glorytun-tcp@.service
+			cp ${DIR}/glorytun-tcp-post.sh /etc/glorytun-tcp/post.sh
+			cp ${DIR}/tun0.glorytun /etc/glorytun-tcp/tun0
+		fi
 		chmod 755 /usr/local/bin/glorytun-tcp-run
-		wget -O /lib/systemd/system/glorytun-tcp@.service ${VPSURL}${VPSPATH}/glorytun-tcp%40.service.in
-		#wget -O /lib/systemd/network/glorytun-tcp.network ${VPSURL}${VPSPATH}/glorytun.network
 		chmod 644 /lib/systemd/system/glorytun-tcp@.service
 		rm -f /lib/systemd/network/glorytun-tcp.network
-		mkdir -p /etc/glorytun-tcp
-		wget -O /etc/glorytun-tcp/post.sh ${VPSURL}${VPSPATH}/glorytun-tcp-post.sh
 		chmod 755 /etc/glorytun-tcp/post.sh
-		wget -O /etc/glorytun-tcp/tun0 ${VPSURL}${VPSPATH}/tun0.glorytun
 		if [ "$update" = "0" ]; then
 			echo "$GLORYTUN_PASS" > /etc/glorytun-tcp/tun0.key
 		fi

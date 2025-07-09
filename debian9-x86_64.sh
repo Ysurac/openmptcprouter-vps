@@ -885,8 +885,12 @@ if [ "$OMR_ADMIN" = "yes" ]; then
 	[ ! -f "/etc/openmptcprouter-vps-admin/current-vpn" ] && echo "openvpn" > /etc/openmptcprouter-vps-admin/current-vpn
 	mkdir -p /var/opt/openmptcprouter
 	if [ "$SOURCES" = "yes" ]; then
-		wget -O /lib/systemd/system/omr-admin.service ${VPSURL}${VPSPATH}/omr-admin.service.in
-		#wget -O /lib/systemd/system/omr-admin-ipv6.service ${VPSURL}${VPSPATH}/omr-admin-ipv6.service.in
+		if [ "$LOCALFILES" = "no" ]; then
+			wget -O /lib/systemd/system/omr-admin.service ${VPSURL}${VPSPATH}/omr-admin.service.in
+			#wget -O /lib/systemd/system/omr-admin-ipv6.service ${VPSURL}${VPSPATH}/omr-admin-ipv6.service.in
+		else
+			cp ${DIR}/omr-admin.service.in /lib/systemd/system/omr-admin.service
+		fi
 		wget -O /tmp/openmptcprouter-vps-admin.zip https://github.com/Ysurac/openmptcprouter-vps-admin/archive/${OMR_ADMIN_VERSION}.zip
 		cd /tmp
 		unzip -q -o openmptcprouter-vps-admin.zip
@@ -1119,7 +1123,8 @@ if systemctl -q is-active shadowsocks-go.service 2>/dev/null; then
 fi
 
 if [ "$SHADOWSOCKS_GO" = "yes" ]; then
-	if [ "$SOURCES" = "yes" ] || [ "$ARCH" = "arm64" ]; then
+	#if [ "$SOURCES" = "yes" ] || [ "$ARCH" = "arm64" ]; then
+	if [ "$ARCH" = "arm64" ]; then
 		if [ "$ARCH" = "amd64" ]; then
 			wget -O /tmp/shadowsocks-go-${SHADOWSOCKS_GO_VERSION}-amd64.deb ${VPSURL}/debian/shadowsocks-go-${SHADOWSOCKS_GO_VERSION}-amd64.deb
 			rm -f /var/lib/dpkg/lock
@@ -1142,7 +1147,11 @@ if [ "$SHADOWSOCKS_GO" = "yes" ]; then
 		UPSK2=$(grep -Po '"'"openmptcprouter"'"\s*:\s*"\K([^"]*)' /etc/shadowsocks-go/upsks.json | head -n 1 | tr -d "\n")
 		[ -n "$UPSK2" ] && [ "$UPSK2" != "UPSK" ] && [ "$UPSK2" != "null" ] && UPSK="$UPSK2"
 	fi
-	wget -O /etc/shadowsocks-go/server.json ${VPSURL}${VPSPATH}/shadowsocks-go.server.json
+	if [ "$LOCALFILES" = "no" ]; then
+		wget -O /etc/shadowsocks-go/server.json ${VPSURL}${VPSPATH}/shadowsocks-go.server.json
+	else
+		cp ${DIR}/shadowsocks-go.server.json /etc/shadowsocks-go/server.json
+	fi
 	sed -i "s:\"PSK\":\"$PSK\":g" /etc/shadowsocks-go/server.json
 	sed -i "s:UPSK:$UPSK:g" /etc/shadowsocks-go/upsks.json
 	jq -M 'del(.users[0].openmptcprouter."shadowsocks-go")' /etc/openmptcprouter-vps-admin/omr-admin-config.json > /etc/openmptcprouter-vps-admin/omr-admin-config.json.new
@@ -1162,7 +1171,8 @@ fi
 
 if [ "$V2RAY" = "yes" ]; then
 	#apt-get -y -o Dpkg::Options::="--force-overwrite" install v2ray
-	if [ "$SOURCES" = "yes" ] || [ "$ARCH" = "arm64" ]; then
+	#if [ "$SOURCES" = "yes" ] || [ "$ARCH" = "arm64" ]; then
+	if [ "$ARCH" = "arm64" ]; then
 		if [ "$ARCH" = "amd64" ]; then
 			wget -O /tmp/v2ray-${V2RAY_VERSION}-amd64.deb ${VPSURL}/debian/v2ray-${V2RAY_VERSION}-amd64.deb
 			rm -f /var/lib/dpkg/lock
@@ -1235,7 +1245,8 @@ fi
 
 if [ "$XRAY" = "yes" ]; then
 	#apt-get -y -o Dpkg::Options::="--force-overwrite" install xray
-	if [ "$SOURCES" = "yes" ] || [ "$ARCH" = "arm64" ]; then
+	#if [ "$SOURCES" = "yes" ] || [ "$ARCH" = "arm64" ]; then
+	if [ "$ARCH" = "arm64" ]; then
 		if [ "$ARCH" = "amd64" ]; then
 			wget -O /tmp/xray-${XRAY_VERSION}-amd64.deb ${VPSURL}/debian/xray-${XRAY_VERSION}-amd64.deb
 			rm -f /var/lib/dpkg/lock
@@ -1504,8 +1515,13 @@ if [ "$FAIL2BAN" = "yes" ]; then
 	rm -f /var/lib/dpkg/lock-frontend
 	apt-get -y install fail2ban python3-systemd
 	systemctl enable fail2ban
-	wget -O /etc/fail2ban/jail.d/openmptcprouter.conf ${VPSURL}${VPSPATH}/fail2ban-jail-openmptcprouter.conf
-	wget -O /etc/fail2ban/filter.d/openvpn.conf ${VPSURL}${VPSPATH}/fail2ban-filter-openvpn.conf
+	if [ "$LOCALFILES" = "no" ]; then
+		wget -O /etc/fail2ban/jail.d/openmptcprouter.conf ${VPSURL}${VPSPATH}/fail2ban-jail-openmptcprouter.conf
+		wget -O /etc/fail2ban/filter.d/openvpn.conf ${VPSURL}${VPSPATH}/fail2ban-filter-openvpn.conf
+	else
+		cp ${DIR}/fail2ban-jail-openmptcprouter.conf /etc/fail2ban/jail.d/openmptcprouter.conf
+		cp ${DIR}/fail2ban-filter-openvpn.conf /etc/fail2ban/filter.d/openvpn.conf
+	fi
 	echo "Install Fail2ban done"
 fi
 
@@ -1749,12 +1765,18 @@ if [ "$DSVPN" = "yes" ]; then
 		make CFLAGS='-DNO_DEFAULT_ROUTES -DNO_DEFAULT_FIREWALL'
 		make install
 		rm -f /lib/systemd/system/dsvpn/*
-		wget -O /usr/local/bin/dsvpn-run ${VPSURL}${VPSPATH}/dsvpn-run
-		chmod 755 /usr/local/bin/dsvpn-run
-		wget -O /lib/systemd/system/dsvpn-server@.service ${VPSURL}${VPSPATH}/dsvpn-server%40.service.in
-		chmod 644 /lib/systemd/system/dsvpn-server@.service
 		mkdir -p /etc/dsvpn
-		wget -O /etc/dsvpn/dsvpn0 ${VPSURL}${VPSPATH}/dsvpn0-config
+		if [ "$LOCALFILES" = "no" ]; then
+			wget -O /usr/local/bin/dsvpn-run ${VPSURL}${VPSPATH}/dsvpn-run
+			wget -O /lib/systemd/system/dsvpn-server@.service ${VPSURL}${VPSPATH}/dsvpn-server%40.service.in
+			wget -O /etc/dsvpn/dsvpn0 ${VPSURL}${VPSPATH}/dsvpn0-config
+		else
+			cp ${DIR}/dsvpn-run /usr/local/bin/dsvpn-run
+			cp ${DIR}/dsvpn-server%40.service.in /lib/systemd/system/dsvpn-server@.service
+			cp ${DIR}/dsvpn0-config /etc/dsvpn/dsvpn0
+		fi
+		chmod 755 /usr/local/bin/dsvpn-run
+		chmod 644 /lib/systemd/system/dsvpn-server@.service
 		if [ -f /etc/dsvpn/dsvpn.key ]; then
 			mv /etc/dsvpn/dsvpn.key /etc/dsvpn/dsvpn0.key
 		fi

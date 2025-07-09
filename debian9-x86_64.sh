@@ -1214,7 +1214,11 @@ if [ "$V2RAY" = "yes" ]; then
 		[ -n "$V2RAY_UUID2" ] && V2RAY_UUID="$V2RAY_UUID2"
 	fi
 	#if [ ! -f /etc/v2ray/v2ray-server.json ]; then
-		wget -O /etc/v2ray/v2ray-server.json ${VPSURL}${VPSPATH}/v2ray-server.json
+		if [ "$LOCALFILES" = "no" ]; then
+			wget -O /etc/v2ray/v2ray-server.json ${VPSURL}${VPSPATH}/v2ray-server.json
+		else
+			cp ${DIR}/v2ray-server.json /etc/v2ray/v2ray-server.json
+		fi
 		sed -i "s:V2RAY_UUID:$V2RAY_UUID:g" /etc/v2ray/v2ray-server.json
 	#fi
 	if [ "$KERNEL" != "5.4" ] && [ -z "$(grep mptcp /etc/v2ray/v2ray-server.json | grep true)" ]; then
@@ -1284,12 +1288,20 @@ if [ "$XRAY" = "yes" ]; then
 		mv -f /etc/openmptcprouter-vps-admin/omr-admin-config.json.new /etc/openmptcprouter-vps-admin/omr-admin-config.json
 	fi
 	if [ ! -f /etc/xray/xray-server.json ] || [ -z "$(grep -i mptcp /etc/xray/xray-server.json | grep true)" ] || [ -z "$(grep -i transport /etc/xray/xray-server.json)" ]; then
-		wget -O /etc/xray/xray-server.json ${VPSURL}${VPSPATH}/xray-server.json
+		if [ "$LOCALFILES" = "no" ]; then
+			wget -O /etc/xray/xray-server.json ${VPSURL}${VPSPATH}/xray-server.json
+		else
+			cp ${DIR}/xray-server.json /etc/xray/xray-server.json
+		fi
 		sed -i "s:XRAY_UUID:$XRAY_UUID:g" /etc/xray/xray-server.json
 		sed -i "s:V2RAY_UUID:$XRAY_UUID:g" /etc/xray/xray-server.json
 		sed -i "s:XRAY_PSK:$PSK:g" /etc/xray/xray-server.json
 		sed -i "s:XRAY_UPSK:$UPSK:g" /etc/xray/xray-server.json
-		wget -O /etc/xray/xray-vless-reality.json ${VPSURL}${VPSPATH}/xray-vless-reality.json
+		if [ "$LOCALFILES" = "no" ]; then
+			wget -O /etc/xray/xray-vless-reality.json ${VPSURL}${VPSPATH}/xray-vless-reality.json
+		else
+			cp ${DIR}/xray-vless-reality.json /etc/xray/xray-vless-reality.json
+		fi
 		if [ -z "$XRAY_X25519_PRIVATE_KEY" ]; then
 			XRAY_X25519_KEYS=$(/usr/bin/xray x25519)
 			XRAY_X25519_PRIVATE_KEY=$(echo "${XRAY_X25519_KEYS}" | grep Private | awk '{ print $3 }' | tr -d "\n")

@@ -315,6 +315,7 @@ if [ "$CHINA" = "yes" ]; then
 #	fi
 	echo "deb [arch=amd64] file:/var/lib/openmptcprouter-vps-debian ./" > /etc/apt/sources.list.d/openmptcprouter.list
 	cat /var/lib/openmptcprouter-vps-debian/openmptcprouter.gpg.key | apt-key add -
+	rm -rf /usr/share/omr-server-git
 	if [ ! -d /usr/share/omr-server-git ]; then
 		#git clone https://gitee.com/ysurac/openmptcprouter-vps.git /usr/share/omr-server-git
 		git clone https://gitlab.com/ysurac/openmptcprouter-vps.git /usr/share/omr-server-git
@@ -519,8 +520,8 @@ elif [ "$KERNEL" = "6.12" ] && [ "$ARCH" = "amd64" ]; then
 	if [ "$PSABI" = "x64v4" ]; then
 		PSABI="x64v3"
 	fi
-	KERNEL_VERSION="6.12.15"
-	KERNEL_REV="0~20250219.g6e42b4c"
+	KERNEL_VERSION="6.12.37
+	KERNEL_REV="0~20250710.g2eb0796"
 	if [ "$CHINA" = "yes" ]; then
 		wget -O /tmp/linux-image-${KERNEL_VERSION}-${PSABI}-xanmod1_${KERNEL_VERSION}-${PSABI}-xanmod1-${KERNEL_REV}_amd64.deb https://sourceforge.net/projects/xanmod/files/releases/main/${KERNEL_VERSION}-xanmod1/${KERNEL_VERSION}-${PSABI}-xanmod1/linux-image-${KERNEL_VERSION}-${PSABI}-xanmod1_${KERNEL_VERSION}-${PSABI}-xanmod1-${KERNEL_REV}_amd64.deb
 		wget -O /tmp/linux-headers-${KERNEL_VERSION}-${PSABI}-xanmod1_${KERNEL_VERSION}-${PSABI}-xanmod1-${KERNEL_REV}_amd64.deb https://sourceforge.net/projects/xanmod/files/releases/main/${KERNEL_VERSION}-xanmod1/${KERNEL_VERSION}-${PSABI}-xanmod1/linux-headers-${KERNEL_VERSION}-${PSABI}-xanmod1_${KERNEL_VERSION}-${PSABI}-xanmod1-${KERNEL_REV}_amd64.deb

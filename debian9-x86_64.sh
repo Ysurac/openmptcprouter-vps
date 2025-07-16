@@ -302,6 +302,7 @@ echo "Add OpenMPTCProuter repo..."
 if [ "$CHINA" = "yes" ]; then
 	echo "Install git..."
 	apt-get -y install git
+	rm -rf /var/lib/openmptcprouter-vps-debian 
 	if [ ! -d /var/lib/openmptcprouter-vps-debian ]; then
 		#git clone https://gitee.com/ysurac/openmptcprouter-vps-debian.git /var/lib/openmptcprouter-vps-debian
 		git clone https://gitlab.com/ysurac/openmptcprouter-vps-debian.git /var/lib/openmptcprouter-vps-debian

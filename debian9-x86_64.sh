@@ -453,6 +453,7 @@ if [ "$KERNEL" = "5.4" ] || [ "$KERNEL" = "5.15" ]; then
 elif [ "$KERNEL" = "6.6" ] && [ "$ARCH" = "amd64" ]; then
 	# awk command from xanmod website
 	PSABI=$(awk 'BEGIN { while (!/flags/) if (getline < "/proc/cpuinfo" != 1) exit 1; if (/lm/&&/cmov/&&/cx8/&&/fpu/&&/fxsr/&&/mmx/&&/syscall/&&/sse2/) level = 1; if (level == 1 && /cx16/&&/lahf/&&/popcnt/&&/sse4_1/&&/sse4_2/&&/ssse3/) level = 2; if (level == 2 && /avx/&&/avx2/&&/bmi1/&&/bmi2/&&/f16c/&&/fma/&&/abm/&&/movbe/&&/xsave/) level = 3; if (level == 3 && /avx512f/&&/avx512bw/&&/avx512cd/&&/avx512dq/&&/avx512vl/) level = 4; if (level > 0) { print "x64v" level; exit level + 1 }; exit 1;}' | tr -d "\n")
+	#'
 	KERNEL_VERSION="6.6.36"
 	KERNEL_REV="0~20240628.g36640c1"
 	wget -O /tmp/linux-image-${KERNEL_VERSION}-${PSABI}-xanmod1_${KERNEL_VERSION}-${PSABI}-xanmod1-${KERNEL_REV}_amd64.deb ${VPSURL}kernel/linux-image-${KERNEL_VERSION}-${PSABI}-xanmod1_${KERNEL_VERSION}-${PSABI}-xanmod1-${KERNEL_REV}_amd64.deb
@@ -472,6 +473,7 @@ elif [ "$KERNEL" = "6.6" ] && [ "$ARCH" = "amd64" ]; then
 elif [ "$KERNEL" = "6.10" ] && [ "$ARCH" = "amd64" ]; then
 	# awk command from xanmod website
 	PSABI=$(awk 'BEGIN { while (!/flags/) if (getline < "/proc/cpuinfo" != 1) exit 1; if (/lm/&&/cmov/&&/cx8/&&/fpu/&&/fxsr/&&/mmx/&&/syscall/&&/sse2/) level = 1; if (level == 1 && /cx16/&&/lahf/&&/popcnt/&&/sse4_1/&&/sse4_2/&&/ssse3/) level = 2; if (level == 2 && /avx/&&/avx2/&&/bmi1/&&/bmi2/&&/f16c/&&/fma/&&/abm/&&/movbe/&&/xsave/) level = 3; if (level == 3 && /avx512f/&&/avx512bw/&&/avx512cd/&&/avx512dq/&&/avx512vl/) level = 4; if (level > 0) { print "x64v" level; exit level + 1 }; exit 1;}' | tr -d "\n")
+	#'
 	if [ "$PSABI" = "x64v1" ]; then
 		echo "psABI x86-64-v1 not supported by Xanmod kernel 6.10, use an older kernel"
 		exit 0
@@ -495,6 +497,7 @@ elif [ "$KERNEL" = "6.10" ] && [ "$ARCH" = "amd64" ]; then
 elif [ "$KERNEL" = "6.11" ] && [ "$ARCH" = "amd64" ]; then
 	# awk command from xanmod website
 	PSABI=$(awk 'BEGIN { while (!/flags/) if (getline < "/proc/cpuinfo" != 1) exit 1; if (/lm/&&/cmov/&&/cx8/&&/fpu/&&/fxsr/&&/mmx/&&/syscall/&&/sse2/) level = 1; if (level == 1 && /cx16/&&/lahf/&&/popcnt/&&/sse4_1/&&/sse4_2/&&/ssse3/) level = 2; if (level == 2 && /avx/&&/avx2/&&/bmi1/&&/bmi2/&&/f16c/&&/fma/&&/abm/&&/movbe/&&/xsave/) level = 3; if (level == 3 && /avx512f/&&/avx512bw/&&/avx512cd/&&/avx512dq/&&/avx512vl/) level = 4; if (level > 0) { print "x64v" level; exit level + 1 }; exit 1;}' | tr -d "\n")
+	#'
 	if [ "$PSABI" = "x64v1" ]; then
 		echo "psABI x86-64-v1 not supported by Xanmod kernel 6.11, use an older kernel"
 		exit 0
@@ -518,10 +521,11 @@ elif [ "$KERNEL" = "6.11" ] && [ "$ARCH" = "amd64" ]; then
 elif [ "$KERNEL" = "6.12" ] && [ "$ARCH" = "amd64" ]; then
 	# awk command from xanmod website
 	PSABI=$(awk 'BEGIN { while (!/flags/) if (getline < "/proc/cpuinfo" != 1) exit 1; if (/lm/&&/cmov/&&/cx8/&&/fpu/&&/fxsr/&&/mmx/&&/syscall/&&/sse2/) level = 1; if (level == 1 && /cx16/&&/lahf/&&/popcnt/&&/sse4_1/&&/sse4_2/&&/ssse3/) level = 2; if (level == 2 && /avx/&&/avx2/&&/bmi1/&&/bmi2/&&/f16c/&&/fma/&&/abm/&&/movbe/&&/xsave/) level = 3; if (level == 3 && /avx512f/&&/avx512bw/&&/avx512cd/&&/avx512dq/&&/avx512vl/) level = 4; if (level > 0) { print "x64v" level; exit level + 1 }; exit 1;}' | tr -d "\n")
+	#'
 	if [ "$PSABI" = "x64v4" ]; then
 		PSABI="x64v3"
 	fi
-	KERNEL_VERSION="6.12.37
+	KERNEL_VERSION="6.12.37"
 	KERNEL_REV="0~20250710.g2eb0796"
 	if [ "$CHINA" = "yes" ]; then
 		wget -O /tmp/linux-image-${KERNEL_VERSION}-${PSABI}-xanmod1_${KERNEL_VERSION}-${PSABI}-xanmod1-${KERNEL_REV}_amd64.deb https://sourceforge.net/projects/xanmod/files/releases/main/${KERNEL_VERSION}-xanmod1/${KERNEL_VERSION}-${PSABI}-xanmod1/linux-image-${KERNEL_VERSION}-${PSABI}-xanmod1_${KERNEL_VERSION}-${PSABI}-xanmod1-${KERNEL_REV}_amd64.deb

@@ -38,6 +38,9 @@ UBOND=${UBOND:-no}
 UBOND_PASS=${UBOND_PASS:-$(head -c 32 /dev/urandom | base64 -w0)}
 OPENVPN=${OPENVPN:-yes}
 OPENVPN_BONDING=${OPENVPN_BONDING:-yes}
+SOFTETHERVPN=${SOFTETHERVPN:-no}
+SOFTETHERVPN_PASS_ADMIN=${SOFTETHERVPN_PASS_ADMIN:-$(od -vN "16" -An -tx1 /dev/urandom | tr '[:lower:]' '[:upper:]' | tr -d " \n")}
+SOFTETHERVPN_PASS_USER=${SOFTETHERVPN_PASS_USER:-$(od -vN "16" -An -tx1 /dev/urandom | tr '[:lower:]' '[:upper:]' | tr -d " \n")}
 DSVPN=${DSVPN:-yes}
 WIREGUARD=${WIREGUARD:-yes}
 FAIL2BAN=${FAIL2BAN:-yes}
@@ -80,8 +83,8 @@ MLVPN_BINARY_VERSION="3.0.0+20211028.git.ddafba3"
 UBOND_VERSION="31af0f69ebb6d07ed9348dca2fced33b956cedee"
 OBFS_VERSION="486bebd9208539058e57e23a12f23103016e09b4"
 OBFS_BINARY_VERSION="0.0.5-1"
-OMR_ADMIN_VERSION="c8a7108a2a68c4aaa3ed586f80592601870551bc"
-OMR_ADMIN_BINARY_VERSION="0.15+20250717"
+OMR_ADMIN_VERSION="b439ed1c87f02ec170b29bc7695348a29fcf5ad4"
+OMR_ADMIN_BINARY_VERSION="0.16+20250806_all"
 #OMR_ADMIN_BINARY_VERSION="0.3+20220827"
 DSVPN_VERSION="3b99d2ef6c02b2ef68b5784bec8adfdd55b29b1a"
 DSVPN_BINARY_VERSION="0.1.4-2"
@@ -104,7 +107,7 @@ VPSURL="https://www.openmptcprouter.com/"
 REPO="repo.openmptcprouter.com"
 CHINA=${CHINA:-no}
 
-OMR_VERSION="0.1032-test"
+OMR_VERSION="0.1033-rolling"
 
 DIR=$( pwd )
 #"
@@ -339,7 +342,7 @@ else
 		Pin: origin ${REPO}
 		Pin-Priority: 1001
 	EOF
-	if [ -n "$(echo $OMR_VERSION | grep test)" ]; then
+	if [ -n "$(echo $OMR_VERSION | grep test)" ] || [ -n "$(echo $OMR_VERSION | grep rolling)" ]; then
 		echo "deb [arch=amd64] https://${REPO} next main" > /etc/apt/sources.list.d/openmptcprouter-test.list
 #		cat <<-EOF | tee -a /etc/apt/preferences.d/openmptcprouter.pref
 #			Explanation: Prefer OpenMPTCProuter provided packages over the Debian native ones
@@ -1882,6 +1885,82 @@ if [ "$GLORYTUN_TCP" = "yes" ]; then
 	[ "$(ip -6 a)" != "" ] && sed -i 's/0.0.0.0/::/g' /etc/glorytun-tcp/tun0
 fi
 
+if [ "$SOFTETHERVPN" = "yes" ]; then
+	apt-get -y install softether-vpnserver
+	if [ "$KERNEL" != "5.4" ]; then
+		mptcpize enable softether-vpnserver >/dev/null 2>&1
+	fi
+	set +e
+	softether_test() {
+		# Check if SoftEther VPN is available...
+		result=1
+		while ! $($@ About >/dev/null 2>&1); do
+			sleep 1
+			echo -n '.'
+		done
+		echo "Server ready for configuration..."
+	}
+	softether_password=$(cat /etc/openmptcprouter-vps-admin/omr-admin-config.json | jq -r .softethervpn_admin_password | tr -d "\n")
+	#echo "softether : $softether_password"
+	if [ "$softether_password" = "null" ]; then
+		#echo "Generate pass..."
+		softether_password=$SOFTETHERVPN_PASS_ADMIN
+		softetherrun="vpncmd 127.0.0.1:443 /SERVER /CSV /CMD"
+		softether_test "$softetherrun"
+		$softetherrun ServerPasswordSet $softether_password
+		softetherdefault="vpncmd 127.0.0.1:443 /SERVER /CSV /PASSWORD:$softether_password"
+		jq --arg softether_password $softether_password '. + {softethervpn_admin_password: $softether_password}' /etc/openmptcprouter-vps-admin/omr-admin-config.json > /etc/openmptcprouter-vps-admin/omr-admin-config.json.tmp
+		mv -f /etc/openmptcprouter-vps-admin/omr-admin-config.json.tmp /etc/openmptcprouter-vps-admin/omr-admin-config.json
+	else
+		softetherdefault="vpncmd 127.0.0.1:65390 /SERVER /CSV /PASSWORD:$softether_password"
+	fi
+
+	softherether_user_name=$DEFAULT_USER
+	softether_user_password=$(cat /etc/openmptcprouter-vps-admin/omr-admin-config.json | jq -r .users[0].openmptcprouter.softethervpn | tr -d "\n")
+	#echo "softether user : $softether_user_password"
+	if [ "$softether_user_password" = "null" ]; then
+		#echo "Generate user password"
+		softether_user_password=$SOFTETHERVPN_PASS_USER
+		jq --arg softether_user_password $softether_user_password '(.users[0].openmptcprouter) += {softethervpn: $softether_user_password}' /etc/openmptcprouter-vps-admin/omr-admin-config.json > /etc/openmptcprouter-vps-admin/omr-admin-config.json.tmp
+		mv -f /etc/openmptcprouter-vps-admin/omr-admin-config.json.tmp /etc/openmptcprouter-vps-admin/omr-admin-config.json
+	fi
+
+	softetherrun="$softetherdefault /CMD"
+	softetherhubrun="$softetherdefault /HUB:OMRVPN /CMD"
+	softether_test "$softetherrun"
+
+	#echo "$softetherrun ServerPasswordSet $softether_password"
+	$softetherrun ServerPasswordSet "$softether_password"
+	#echo "$softetherrun HubCreate OMRVPN"
+	$softetherrun HubCreate OMRVPN /PASSWORD:"$softether_password"
+	#echo "$softetherrun HubDelete DEFAULT"
+	$softetherrun HubDelete DEFAULT
+	#echo "$softetherrun BridgeCreate OMRVPN /DEVICE:softether /TAP:yes"
+	$softetherrun BridgeCreate OMRVPN /DEVICE:softether /TAP:yes
+	#echo "$softetherhubrun DHCPSet OMRVPN /START:10.255.210.2 /END:10.255.210.254 /MASK:255.255.255.0 /EXPIRE:7200 /GW:10.255.210.1 /DNS:none /DNS2:none /DOMAIN:none /LOG:yes"
+	$softetherhubrun DHCPSet /START:10.255.210.2 /END:10.255.210.254 /MASK:255.255.255.0 /EXPIRE:7200 /GW:10.255.210.1 /DNS:none /DNS2:none /DOMAIN:none /LOG:yes
+	#echo "$softetherhubrun DHCPSet OMRVPN DhcpEnable"
+	$softetherhubrun DhcpEnable
+	#echo "$softetherhubrun SecureNatEnable OMRVPN"
+	$softetherhubrun SecureNatEnable
+	#echo "$softetherhubrun NatEnable OMRVPN"
+	$softetherhubrun NatEnable
+	#echo "$softetherhubrun UserCreate ${softherether_user_name} /GROUP:none /REALNAME:none /NOTE:none"
+	$softetherhubrun UserCreate ${softherether_user_name} /GROUP:none /REALNAME:none /NOTE:none
+	#echo "$softetherhubrun UserPasswordSet ${softherether_user_name} /PASSWORD:${softether_user_password}"
+	$softetherhubrun UserPasswordSet ${softherether_user_name} /PASSWORD:${softether_user_password}
+	#echo "$softetherhubrun ListenerCreate OMRVPN 65390"
+	$softetherrun ListenerCreate 65390
+	$softetherrun ListenerEnable 65390
+	softetherdefault="vpncmd 127.0.0.1:65390 /SERVER /CSV /PASSWORD:$softether_password"
+	softetherhubrun="$softetherdefault /HUB:OMRVPN /CMD"
+	$softetherrun ListenerDisable 443
+	$softetherrun ListenerDisable 992
+	$softetherrun ListenerDisable 1194
+	$softetherrun ListenerDisable 5555
+	$softetherrun PortsUDPSet 0
+	set -e
+fi
 
 # Load tun module at boot time
 if ! grep -q tun /etc/modules ; then

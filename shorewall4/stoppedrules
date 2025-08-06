@@ -27,4 +27,5 @@ ACCEPT          wg+		-
 ACCEPT          -               wg+
 ACCEPT          client-wg+	-
 ACCEPT          -               client-wg+
-
+ACCEPT          tap_softether	-
+ACCEPT          -               tap_softether

@@ -27,10 +27,12 @@ _glorytun_udp() {
 			systemctl -q restart 'glorytun-udp@*'
 			sleep 10
 		}
-		for intf in /etc/glorytun-udp/tun*; do
-			[ "$(echo $intf | grep key)" = "" ] && /etc/glorytun-udp/post.sh ${intf}
-		done
-		#ip link set mtu 9000 dev gt-udp-tun0 >/dev/null 2>&1
+		if [ -z "$(pgrep post.sh)" ]; then
+			for intf in /etc/glorytun-udp/tun*; do
+				[ "$(echo $intf | grep key)" = "" ] && /etc/glorytun-udp/post.sh ${intf} &
+			done
+			#ip link set mtu 9000 dev gt-udp-tun0 >/dev/null 2>&1
+		fi
 	fi
 }
 
@@ -67,6 +69,15 @@ _dsvpn() {
 				systemctl restart dsvpn-server@dsvpn0
 			fi
 			#ip link set mtu 9000 dev dsvpn0 >/dev/null 2>&1
+		fi
+	fi
+}
+
+_softethervpn() {
+	if systemctl list-unit-files softether-vpnserver.service >/dev/null; then
+		if [ -z "$(ip a show dev tap_softether | grep '10.255.210.1')" ]; then
+			ip a add 10.255.210.1/24 dev tap_softether >/dev/null 2>&1
+			ip link set promisc on tap_softether >/dev/null 2>&1
 		fi
 	fi
 }
@@ -221,6 +232,7 @@ while true; do
 	_xray
 	_v2ray
 	_dsvpn
+	_softethervpn
 	_wireguard
 	_multipath
 	_omr_api

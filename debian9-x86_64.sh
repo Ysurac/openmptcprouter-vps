@@ -83,8 +83,8 @@ MLVPN_BINARY_VERSION="3.0.0+20211028.git.ddafba3"
 UBOND_VERSION="31af0f69ebb6d07ed9348dca2fced33b956cedee"
 OBFS_VERSION="486bebd9208539058e57e23a12f23103016e09b4"
 OBFS_BINARY_VERSION="0.0.5-1"
-OMR_ADMIN_VERSION="b439ed1c87f02ec170b29bc7695348a29fcf5ad4"
-OMR_ADMIN_BINARY_VERSION="0.16+20250806_all"
+OMR_ADMIN_VERSION="14387eac2a5f1dcece149d8207c2f57200906694"
+OMR_ADMIN_BINARY_VERSION="0.16+20250811_all"
 #OMR_ADMIN_BINARY_VERSION="0.3+20220827"
 DSVPN_VERSION="3b99d2ef6c02b2ef68b5784bec8adfdd55b29b1a"
 DSVPN_BINARY_VERSION="0.1.4-2"
@@ -107,7 +107,7 @@ VPSURL="https://www.openmptcprouter.com/"
 REPO="repo.openmptcprouter.com"
 CHINA=${CHINA:-no}
 
-OMR_VERSION="0.1034-rolling"
+OMR_VERSION="0.1035-rolling"
 
 DIR=$( pwd )
 #"
@@ -204,7 +204,7 @@ fi
 #	wget https://${REPO}/openmptcprouter.gpg.key -O /etc/apt/trusted.gpg.d/openmptcprouter.gpg
 #}
 
-CURRENT_OMR="$(grep -s 'OpenMPTCProuter VPS' /etc/* | awk '{print $4}')"
+CURRENT_OMR="$(grep -s 'OpenMPTCProuter VPS' /etc/* | awk '{print $4}' || true)"
 if [ "$REINSTALL" = "no" ] && [ "$CURRENT_OMR" = "$OMR_VERSION" ]; then
 	exit 1
 fi
@@ -401,7 +401,7 @@ fi
 echo "Install mptcp kernel and shadowsocks..."
 apt-get update --allow-releaseinfo-change
 sleep 2
-if [ "$ID" = "debian" ] && [ "$VERSION_ID" = "13" ]) then
+if [ "$ID" = "debian" ] && [ "$VERSION_ID" = "13" ]; then
 	apt-get -y install dirmngr patch rename curl unzip pkg-config ipset
 else
 	apt-get -y install dirmngr patch rename curl libcurl4 unzip pkg-config ipset
@@ -747,7 +747,7 @@ if [ "$SHADOWSOCKS" = "yes" ]; then
 			if [ "$VERSION_ID" = "9" ]; then
 				apt -y -t stretch-backports install libsodium-dev
 			else
-				apt -y install libsodium-dev
+				apt -y install libsodium-dev || true
 			fi
 		elif [ "$ID" = "ubuntu" ]; then
 			rm -f /var/lib/dpkg/lock
@@ -757,10 +757,10 @@ if [ "$SHADOWSOCKS" = "yes" ]; then
 		#cd /tmp/shadowsocks-libev-${SHADOWSOCKS_VERSION}
 		rm -f /var/lib/dpkg/lock
 		rm -f /var/lib/dpkg/lock-frontend
-		mk-build-deps --install --tool "apt-get -o Debug::pkgProblemResolver=yes --no-install-recommends -y" >/dev/null 2>&1
+		mk-build-deps --install --tool "apt-get -o Debug::pkgProblemResolver=yes --no-install-recommends -y" >/dev/null 2>&1 || true
 		rm -f /var/lib/dpkg/lock
 		rm -f /var/lib/dpkg/lock-frontend
-		dpkg-buildpackage -b -us -uc >/dev/null 2>&1
+		dpkg-buildpackage -b -us -uc >/dev/null 2>&1 || true
 		rm -f /var/lib/dpkg/lock
 		rm -f /var/lib/dpkg/lock-frontend
 		cd /tmp
@@ -885,7 +885,9 @@ if [ "$OMR_ADMIN" = "yes" ]; then
 	echo "If you see any error here, I really don't care: it's about a module not used for home users"
 	#pip3 install pyjwt passlib uvicorn fastapi netjsonconfig python-multipart netaddr
 	#pip3 -q install fastapi netjsonconfig python-multipart uvicorn -U
-	if [ "$ID" = "debian" ] && ([ "$VERSION_ID" = "12" ] || [ "$VERSION_ID" = "13" ]); then
+	if [ "$ID" = "debian" ] && [ "$VERSION_ID" = "13" ]; then
+		apt-get -y install python3-jsonschema python3-fastapi python3-multipart python3-starlette
+	elif [ "$ID" = "debian" ] && [ "$VERSION_ID" = "12" ]; then
 		#pip3 -q install netjsonconfig --break-system-packages
 		pip3 -q install fastapi -U --break-system-packages
 		pip3 -q install jsonschema -U --break-system-packages
@@ -1735,9 +1737,9 @@ if [ "$GLORYTUN_UDP" = "yes" ]; then
 		git submodule update --init --recursive
 		meson build
 		ninja -C build install
-		sed -i 's:EmitDNS=yes:EmitDNS=no:g' /lib/systemd/network/glorytun.network
-		rm /lib/systemd/system/glorytun*
-		rm /lib/systemd/network/glorytun*
+		sed -i 's:EmitDNS=yes:EmitDNS=no:g' /lib/systemd/network/glorytun.network || true
+		rm -f /lib/systemd/system/glorytun*
+		rm -f /lib/systemd/network/glorytun*
 		if [ "$LOCALFILES" = "no" ]; then
 			wget -O /usr/local/bin/glorytun-udp-run ${VPSURL}${VPSPATH}/glorytun-udp-run
 		else
@@ -1868,6 +1870,12 @@ if [ "$GLORYTUN_TCP" = "yes" ]; then
 			mv /tmp/glorytun-tcp /tmp/glorytun-0.0.35
 		fi
 		cd glorytun-0.0.35
+		if [ "$ID" = "debian" ] && [ "$VERSION_ID" = "13" ]; then
+			wget https://github.com/Ysurac/openmptcprouter-feeds/raw/refs/heads/develop/glorytun/patches/001-fix-compilation-errors-gcc14.patch
+			wget https://github.com/Ysurac/openmptcprouter-feeds/raw/refs/heads/develop/glorytun/patches/002-fix-crypto-aead-pointer-types.patch
+			patch -p1 < 001-fix-compilation-errors-gcc14.patch
+			patch -p1 < 002-fix-crypto-aead-pointer-types.patch
+		fi
 		./autogen.sh
 		./configure
 		make

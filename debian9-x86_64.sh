@@ -401,7 +401,7 @@ fi
 echo "Install mptcp kernel and shadowsocks..."
 apt-get update --allow-releaseinfo-change
 sleep 2
-if [ "$ID" = "debian" ] && [ "$VERSION_ID" = "13" ]) then
+if [ "$ID" = "debian" ] && [ "$VERSION_ID" = "13" ]; then
 	apt-get -y install dirmngr patch rename curl unzip pkg-config ipset
 else
 	apt-get -y install dirmngr patch rename curl libcurl4 unzip pkg-config ipset
@@ -1867,6 +1867,7 @@ if [ "$GLORYTUN_TCP" = "yes" ]; then
 		if [ "$KERNEL" != "5.4" ]; then
 			mv /tmp/glorytun-tcp /tmp/glorytun-0.0.35
 		fi
+        touch AUTHORS ChangeLog NEWS
 		cd glorytun-0.0.35
 		./autogen.sh
 		./configure

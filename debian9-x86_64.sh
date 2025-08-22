@@ -27,6 +27,7 @@ SHADOWSOCKS_GO=${SHADOWSOCKS_GO:-yes}
 PSK=${PSK:-$(head -c 32 /dev/urandom | base64 -w0)}
 UPSK=${UPSK:-$(head -c 32 /dev/urandom | base64 -w0)}
 UPDATE_OS=${UPDATE_OS:-yes}
+FORCE_UPDATE_OS=${FORCE_UPDATE_OS:-no}
 UPDATE=${UPDATE:-yes}
 TLS=${TLS:-yes}
 OMR_ADMIN=${OMR_ADMIN:-yes}
@@ -76,6 +77,7 @@ GLORYTUN_UDP_VERSION="23100474922259d00a8c0c4b00a0c8de89202cf9"
 GLORYTUN_UDP_BINARY_VERSION="0.3.4-5"
 GLORYTUN_TCP=${GLORYTUN_TCP:-yes}
 # Old Glorytun TCP version if sources is not enabled...
+GLORYTUN_TCP_VERSION="8aebb3efb3b108b1276aa74679e200e003f298de"
 GLORYTUN_TCP_BINARY_VERSION="0.0.35-6"
 #MLVPN_VERSION="8f9720978b28c1954f9f229525333547283316d2"
 MLVPN_VERSION="8aa1b16d843ea68734e2520e39a34cb7f3d61b2b"
@@ -107,7 +109,7 @@ VPSURL="https://www.openmptcprouter.com/"
 REPO="repo.openmptcprouter.com"
 CHINA=${CHINA:-no}
 
-OMR_VERSION="0.1035-rolling"
+OMR_VERSION="0.1036-rolling-test"
 
 DIR=$( pwd )
 #"
@@ -279,7 +281,9 @@ if [ "$ID" = "debian" ] && [ "$VERSION_ID" = "11" ] && [ "$UPDATE_OS" = "yes" ];
 	apt-get -y -o Dpkg::Options::="--force-confdef" -o Dpkg::Options::="--force-confnew" --allow-downgrades dist-upgrade
 	VERSION_ID="12"
 fi
-if [ "$ID" = "debian" ] && [ "$VERSION_ID" = "12" ] && [ "$UPDATE_OS" = "yes" ] && false; then
+
+# Update to Debian 13 only if FORCE_UPDATE_OS is set to yes. No problem to use Debian 12 if not.
+if [ "$ID" = "debian" ] && [ "$VERSION_ID" = "12" ] && [ "$FORCE_UPDATE_OS" = "yes" ]; then
 	echo "Update Debian 12 Bookworm to Debian 13 Trixie"
 	apt-get -y -f --force-yes -o Dpkg::Options::="--force-confdef" -o Dpkg::Options::="--force-confnew" --allow-downgrades upgrade
 	apt-get -y -f --force-yes -o Dpkg::Options::="--force-confdef" -o Dpkg::Options::="--force-confnew" --allow-downgrades dist-upgrade
@@ -390,8 +394,8 @@ if [ "$ID" = "debian" ]; then
 		echo 'deb http://deb.debian.org/debian bullseye main' > /etc/apt/sources.list.d/bullseye.list
 	fi
 elif [ "$ID" = "ubuntu" ]; then
-	echo 'deb http://archive.ubuntu.com/ubuntu bionic-backports main' > /etc/apt/sources.list.d/bionic-backports.list
-	echo 'deb http://archive.ubuntu.com/ubuntu bionic universe' > /etc/apt/sources.list.d/bionic-universe.list
+	echo 'deb https://ports.ubuntu.com/ubuntu-ports bionic-backports main' > /etc/apt/sources.list.d/bionic-backports.list
+	echo 'deb https://ports.ubuntu.com/ubuntu-ports bionic universe' > /etc/apt/sources.list.d/bionic-universe.list
 	[ "$VERSION_ID" = "22.04" ] && {
 		apt-key adv --keyserver keyserver.ubuntu.com --recv-keys 3B4FE6ACC0B21F32
 		echo 'deb http://old-releases.ubuntu.com/ubuntu impish main universe' > /etc/apt/sources.list.d/impish-universe.list
@@ -735,8 +739,8 @@ if [ "$SHADOWSOCKS" = "yes" ]; then
 		#rm -rf /tmp/libbpf
 		rm -f /var/lib/dpkg/lock
 		rm -f /var/lib/dpkg/lock-frontend
-		apt-get -y install --no-install-recommends devscripts equivs apg libcap2-bin libpam-cap libc-ares2 libc-ares-dev libev4 haveged libpcre3-dev
-		apt-get -y install --no-install-recommends asciidoc-base asciidoc-common docbook-xml docbook-xsl libev-dev libmbedcrypto3 libmbedtls-dev libmbedtls12 libmbedx509-0 libxml2-utils libxslt1.1 pkg-config sgml-base sgml-data xml-core xmlto xsltproc
+		apt-get -y install --no-install-recommends devscripts equivs apg libcap2-bin libpam-cap libc-ares2 libc-ares-dev libev4 haveged libpcre3-dev || true
+		apt-get -y install --no-install-recommends asciidoc-base asciidoc-common docbook-xml docbook-xsl libev-dev libmbedcrypto3 libmbedtls-dev libmbedtls12 libmbedx509-0 libxml2-utils libxslt1.1 pkg-config sgml-base sgml-data xml-core xmlto xsltproc || true
 		sleep 1
 		rm -f /var/lib/dpkg/lock
 		rm -f /var/lib/dpkg/lock-frontend
@@ -747,7 +751,7 @@ if [ "$SHADOWSOCKS" = "yes" ]; then
 			if [ "$VERSION_ID" = "9" ]; then
 				apt -y -t stretch-backports install libsodium-dev
 			else
-				apt -y install libsodium-dev || true
+				apt-get -y install libsodium-dev || true
 			fi
 		elif [ "$ID" = "ubuntu" ]; then
 			rm -f /var/lib/dpkg/lock
@@ -765,7 +769,7 @@ if [ "$SHADOWSOCKS" = "yes" ]; then
 		rm -f /var/lib/dpkg/lock-frontend
 		cd /tmp
 		#dpkg -i shadowsocks-libev_*.deb
-		dpkg -i omr-shadowsocks-libev_*.deb >/dev/null 2>&1
+		dpkg -i omr-shadowsocks-libev_*.deb >/dev/null 2>&1 || true
 		#mkdir -p /usr/lib/shadowsocks-libev
 		#cp -f /tmp/shadowsocks-libev-${SHADOWSOCKS_VERSION}/src/*.ebpf /usr/lib/shadowsocks-libev
 		#rm -rf /tmp/shadowsocks-libev-${SHADOWSOCKS_VERSION}
@@ -1315,6 +1319,11 @@ if [ "$XRAY" = "yes" ]; then
 		mv -f /etc/openmptcprouter-vps-admin/omr-admin-config.json /etc/openmptcprouter-vps-admin/omr-admin-config.json.bak
 		mv -f /etc/openmptcprouter-vps-admin/omr-admin-config.json.new /etc/openmptcprouter-vps-admin/omr-admin-config.json
 	fi
+	if [ -f /etc/xray/xray-server.json ]; then
+		jq -M 'del(.api.listen)' /etc/xray/xray-server.json > /etc/xray/xray-server.json.new
+		mv -f /etc/xray/xray-server.json /etc/xray/xray-server.json.bak
+		mv -f /etc/xray/xray-server.json.new /etc/xray/xray-server.json
+	fi
 	if [ ! -f /etc/xray/xray-server.json ] || [ -z "$(grep -i mptcp /etc/xray/xray-server.json | grep true)" ] || [ -z "$(grep -i transport /etc/xray/xray-server.json)" ]; then
 		if [ "$LOCALFILES" = "no" ]; then
 			wget -O /etc/xray/xray-server.json ${VPSURL}${VPSPATH}/xray-server.json
@@ -1844,12 +1853,14 @@ if systemctl -q is-active glorytun-tcp@tun0.service 2>/dev/null; then
 	systemctl -q stop 'glorytun-tcp@*' > /dev/null 2>&1
 fi
 if [ "$GLORYTUN_TCP" = "yes" ]; then
+	echo "Install Glorytun-TCP..."
 	if [ "$SOURCES" = "yes" ]; then
+		echo "install libsodium..."
 		if [ "$ID" = "debian" ]; then
 			if [ "$VERSION_ID" = "9" ]; then
 				apt -t stretch-backports -y install libsodium-dev
 			else
-				apt -y install libsodium-dev
+				apt-get -y install libsodium-dev || true
 			fi
 		elif [ "$ID" = "ubuntu" ]; then
 			apt-get -y install libsodium-dev
@@ -1857,20 +1868,27 @@ if [ "$GLORYTUN_TCP" = "yes" ]; then
 		rm -f /var/lib/dpkg/lock
 		rm -f /var/lib/dpkg/lock-frontend
 		rm -f /usr/bin/glorytun-tcp
-		apt-get -y install build-essential pkg-config autoconf automake
+		echo "Install needed build tools..."
+		apt-get -y install build-essential pkg-config autoconf automake || true
 		rm -rf /tmp/glorytun-0.0.35
 		cd /tmp
 		if [ "$KERNEL" != "5.4" ]; then
-			wget -O /tmp/glorytun-0.0.35.tar.gz https://github.com/Ysurac/glorytun/archive/refs/heads/tcp.tar.gz
+			#wget -O /tmp/glorytun-0.0.35.tar.gz https://github.com/Ysurac/glorytun/archive/refs/heads/tcp.tar.gz
+			#if [ "$KERNEL" != "5.4" ]; then
+			#	mv /tmp/glorytun-tcp /tmp/glorytun-0.0.35
+			#fi
+			echo "Clone glorytun"
+			git clone https://github.com/Ysurac/glorytun.git glorytun-0.0.35
+			cd glorytun-0.0.35
+			echo "checkout ${GLORYTUN_TCP_VERSION}"
+			git checkout ${GLORYTUN_TCP_VERSION}
 		else
 			wget -O /tmp/glorytun-0.0.35.tar.gz https://github.com/angt/glorytun/releases/download/v0.0.35/glorytun-0.0.35.tar.gz
+			tar xzf glorytun-0.0.35.tar.gz
+			cd glorytun-0.0.35
 		fi
-		tar xzf glorytun-0.0.35.tar.gz
-		if [ "$KERNEL" != "5.4" ]; then
-			mv /tmp/glorytun-tcp /tmp/glorytun-0.0.35
-		fi
-		cd glorytun-0.0.35
 		if [ "$ID" = "debian" ] && [ "$VERSION_ID" = "13" ]; then
+			echo "Patch Glorytun TCP"
 			wget https://github.com/Ysurac/openmptcprouter-feeds/raw/refs/heads/develop/glorytun/patches/001-fix-compilation-errors-gcc14.patch
 			wget https://github.com/Ysurac/openmptcprouter-feeds/raw/refs/heads/develop/glorytun/patches/002-fix-crypto-aead-pointer-types.patch
 			patch -p1 < 001-fix-compilation-errors-gcc14.patch
@@ -1968,6 +1986,8 @@ if [ "$SOFTETHERVPN" = "yes" ]; then
 	$softetherhubrun DhcpEnable
 	#echo "$softetherhubrun SecureNatEnable OMRVPN"
 	$softetherhubrun SecureNatEnable
+	#echo "$softetherhubrun SecureNatHostSet /IP:10.255.210.1 /MAC:none /MASK:none"
+	$softetherhubrun SecureNatHostSet /IP:10.255.210.1 /MAC:none /MASK:none
 	#echo "$softetherhubrun NatEnable OMRVPN"
 	$softetherhubrun NatEnable
 	#echo "$softetherhubrun UserCreate ${softherether_user_name} /GROUP:none /REALNAME:none /NOTE:none"
@@ -1975,15 +1995,15 @@ if [ "$SOFTETHERVPN" = "yes" ]; then
 	#echo "$softetherhubrun UserPasswordSet ${softherether_user_name} /PASSWORD:${softether_user_password}"
 	$softetherhubrun UserPasswordSet ${softherether_user_name} /PASSWORD:${softether_user_password}
 	#echo "$softetherhubrun ListenerCreate OMRVPN 65390"
-	$softetherrun ListenerCreate 65390
-	$softetherrun ListenerEnable 65390
+	$softetherhubrun ListenerCreate 65390
+	$softetherhubrun ListenerEnable 65390
 	softetherdefault="vpncmd 127.0.0.1:65390 /SERVER /CSV /PASSWORD:$softether_password"
 	softetherhubrun="$softetherdefault /HUB:OMRVPN /CMD"
-	$softetherrun ListenerDisable 443
-	$softetherrun ListenerDisable 992
-	$softetherrun ListenerDisable 1194
-	$softetherrun ListenerDisable 5555
-	$softetherrun PortsUDPSet 0
+	$softetherhubrun ListenerDisable 443
+	$softetherhubrun ListenerDisable 992
+	$softetherhubrun ListenerDisable 1194
+	$softetherhubrun ListenerDisable 5555
+	$softetherhubrun PortsUDPSet 0
 	set -e
 fi
 
@@ -2116,7 +2136,7 @@ else
 		rm -f ${DIR}/openmptcprouter-shorewall.tar.gz
 		rm -f ${DIR}/openmptcprouter-shorewall6.tar.gz
 	fi
-	if [ -f  /etc/shorewall/params.vpn ]; then
+	if [ -f /etc/shorewall/params.vpn ]; then
 		awk '!seen[$0]++' /etc/shorewall/params.vpn > params.vpn.new
 		mv -f params.vpn.new params.vpn
 	fi

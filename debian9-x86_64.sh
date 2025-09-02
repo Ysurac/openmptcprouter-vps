@@ -109,7 +109,7 @@ VPSURL="https://www.openmptcprouter.com/"
 REPO="repo.openmptcprouter.com"
 CHINA=${CHINA:-no}
 
-OMR_VERSION="0.1037-rolling-test"
+OMR_VERSION="0.1038-rolling-test"
 
 DIR=$( pwd )
 #"

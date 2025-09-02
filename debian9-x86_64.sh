@@ -1640,6 +1640,7 @@ if [ "$OPENVPN" = "yes" ]; then
 		EASYRSA_CERT_EXPIRE=3650 ./easyrsa --batch build-client-full "openmptcprouter" nopass
 		EASYRSA_CRL_DAYS=3650 ./easyrsa --batch gen-crl
 	fi
+	chmod 644 /etc/openvpn/ca/pki/crl.pem >/dev/null 2>&1 || true
 	if [ ! -f "/etc/openvpn/ca/pki/issued/openmptcprouter.crt" ]; then
 		mv /etc/openvpn/ca/pki/issued/client.crt /etc/openvpn/ca/pki/issued/openmptcprouter.crt
 		mv /etc/openvpn/ca/pki/private/client.key /etc/openvpn/ca/pki/private/openmptcprouter.key

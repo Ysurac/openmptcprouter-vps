@@ -6,6 +6,7 @@ if [ ! -f "$1" ]; then
         echo "usage: $(basename "$0") FILE"
         exit 1
 fi
+[ ! -f $(readlink -f "$1") ] && exit 0
 
 . "$(readlink -f "$1")"
 

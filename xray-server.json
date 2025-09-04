@@ -1,7 +1,7 @@
 {
 	"log": {
 		"loglevel": "error",
-		"error": "/tmp/v2rayError.log"
+		"error": "/tmp/xrayError.log"
 	},
 	"inbounds": [
 		{

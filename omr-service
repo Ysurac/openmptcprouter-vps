@@ -92,7 +92,7 @@ _shadowsocks_go() {
 _xray() {
 	if systemctl list-unit-files xray.service >/dev/null; then
 		[ -z "$(pgrep xray)" ] && {
-			logger -t "OMR-Service" "ss-server not detected, restart XRay"
+			logger -t "OMR-Service" "xray not detected, restart XRay"
 			systemctl restart xray
 		}
 	fi
@@ -228,5 +228,5 @@ while true; do
 	[ "$gre_tunnels" != "false" ] && _gre_tunnels
 	_openvpn_bonding
 	_vpn1
-	sleep 10
+	sleep 30
 done

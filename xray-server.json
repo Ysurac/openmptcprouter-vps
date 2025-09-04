@@ -206,7 +206,6 @@
 	"stats": {},
 	"api": {
 		"tag": "api",
-		"listen": "127.0.0.1:65080",
 		"services": [
 			"HandlerService",
 			"LoggerService",

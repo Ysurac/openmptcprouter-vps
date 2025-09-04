@@ -73,6 +73,7 @@ GLORYTUN_UDP_VERSION="23100474922259d00a8c0c4b00a0c8de89202cf9"
 GLORYTUN_UDP_BINARY_VERSION="0.3.4-5"
 GLORYTUN_TCP=${GLORYTUN_TCP:-yes}
 # Old Glorytun TCP version if sources is not enabled...
+GLORYTUN_TCP_VERSION="8aebb3efb3b108b1276aa74679e200e003f298de"
 GLORYTUN_TCP_BINARY_VERSION="0.0.35-6"
 #MLVPN_VERSION="8f9720978b28c1954f9f229525333547283316d2"
 MLVPN_VERSION="8aa1b16d843ea68734e2520e39a34cb7f3d61b2b"
@@ -567,7 +568,7 @@ if [ "$IPERF" = "yes" ]; then
 	[ "$ARCH" = "amd64" ] && apt-get -y remove omr-iperf3 omr-libiperf0 >/dev/null 2>&1
 	if [ "$SOURCES" = "yes" ]; then
 		apt-get -y remove iperf3 libiperf0
-		apt-get -y install xz-utils devscripts
+		apt-get -y install xz-utils devscripts equivs
 		cd /tmp
 		rm -rf iperf-3.18
 		wget https://github.com/esnet/iperf/releases/download/3.18/iperf-3.18.tar.gz
@@ -1269,6 +1270,11 @@ if [ "$XRAY" = "yes" ]; then
 		mv -f /etc/openmptcprouter-vps-admin/omr-admin-config.json /etc/openmptcprouter-vps-admin/omr-admin-config.json.bak
 		mv -f /etc/openmptcprouter-vps-admin/omr-admin-config.json.new /etc/openmptcprouter-vps-admin/omr-admin-config.json
 	fi
+	if [ -f /etc/xray/xray-server.json ]; then
+		jq -M 'del(.api.listen)' /etc/xray/xray-server.json > /etc/xray/xray-server.json.new
+		mv -f /etc/xray/xray-server.json /etc/xray/xray-server.json.bak
+		mv -f /etc/xray/xray-server.json.new /etc/xray/xray-server.json
+	fi
 	if [ ! -f /etc/xray/xray-server.json ] || [ -z "$(grep -i mptcp /etc/xray/xray-server.json | grep true)" ] || [ -z "$(grep -i transport /etc/xray/xray-server.json)" ]; then
 		wget -O /etc/xray/xray-server.json ${VPSURL}${VPSPATH}/xray-server.json
 		sed -i "s:XRAY_UUID:$XRAY_UUID:g" /etc/xray/xray-server.json
@@ -1777,7 +1783,7 @@ if [ "$GLORYTUN_TCP" = "yes" ]; then
 			if [ "$VERSION_ID" = "9" ]; then
 				apt -t stretch-backports -y install libsodium-dev
 			else
-				apt -y install libsodium-dev
+				apt -y install libsodium-dev || true
 			fi
 		elif [ "$ID" = "ubuntu" ]; then
 			apt-get -y install libsodium-dev
@@ -1785,19 +1791,22 @@ if [ "$GLORYTUN_TCP" = "yes" ]; then
 		rm -f /var/lib/dpkg/lock
 		rm -f /var/lib/dpkg/lock-frontend
 		rm -f /usr/bin/glorytun-tcp
-		apt-get -y install build-essential pkg-config autoconf automake
+		apt-get -y install build-essential pkg-config autoconf automake || true
 		rm -rf /tmp/glorytun-0.0.35
 		cd /tmp
 		if [ "$KERNEL" != "5.4" ]; then
-			wget -O /tmp/glorytun-0.0.35.tar.gz https://github.com/Ysurac/glorytun/archive/refs/heads/tcp.tar.gz
+			#wget -O /tmp/glorytun-0.0.35.tar.gz https://github.com/Ysurac/glorytun/archive/refs/heads/tcp.tar.gz
+			#if [ "$KERNEL" != "5.4" ]; then
+			#	mv /tmp/glorytun-tcp /tmp/glorytun-0.0.35
+			#fi
+			git clone https://github.com/Ysurac/glorytun.git glorytun-0.0.35
+			cd glorytun-0.0.35
+			git checkout ${GLORYTUN_TCP_VERSION}
 		else
 			wget -O /tmp/glorytun-0.0.35.tar.gz https://github.com/angt/glorytun/releases/download/v0.0.35/glorytun-0.0.35.tar.gz
+			tar xzf glorytun-0.0.35.tar.gz
+			cd glorytun-0.0.35
 		fi
-		tar xzf glorytun-0.0.35.tar.gz
-		if [ "$KERNEL" != "5.4" ]; then
-			mv /tmp/glorytun-tcp /tmp/glorytun-0.0.35
-		fi
-		cd glorytun-0.0.35
 		./autogen.sh
 		./configure
 		make

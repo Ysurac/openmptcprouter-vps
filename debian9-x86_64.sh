@@ -6,7 +6,7 @@
 # See /LICENSE for more information.
 #
 
-KERNEL=${KERNEL:-6.6}
+KERNEL=${KERNEL:-6.12}
 UPSTREAM=${UPSTREAM:-no}
 [ "$UPSTREAM" = "yes" ] && KERNEL="6.1"
 UPSTREAM6=${UPSTREAM6:-no}
@@ -46,9 +46,9 @@ DSVPN=${DSVPN:-yes}
 WIREGUARD=${WIREGUARD:-yes}
 FAIL2BAN=${FAIL2BAN:-yes}
 SOURCES=${SOURCES:-no}
-if [ "$KERNEL" != "5.4" ]; then
-	SOURCES="yes"
-fi
+#if [ "$KERNEL" != "5.4" ]; then
+#	SOURCES="yes"
+#fi
 NOINTERNET=${NOINTERNET:-no}
 GRETUNNELS=${GRETUNNELS:-yes}
 LANROUTES=${LANROUTES:-yes}
@@ -85,8 +85,8 @@ MLVPN_BINARY_VERSION="3.0.0+20211028.git.ddafba3"
 UBOND_VERSION="31af0f69ebb6d07ed9348dca2fced33b956cedee"
 OBFS_VERSION="486bebd9208539058e57e23a12f23103016e09b4"
 OBFS_BINARY_VERSION="0.0.5-1"
-OMR_ADMIN_VERSION="a10f23b23823347757d6fc048d0db524f9836649"
-OMR_ADMIN_BINARY_VERSION="0.16+20250829_all"
+OMR_ADMIN_VERSION="c3f7df447883d7c75f2f1004c9ae306f7cb8e5d6"
+OMR_ADMIN_BINARY_VERSION="0.16+20250909"
 #OMR_ADMIN_BINARY_VERSION="0.3+20220827"
 DSVPN_VERSION="3b99d2ef6c02b2ef68b5784bec8adfdd55b29b1a"
 DSVPN_BINARY_VERSION="0.1.4-2"
@@ -109,7 +109,7 @@ VPSURL="https://www.openmptcprouter.com/"
 REPO="repo.openmptcprouter.com"
 CHINA=${CHINA:-no}
 
-OMR_VERSION="0.1038-rolling-test"
+OMR_VERSION="0.1040-rolling-test"
 
 DIR=$( pwd )
 #"
@@ -283,7 +283,7 @@ if [ "$ID" = "debian" ] && [ "$VERSION_ID" = "11" ] && [ "$UPDATE_OS" = "yes" ];
 fi
 
 # Update to Debian 13 only if FORCE_UPDATE_OS is set to yes. No problem to use Debian 12 if not.
-if [ "$ID" = "debian" ] && [ "$VERSION_ID" = "12" ] && [ "$FORCE_UPDATE_OS" = "yes" ]; then
+if [ "$ID" = "debian" ] && [ "$VERSION_ID" = "12" ] && [ "$UPDATE_OS" = "yes" ]; then
 	echo "Update Debian 12 Bookworm to Debian 13 Trixie"
 	apt-get -y -f --force-yes -o Dpkg::Options::="--force-confdef" -o Dpkg::Options::="--force-confnew" --allow-downgrades upgrade
 	apt-get -y -f --force-yes -o Dpkg::Options::="--force-confdef" -o Dpkg::Options::="--force-confnew" --allow-downgrades dist-upgrade
@@ -291,6 +291,7 @@ if [ "$ID" = "debian" ] && [ "$VERSION_ID" = "12" ] && [ "$FORCE_UPDATE_OS" = "y
 	sed -i 's:bookworm:trixie:g' /etc/apt/sources.list
 	sed -i 's:archive:deb:g' /etc/apt/sources.list.d/debian.sources
 	sed -i 's:bookworm:trixie:g' /etc/apt/sources.list.d/debian.sources
+	sed -i 's|Signed-By: /usr/share/keyrings/debian-deb-keyring.gpg|Signed-By: /usr/share/keyrings/debian-archive-keyring.gpg|g' /etc/apt/sources.list.d/debian.sources
 	apt-get update --allow-releaseinfo-change
 	apt-get -y -o Dpkg::Options::="--force-confdef" -o Dpkg::Options::="--force-confnew" --allow-downgrades upgrade
 	apt-get -y -o Dpkg::Options::="--force-confdef" -o Dpkg::Options::="--force-confnew" --allow-downgrades dist-upgrade
@@ -353,12 +354,23 @@ if [ "$CHINA" = "yes" ]; then
 	DIR="/usr/share/omr-server-git"
 else
 	echo "deb [arch=amd64] https://${REPO} buster main" > /etc/apt/sources.list.d/openmptcprouter.list
-	cat <<-EOF | tee /etc/apt/preferences.d/openmptcprouter.pref
-		Explanation: Prefer OpenMPTCProuter provided packages over the Debian native ones
-		Package: *
-		Pin: origin ${REPO}
-		Pin-Priority: 1001
-	EOF
+	if [ "$ID" = "debian" ] && [ "$VERSION_ID" = "13" ]; then
+		cat <<-EOF | tee /etc/apt/preferences.d/openmptcprouter.pref
+			Explanation: Prefer OpenMPTCProuter provided packages over the Debian native ones
+			Package: *
+			Pin: release o=${REPO}
+			Pin-Priority: 999
+			
+		EOF
+	else
+		cat <<-EOF | tee /etc/apt/preferences.d/openmptcprouter.pref
+			Explanation: Prefer OpenMPTCProuter provided packages over the Debian native ones
+			Package: *
+			Pin: release o=${REPO}
+			Pin-Priority: 400
+			
+		EOF
+	fi
 	if [ -n "$(echo $OMR_VERSION | grep test)" ] || [ -n "$(echo $OMR_VERSION | grep rolling)" ]; then
 		echo "deb [arch=amd64] https://${REPO} next main" > /etc/apt/sources.list.d/openmptcprouter-test.list
 #		cat <<-EOF | tee -a /etc/apt/preferences.d/openmptcprouter.pref
@@ -651,16 +663,20 @@ rm -f /var/lib/dpkg/lock
 rm -f /var/lib/dpkg/lock-frontend
 
 if [ "$KERNEL" != "5.4" ]; then
-	echo "Compile and install mptcpize..."
-	apt-get -y install --no-install-recommends build-essential
-	cd /tmp
-	apt-get -y install git
-	git clone https://github.com/Ysurac/mptcpize.git
-	cd mptcpize
-	make
-	make install
-	cd /tmp
-	rm -rf /tmp/mptcpize
+	if [ "$ID" = "debian" ] && ([ "$VERSION_ID" = "12" ] || [ "$VERSION_ID" = "13" ]); then
+		apt-get -y install mptcpize
+	else
+		echo "Compile and install mptcpize..."
+		apt-get -y install --no-install-recommends build-essential
+		cd /tmp
+		apt-get -y install git
+		git clone https://github.com/Ysurac/mptcpize.git
+		cd mptcpize
+		make
+		make install
+		cd /tmp
+		rm -rf /tmp/mptcpize
+	fi
 	if [ "$ID" = "debian" ] && ([ "$VERSION_ID" = "12" ] || [ "$VERSION_ID" = "13" ]); then
 		apt-get -y install iproute2
 	else
@@ -675,8 +691,8 @@ if [ "$KERNEL" != "5.4" ]; then
 		make
 		make install
 		cd /tmp
+		rm -rf iproute2
 	fi
-	rm -rf iproute2
 
 	if [ "$ID" = "debian" ]; then
 		echo "MPTCPize iperf3..."
@@ -1582,7 +1598,11 @@ if [ "$OPENVPN" = "yes" ]; then
 	echo "Install OpenVPN"
 	rm -f /var/lib/dpkg/lock
 	rm -f /var/lib/dpkg/lock-frontend
-	apt-get -y install openvpn easy-rsa
+	if [ "$VERSION_ID" = "13" ] && [ "$ID" = "debian" ]; then
+		apt-get -y install openvpn easy-rsa
+	else
+		apt-get -y --default-release install openvpn easy-rsa
+	fi
 	#wget -O /lib/systemd/network/openvpn.network ${VPSURL}${VPSPATH}/openvpn.network
 	rm -f /lib/systemd/network/openvpn.network
 	#if [ ! -f "/etc/openvpn/server/static.key" ]; then
@@ -1714,7 +1734,9 @@ if [ "$OPENVPN" = "yes" ]; then
 	systemctl enable openvpn@tun0.service
 	systemctl enable openvpn@tun1.service
 	if [ "$KERNEL" != "5.4" ]; then
-		mptcpize enable openvpn@tun0 >/dev/null 2>&1
+		if [ "$VERSION_ID" != "13" ] && [ "$ID" != "debian" ]; then
+			mptcpize enable openvpn@tun0 >/dev/null 2>&1
+		fi
 	fi
 	if [ "$OPENVPN_BONDING" = "yes" ]; then
 		systemctl enable openvpn@bonding1.service

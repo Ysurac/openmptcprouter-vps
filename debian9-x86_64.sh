@@ -109,7 +109,7 @@ VPSURL="https://www.openmptcprouter.com/"
 REPO="repo.openmptcprouter.com"
 CHINA=${CHINA:-no}
 
-OMR_VERSION="0.1041-rolling-test"
+OMR_VERSION="0.1042-rolling-test"
 
 DIR=$( pwd )
 #"
@@ -999,6 +999,11 @@ if [ "$OMR_ADMIN" = "yes" ]; then
 		jq '. + {lan_routes: false}' /etc/openmptcprouter-vps-admin/omr-admin-config.json > /etc/openmptcprouter-vps-admin/omr-admin-config.json.tmp
 		mv /etc/openmptcprouter-vps-admin/omr-admin-config.json.tmp /etc/openmptcprouter-vps-admin/omr-admin-config.json
 	}
+
+	# IPv6 give an error on uvicorn
+	jq '. + {host: "0.0.0.0"}' /etc/openmptcprouter-vps-admin/omr-admin-config.json > /etc/openmptcprouter-vps-admin/omr-admin-config.json.tmp
+	mv /etc/openmptcprouter-vps-admin/omr-admin-config.json.tmp /etc/openmptcprouter-vps-admin/omr-admin-config.json
+
 	chmod 644 /lib/systemd/system/omr-admin.service
 	#chmod 644 /lib/systemd/system/omr-admin-ipv6.service
 	#[ "$(ip -6 a)" != "" ] && sed -i 's/0.0.0.0/::/g' /usr/local/bin/omr-admin.py

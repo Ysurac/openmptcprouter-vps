@@ -85,8 +85,8 @@ MLVPN_BINARY_VERSION="3.0.0+20211028.git.ddafba3"
 UBOND_VERSION="31af0f69ebb6d07ed9348dca2fced33b956cedee"
 OBFS_VERSION="486bebd9208539058e57e23a12f23103016e09b4"
 OBFS_BINARY_VERSION="0.0.5-1"
-OMR_ADMIN_VERSION="c3f7df447883d7c75f2f1004c9ae306f7cb8e5d6"
-OMR_ADMIN_BINARY_VERSION="0.16+20250909"
+OMR_ADMIN_VERSION="86e5fec69cfa79df4ef6b3733620e2ca3f9df542"
+OMR_ADMIN_BINARY_VERSION="0.16+20250918"
 #OMR_ADMIN_BINARY_VERSION="0.3+20220827"
 DSVPN_VERSION="3b99d2ef6c02b2ef68b5784bec8adfdd55b29b1a"
 DSVPN_BINARY_VERSION="0.1.4-2"
@@ -564,8 +564,8 @@ elif [ "$KERNEL" = "6.12" ] && [ "$ARCH" = "amd64" ]; then
 	if [ "$PSABI" = "x64v4" ]; then
 		PSABI="x64v3"
 	fi
-	KERNEL_VERSION="6.12.41"
-	KERNEL_REV="0~20250801.g8269fa8"
+	KERNEL_VERSION="6.12.47"
+	KERNEL_REV="0~20250912.g88be869"
 	if [ "$CHINA" = "yes" ]; then
 		wget -O /tmp/linux-image-${KERNEL_VERSION}-${PSABI}-xanmod1_${KERNEL_VERSION}-${PSABI}-xanmod1-${KERNEL_REV}_amd64.deb https://sourceforge.net/projects/xanmod/files/releases/lts/${KERNEL_VERSION}-xanmod1/${KERNEL_VERSION}-${PSABI}-xanmod1/linux-image-${KERNEL_VERSION}-${PSABI}-xanmod1_${KERNEL_VERSION}-${PSABI}-xanmod1-${KERNEL_REV}_amd64.deb
 		wget -O /tmp/linux-headers-${KERNEL_VERSION}-${PSABI}-xanmod1_${KERNEL_VERSION}-${PSABI}-xanmod1-${KERNEL_REV}_amd64.deb https://sourceforge.net/projects/xanmod/files/releases/lts/${KERNEL_VERSION}-xanmod1/${KERNEL_VERSION}-${PSABI}-xanmod1/linux-headers-${KERNEL_VERSION}-${PSABI}-xanmod1_${KERNEL_VERSION}-${PSABI}-xanmod1-${KERNEL_REV}_amd64.deb
@@ -2228,6 +2228,8 @@ fi
 if [ -f /etc/motd.head ]; then
 	if grep --quiet 'OpenMPTCProuter VPS' /etc/motd.head; then
 		sed -i "s:< OpenMPTCProuter VPS [0-9]*\.[0-9]*\(\|-test[0-9]*\) >:< OpenMPTCProuter VPS $OMR_VERSION >:g" /etc/motd.head
+		sed -i "s:< OpenMPTCProuter VPS [0-9]*\.[0-9]*\(\|-rolling[0-9]*\) >:< OpenMPTCProuter VPS $OMR_VERSION >:g" /etc/motd.head
+		sed -i "s:< OpenMPTCProuter VPS [0-9]*\.[0-9]*\(\|-rolling-test[0-9]*\) >:< OpenMPTCProuter VPS $OMR_VERSION >:g" /etc/motd.head
 		sed -i "s:< OpenMPTCProuter VPS \$OMR_VERSION >:< OpenMPTCProuter VPS $OMR_VERSION >:g" /etc/motd.head
 	else
 		echo "< OpenMPTCProuter VPS $OMR_VERSION >" >> /etc/motd.head
@@ -2235,6 +2237,8 @@ if [ -f /etc/motd.head ]; then
 elif [ -f /etc/motd ]; then
 	if grep --quiet 'OpenMPTCProuter VPS' /etc/motd; then
 		sed -i "s:< OpenMPTCProuter VPS [0-9]*\.[0-9]*\(\|-test[0-9]*\) >:< OpenMPTCProuter VPS $OMR_VERSION >:g" /etc/motd
+		sed -i "s:< OpenMPTCProuter VPS [0-9]*\.[0-9]*\(\|-rolling[0-9]*\) >:< OpenMPTCProuter VPS $OMR_VERSION >:g" /etc/motd
+		sed -i "s:< OpenMPTCProuter VPS [0-9]*\.[0-9]*\(\|-rolling-test[0-9]*\) >:< OpenMPTCProuter VPS $OMR_VERSION >:g" /etc/motd
 		sed -i "s:< OpenMPTCProuter VPS \$OMR_VERSION >:< OpenMPTCProuter VPS $OMR_VERSION >:g" /etc/motd
 	else
 		echo "< OpenMPTCProuter VPS $OMR_VERSION >" >> /etc/motd

@@ -1607,7 +1607,7 @@ if [ "$OPENVPN" = "yes" ]; then
 	rm -f /var/lib/dpkg/lock
 	rm -f /var/lib/dpkg/lock-frontend
 	if [ "$VERSION_ID" = "13" ] && [ "$ID" = "debian" ]; then
-		apt-get -y install openvpn easy-rsa
+		apt-get -y --allow-downgrades install openvpn easy-rsa
 	else
 		apt-get -y --default-release install openvpn easy-rsa
 	fi

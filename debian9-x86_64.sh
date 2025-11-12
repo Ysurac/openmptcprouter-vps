@@ -109,7 +109,7 @@ VPSURL="https://www.openmptcprouter.com/"
 REPO="repo.openmptcprouter.com"
 CHINA=${CHINA:-no}
 
-OMR_VERSION="0.1042-rolling-test"
+OMR_VERSION="0.1043-rolling-test"
 
 DIR=$( pwd )
 #"
@@ -265,6 +265,7 @@ if [ "$ID" = "debian" ] && [ "$VERSION_ID" = "10" ] && [ "$UPDATE_OS" = "yes" ];
 	sed -i 's:buster:bullseye:g' /etc/apt/sources.list
 	sed -i 's:archive:deb:g' /etc/apt/sources.list
 	sed -i 's:bullseye/updates:bullseye-security:g' /etc/apt/sources.list
+	sed -i 's:openmptcprouter:d' /etc/apt/sources.list
 	apt-get update --allow-releaseinfo-change
 	apt-get -y -o Dpkg::Options::="--force-confdef" -o Dpkg::Options::="--force-confnew" --allow-downgrades upgrade
 	apt-get -y -o Dpkg::Options::="--force-confdef" -o Dpkg::Options::="--force-confnew" --allow-downgrades dist-upgrade
@@ -892,12 +893,14 @@ if [ "$OMR_ADMIN" = "yes" ]; then
 		pip3 -q install pyjwt
 	else
 		if [ "$ID" = "debian" ] && ([ "$VERSION_ID" = "10" ] || [ "$VERSION_ID" = "11" ] || [ "$VERSION_ID" = "12" ] || [ "$VERSION_ID" = "13" ]); then
-			if [ "$VERSION_ID" = "12" ] || [ "$VERSION_ID" = "13" ]; then
+			if [ "$VERSION_ID" = "13" ]; then
+				apt-get -y --allow-downgrades install python3-passlib python3-jwt python3-netaddr libuv1 python3-uvloop
+			elif [ "$VERSION_ID" = "12" ]; then
 				apt-get -y --allow-downgrades install python3-passlib python3-jwt python3-netaddr libuv1
-				pip3 -q install uvloop --break-system-packages
+				pip3 -q install "uvloop==0.21.0" --break-system-packages
 			else
 				apt-get -y --allow-downgrades install python3-passlib python3-jwt python3-netaddr libuv1
-				pip3 -q install uvloop
+				pip3 -q install "uvloop==0.21.0"
 			fi
 		else
 			apt-get -y --allow-downgrades install python3-passlib python3-jwt python3-netaddr libuv1 python3-uvloop
@@ -1738,6 +1741,8 @@ if [ "$OPENVPN" = "yes" ]; then
 		# for old OpenVPN releases
 		sed -i 's/disable-dco//' /etc/openvpn/tun0.conf
 	fi
+	chmod 755 /etc/openvpn/ccd/
+	chmod 644 /etc/openvpn/ccd/*
 	chmod 644 /lib/systemd/system/openvpn*.service
 	systemctl enable openvpn@tun0.service
 	systemctl enable openvpn@tun1.service

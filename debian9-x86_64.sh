@@ -894,7 +894,7 @@ if [ "$OMR_ADMIN" = "yes" ]; then
 	else
 		if [ "$ID" = "debian" ] && ([ "$VERSION_ID" = "10" ] || [ "$VERSION_ID" = "11" ] || [ "$VERSION_ID" = "12" ] || [ "$VERSION_ID" = "13" ]); then
 			if [ "$VERSION_ID" = "13" ]; then
-				apt-get -y --allow-downgrades install python3-passlib python3-jwt python3-netaddr libuv1 python3-uvloop
+				apt-get -y --allow-downgrades install python3-passlib python3-jwt python3-netaddr libuv1t64 python3-uvloop
 			elif [ "$VERSION_ID" = "12" ]; then
 				apt-get -y --allow-downgrades install python3-passlib python3-jwt python3-netaddr libuv1
 				pip3 -q install "uvloop==0.21.0" --break-system-packages
@@ -903,7 +903,7 @@ if [ "$OMR_ADMIN" = "yes" ]; then
 				pip3 -q install "uvloop==0.21.0"
 			fi
 		else
-			apt-get -y --allow-downgrades install python3-passlib python3-jwt python3-netaddr libuv1 python3-uvloop
+			apt-get -y --allow-downgrades install python3-passlib python3-jwt python3-netaddr libuv1t64 python3-uvloop
 		fi
 	fi
 	apt-get -y --allow-downgrades install python3-uvicorn jq ipcalc python3-netifaces python3-aiofiles python3-psutil python3-requests pwgen

@@ -85,8 +85,8 @@ MLVPN_BINARY_VERSION="3.0.0+20211028.git.ddafba3"
 UBOND_VERSION="31af0f69ebb6d07ed9348dca2fced33b956cedee"
 OBFS_VERSION="486bebd9208539058e57e23a12f23103016e09b4"
 OBFS_BINARY_VERSION="0.0.5-1"
-OMR_ADMIN_VERSION="86e5fec69cfa79df4ef6b3733620e2ca3f9df542"
-OMR_ADMIN_BINARY_VERSION="0.16+20250918"
+OMR_ADMIN_VERSION="a8b314942a8ad36e3c9f6521d1dc0a9cc7561aea"
+OMR_ADMIN_BINARY_VERSION="0.16+20251126"
 #OMR_ADMIN_BINARY_VERSION="0.3+20220827"
 DSVPN_VERSION="3b99d2ef6c02b2ef68b5784bec8adfdd55b29b1a"
 DSVPN_BINARY_VERSION="0.1.4-2"
@@ -719,7 +719,7 @@ echo "Remove Shadowsocks-libev..."
 apt-get -y remove shadowsocks-libev >/dev/null 2>&1 || true
 if [ "$SHADOWSOCKS" = "yes" ]; then
 	echo "Install Shadowsocks-libev..."
-	if [ "$SOURCES" = "yes" ]; then
+	if [ "$SOURCES" = "yes" ] || [ "ARCH" != "amd64" ]; then
 		#apt -t stretch-backports -y install shadowsocks-libev
 		## Compile Shadowsocks
 		#rm -rf /tmp/shadowsocks-libev-${SHADOWSOCKS_VERSION}

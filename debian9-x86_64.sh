@@ -1773,7 +1773,7 @@ if systemctl -q is-active glorytun-udp@tun0.service 2>/dev/null; then
 	systemctl -q stop 'glorytun-udp@*' > /dev/null 2>&1
 fi
 if [ "$GLORYTUN_UDP" = "yes" ]; then
-	if [ "$SOURCES" = "yes" ]; then
+	if [ "$SOURCES" = "yes" ] || [ "$ARCH" != "amd64" ]; then
 		rm -f /var/lib/dpkg/lock
 		rm -f /var/lib/dpkg/lock-frontend
 		rm -f /usr/bin/glorytun
@@ -1842,7 +1842,7 @@ if [ "$DSVPN" = "yes" ]; then
 		systemctl -q disable dsvpn-server > /dev/null 2>&1
 		systemctl -q stop dsvpn-server > /dev/null 2>&1
 	fi
-	if [ "$SOURCES" = "yes" ]; then
+	if [ "$SOURCES" = "yes" ] || [ "$ARCH" != "amd64" ]; then
 		rm -f /var/lib/dpkg/lock
 		rm -f /var/lib/dpkg/lock-frontend
 		apt-get install -y --no-install-recommends build-essential git ca-certificates
@@ -1894,7 +1894,7 @@ if systemctl -q is-active glorytun-tcp@tun0.service 2>/dev/null; then
 fi
 if [ "$GLORYTUN_TCP" = "yes" ]; then
 	echo "Install Glorytun-TCP..."
-	if [ "$SOURCES" = "yes" ]; then
+	if [ "$SOURCES" = "yes" ] || [ "$ARCH" != "amd64" ]; then
 		echo "install libsodium..."
 		if [ "$ID" = "debian" ]; then
 			if [ "$VERSION_ID" = "9" ]; then

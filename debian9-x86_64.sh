@@ -720,6 +720,7 @@ apt-get -y remove shadowsocks-libev >/dev/null 2>&1 || true
 if [ "$SHADOWSOCKS" = "yes" ]; then
 	echo "Install Shadowsocks-libev..."
 	if [ "$SOURCES" = "yes" ] || [ "ARCH" != "amd64" ]; then
+		apt-get -y install git
 		#apt -t stretch-backports -y install shadowsocks-libev
 		## Compile Shadowsocks
 		#rm -rf /tmp/shadowsocks-libev-${SHADOWSOCKS_VERSION}

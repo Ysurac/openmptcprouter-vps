@@ -6,7 +6,7 @@
 # See /LICENSE for more information.
 #
 
-KERNEL=${KERNEL:-6.6}
+KERNEL=${KERNEL:-6.12}
 UPSTREAM=${UPSTREAM:-no}
 [ "$UPSTREAM" = "yes" ] && KERNEL="6.1"
 UPSTREAM6=${UPSTREAM6:-no}
@@ -46,9 +46,9 @@ DSVPN=${DSVPN:-yes}
 WIREGUARD=${WIREGUARD:-yes}
 FAIL2BAN=${FAIL2BAN:-yes}
 SOURCES=${SOURCES:-no}
-if [ "$KERNEL" != "5.4" ]; then
-	SOURCES="yes"
-fi
+#if [ "$KERNEL" != "5.4" ]; then
+#	SOURCES="yes"
+#fi
 NOINTERNET=${NOINTERNET:-no}
 GRETUNNELS=${GRETUNNELS:-yes}
 LANROUTES=${LANROUTES:-yes}
@@ -85,8 +85,8 @@ MLVPN_BINARY_VERSION="3.0.0+20211028.git.ddafba3"
 UBOND_VERSION="31af0f69ebb6d07ed9348dca2fced33b956cedee"
 OBFS_VERSION="486bebd9208539058e57e23a12f23103016e09b4"
 OBFS_BINARY_VERSION="0.0.5-1"
-OMR_ADMIN_VERSION="a10f23b23823347757d6fc048d0db524f9836649"
-OMR_ADMIN_BINARY_VERSION="0.16+20250829"
+OMR_ADMIN_VERSION="ccac898d295e5c0d74229d66f0eb04c9f051349d"
+OMR_ADMIN_BINARY_VERSION="0.16+20260113"
 #OMR_ADMIN_BINARY_VERSION="0.3+20220827"
 DSVPN_VERSION="3b99d2ef6c02b2ef68b5784bec8adfdd55b29b1a"
 DSVPN_BINARY_VERSION="0.1.4-2"
@@ -109,7 +109,7 @@ VPSURL="https://www.openmptcprouter.com/"
 REPO="repo.openmptcprouter.com"
 CHINA=${CHINA:-no}
 
-OMR_VERSION="0.1039"
+OMR_VERSION="0.1046"
 
 DIR=$( pwd )
 #"
@@ -265,6 +265,7 @@ if [ "$ID" = "debian" ] && [ "$VERSION_ID" = "10" ] && [ "$UPDATE_OS" = "yes" ];
 	sed -i 's:buster:bullseye:g' /etc/apt/sources.list
 	sed -i 's:archive:deb:g' /etc/apt/sources.list
 	sed -i 's:bullseye/updates:bullseye-security:g' /etc/apt/sources.list
+	sed -i 's:openmptcprouter:d' /etc/apt/sources.list
 	apt-get update --allow-releaseinfo-change
 	apt-get -y -o Dpkg::Options::="--force-confdef" -o Dpkg::Options::="--force-confnew" --allow-downgrades upgrade
 	apt-get -y -o Dpkg::Options::="--force-confdef" -o Dpkg::Options::="--force-confnew" --allow-downgrades dist-upgrade
@@ -283,14 +284,18 @@ if [ "$ID" = "debian" ] && [ "$VERSION_ID" = "11" ] && [ "$UPDATE_OS" = "yes" ];
 fi
 
 # Update to Debian 13 only if FORCE_UPDATE_OS is set to yes. No problem to use Debian 12 if not.
-if [ "$ID" = "debian" ] && [ "$VERSION_ID" = "12" ] && [ "$FORCE_UPDATE_OS" = "yes" ]; then
+if [ "$ID" = "debian" ] && [ "$VERSION_ID" = "12" ] && [ "$UPDATE_OS" = "yes" ]; then
 	echo "Update Debian 12 Bookworm to Debian 13 Trixie"
 	apt-get -y -f --force-yes -o Dpkg::Options::="--force-confdef" -o Dpkg::Options::="--force-confnew" --allow-downgrades upgrade
 	apt-get -y -f --force-yes -o Dpkg::Options::="--force-confdef" -o Dpkg::Options::="--force-confnew" --allow-downgrades dist-upgrade
 	sed -i 's:archive:deb:g' /etc/apt/sources.list
 	sed -i 's:bookworm:trixie:g' /etc/apt/sources.list
-	sed -i 's:archive:deb:g' /etc/apt/sources.list.d/debian.sources
-	sed -i 's:bookworm:trixie:g' /etc/apt/sources.list.d/debian.sources
+	sed -i 's|Signed-By: /usr/share/keyrings/debian-deb-keyring.gpg|Signed-By: /usr/share/keyrings/debian-archive-keyring.gpg|g' /etc/apt/sources.list
+	if [ -f  /etc/apt/sources.list.d/debian.sources ]; then
+		sed -i 's:archive:deb:g' /etc/apt/sources.list.d/debian.sources
+		sed -i 's:bookworm:trixie:g' /etc/apt/sources.list.d/debian.sources
+		sed -i 's|Signed-By: /usr/share/keyrings/debian-deb-keyring.gpg|Signed-By: /usr/share/keyrings/debian-archive-keyring.gpg|g' /etc/apt/sources.list.d/debian.sources
+	fi
 	apt-get update --allow-releaseinfo-change
 	apt-get -y -o Dpkg::Options::="--force-confdef" -o Dpkg::Options::="--force-confnew" --allow-downgrades upgrade
 	apt-get -y -o Dpkg::Options::="--force-confdef" -o Dpkg::Options::="--force-confnew" --allow-downgrades dist-upgrade
@@ -353,12 +358,23 @@ if [ "$CHINA" = "yes" ]; then
 	DIR="/usr/share/omr-server-git"
 else
 	echo "deb [arch=amd64] https://${REPO} buster main" > /etc/apt/sources.list.d/openmptcprouter.list
-	cat <<-EOF | tee /etc/apt/preferences.d/openmptcprouter.pref
-		Explanation: Prefer OpenMPTCProuter provided packages over the Debian native ones
-		Package: *
-		Pin: origin ${REPO}
-		Pin-Priority: 1001
-	EOF
+	if [ "$ID" = "debian" ] && [ "$VERSION_ID" = "13" ]; then
+		cat <<-EOF | tee /etc/apt/preferences.d/openmptcprouter.pref
+			Explanation: Prefer OpenMPTCProuter provided packages over the Debian native ones
+			Package: *
+			Pin: release o=${REPO}
+			Pin-Priority: 999
+			
+		EOF
+	else
+		cat <<-EOF | tee /etc/apt/preferences.d/openmptcprouter.pref
+			Explanation: Prefer OpenMPTCProuter provided packages over the Debian native ones
+			Package: *
+			Pin: release o=${REPO}
+			Pin-Priority: 400
+			
+		EOF
+	fi
 	if [ -n "$(echo $OMR_VERSION | grep test)" ] || [ -n "$(echo $OMR_VERSION | grep rolling)" ]; then
 		echo "deb [arch=amd64] https://${REPO} next main" > /etc/apt/sources.list.d/openmptcprouter-test.list
 #		cat <<-EOF | tee -a /etc/apt/preferences.d/openmptcprouter.pref
@@ -549,8 +565,8 @@ elif [ "$KERNEL" = "6.12" ] && [ "$ARCH" = "amd64" ]; then
 	if [ "$PSABI" = "x64v4" ]; then
 		PSABI="x64v3"
 	fi
-	KERNEL_VERSION="6.12.41"
-	KERNEL_REV="0~20250801.g8269fa8"
+	KERNEL_VERSION="6.12.47"
+	KERNEL_REV="0~20250912.g88be869"
 	if [ "$CHINA" = "yes" ]; then
 		wget -O /tmp/linux-image-${KERNEL_VERSION}-${PSABI}-xanmod1_${KERNEL_VERSION}-${PSABI}-xanmod1-${KERNEL_REV}_amd64.deb https://sourceforge.net/projects/xanmod/files/releases/lts/${KERNEL_VERSION}-xanmod1/${KERNEL_VERSION}-${PSABI}-xanmod1/linux-image-${KERNEL_VERSION}-${PSABI}-xanmod1_${KERNEL_VERSION}-${PSABI}-xanmod1-${KERNEL_REV}_amd64.deb
 		wget -O /tmp/linux-headers-${KERNEL_VERSION}-${PSABI}-xanmod1_${KERNEL_VERSION}-${PSABI}-xanmod1-${KERNEL_REV}_amd64.deb https://sourceforge.net/projects/xanmod/files/releases/lts/${KERNEL_VERSION}-xanmod1/${KERNEL_VERSION}-${PSABI}-xanmod1/linux-headers-${KERNEL_VERSION}-${PSABI}-xanmod1_${KERNEL_VERSION}-${PSABI}-xanmod1-${KERNEL_REV}_amd64.deb
@@ -568,7 +584,11 @@ elif [ "$KERNEL" = "6.12" ] && [ "$ARCH" = "amd64" ]; then
 #	apt-get -y install linux-xanmod-lts-x64v3
 	[ -f /etc/default/grub ] && {
 		sed -i "s@^\(GRUB_DEFAULT=\).*@\1\"0\"@" /etc/default/grub >/dev/null 2>&1
-		[ -f /boot/grub/grub.cfg ] && grub-mkconfig -o /boot/grub/grub.cfg >/dev/null 2>&1
+		if [ -f /boot/grub/grub.cfg ]; then 
+			BOOTNB=$(grep vmlinuz- /boot/grub/grub.cfg | grep -n -m 1 xanmod | sed -e 's/:.*//g' | tr -d '\n')
+			[ -n "$BOOTNB" ] && sed -i "s@^\(GRUB_DEFAULT=\).*@\1\"${BOOTNB}\"@" /etc/default/grub >/dev/null 2>&1
+			grub-mkconfig -o /boot/grub/grub.cfg >/dev/null 2>&1
+		fi
 	}
 elif [ "$KERNEL" = "6.6" ] && [ "$ID" = "debian" ]; then
 	echo 'deb http://deb.debian.org/debian bookworm-backports main' > /etc/apt/sources.list.d/bookworm-backports.list
@@ -653,16 +673,20 @@ rm -f /var/lib/dpkg/lock
 rm -f /var/lib/dpkg/lock-frontend
 
 if [ "$KERNEL" != "5.4" ]; then
-	echo "Compile and install mptcpize..."
-	apt-get -y install --no-install-recommends build-essential
-	cd /tmp
-	apt-get -y install git
-	git clone https://github.com/Ysurac/mptcpize.git
-	cd mptcpize
-	make
-	make install
-	cd /tmp
-	rm -rf /tmp/mptcpize
+	if [ "$ID" = "debian" ] && ([ "$VERSION_ID" = "12" ] || [ "$VERSION_ID" = "13" ]); then
+		apt-get -y install mptcpize
+	else
+		echo "Compile and install mptcpize..."
+		apt-get -y install --no-install-recommends build-essential
+		cd /tmp
+		apt-get -y install git
+		git clone https://github.com/Ysurac/mptcpize.git
+		cd mptcpize
+		make
+		make install
+		cd /tmp
+		rm -rf /tmp/mptcpize
+	fi
 	if [ "$ID" = "debian" ] && ([ "$VERSION_ID" = "12" ] || [ "$VERSION_ID" = "13" ]); then
 		apt-get -y install iproute2
 	else
@@ -677,8 +701,8 @@ if [ "$KERNEL" != "5.4" ]; then
 		make
 		make install
 		cd /tmp
+		rm -rf iproute2
 	fi
-	rm -rf iproute2
 
 	if [ "$ID" = "debian" ]; then
 		echo "MPTCPize iperf3..."
@@ -697,7 +721,8 @@ echo "Remove Shadowsocks-libev..."
 apt-get -y remove shadowsocks-libev >/dev/null 2>&1 || true
 if [ "$SHADOWSOCKS" = "yes" ]; then
 	echo "Install Shadowsocks-libev..."
-	if [ "$SOURCES" = "yes" ]; then
+	if [ "$SOURCES" = "yes" ] || [ "ARCH" != "amd64" ]; then
+		apt-get -y install git
 		#apt -t stretch-backports -y install shadowsocks-libev
 		## Compile Shadowsocks
 		#rm -rf /tmp/shadowsocks-libev-${SHADOWSOCKS_VERSION}
@@ -875,15 +900,17 @@ if [ "$OMR_ADMIN" = "yes" ]; then
 		pip3 -q install pyjwt
 	else
 		if [ "$ID" = "debian" ] && ([ "$VERSION_ID" = "10" ] || [ "$VERSION_ID" = "11" ] || [ "$VERSION_ID" = "12" ] || [ "$VERSION_ID" = "13" ]); then
-			if [ "$VERSION_ID" = "12" ] || [ "$VERSION_ID" = "13" ]; then
+			if [ "$VERSION_ID" = "13" ]; then
+				apt-get -y --allow-downgrades install python3-passlib python3-jwt python3-netaddr libuv1t64 python3-uvloop
+			elif [ "$VERSION_ID" = "12" ]; then
 				apt-get -y --allow-downgrades install python3-passlib python3-jwt python3-netaddr libuv1
-				pip3 -q install uvloop --break-system-packages
+				pip3 -q install "uvloop==0.21.0" --break-system-packages
 			else
 				apt-get -y --allow-downgrades install python3-passlib python3-jwt python3-netaddr libuv1
-				pip3 -q install uvloop
+				pip3 -q install "uvloop==0.21.0"
 			fi
 		else
-			apt-get -y --allow-downgrades install python3-passlib python3-jwt python3-netaddr libuv1 python3-uvloop
+			apt-get -y --allow-downgrades install python3-passlib python3-jwt python3-netaddr libuv1t64 python3-uvloop
 		fi
 	fi
 	apt-get -y --allow-downgrades install python3-uvicorn jq ipcalc python3-netifaces python3-aiofiles python3-psutil python3-requests pwgen
@@ -982,6 +1009,11 @@ if [ "$OMR_ADMIN" = "yes" ]; then
 		jq '. + {lan_routes: false}' /etc/openmptcprouter-vps-admin/omr-admin-config.json > /etc/openmptcprouter-vps-admin/omr-admin-config.json.tmp
 		mv /etc/openmptcprouter-vps-admin/omr-admin-config.json.tmp /etc/openmptcprouter-vps-admin/omr-admin-config.json
 	}
+
+	# IPv6 give an error on uvicorn
+	jq '. + {host: "0.0.0.0"}' /etc/openmptcprouter-vps-admin/omr-admin-config.json > /etc/openmptcprouter-vps-admin/omr-admin-config.json.tmp
+	mv /etc/openmptcprouter-vps-admin/omr-admin-config.json.tmp /etc/openmptcprouter-vps-admin/omr-admin-config.json
+
 	chmod 644 /lib/systemd/system/omr-admin.service
 	#chmod 644 /lib/systemd/system/omr-admin-ipv6.service
 	#[ "$(ip -6 a)" != "" ] && sed -i 's/0.0.0.0/::/g' /usr/local/bin/omr-admin.py
@@ -1024,6 +1056,7 @@ if [ "$SHADOWSOCKS" = "yes" ]; then
 	fi
 	# Install shadowsocks config and add a shadowsocks by CPU
 	if [ "$update" = "0" ] || [ ! -f /etc/shadowsocks-libev/manager.json ]; then
+		mkdir -p /etc/shadowsocks-libev
 		if [ "$LOCALFILES" = "no" ]; then
 			wget -O /etc/shadowsocks-libev/manager.json ${VPSURL}${VPSPATH}/manager.json
 		else
@@ -1084,7 +1117,7 @@ chmod 644 /lib/systemd/system/omr-update.service
 # Install simple-obfs
 if [ "$OBFS" = "yes" ]; then
 	echo "Install OBFS"
-	if [ "$SOURCES" = "yes" ]; then
+	if [ "$SOURCES" = "yes" ] || [ "$ARCH" != "amd64" ]; then
 		rm -rf /tmp/simple-obfs
 		cd /tmp
 		rm -f /var/lib/dpkg/lock
@@ -1116,7 +1149,7 @@ fi
 # Install v2ray-plugin
 if [ "$V2RAY_PLUGIN" = "yes" ]; then
 	echo "Install v2ray plugin"
-	if [ "$SOURCES" = "yes" ]; then
+	if [ "$SOURCES" = "yes" ] && [ "$ARCH" != "amd64" ]; then
 		rm -rf /tmp/v2ray-plugin-linux-amd64-${V2RAY_PLUGIN_VERSION}.tar.gz
 		#wget -O /tmp/v2ray-plugin-linux-amd64-v${V2RAY_PLUGIN_VERSION}.tar.gz https://github.com/shadowsocks/v2ray-plugin/releases/download/${V2RAY_PLUGIN_VERSION}/v2ray-plugin-linux-amd64-v${V2RAY_PLUGIN_VERSION}.tar.gz
 		#wget -O /tmp/v2ray-plugin-linux-amd64-v${V2RAY_PLUGIN_VERSION}.tar.gz ${VPSURL}${VPSPATH}/bin/v2ray-plugin-linux-amd64-v${V2RAY_PLUGIN_VERSION}.tar.gz
@@ -1584,7 +1617,11 @@ if [ "$OPENVPN" = "yes" ]; then
 	echo "Install OpenVPN"
 	rm -f /var/lib/dpkg/lock
 	rm -f /var/lib/dpkg/lock-frontend
-	apt-get -y install openvpn easy-rsa
+	if [ "$VERSION_ID" = "13" ] && [ "$ID" = "debian" ]; then
+		apt-get -y --allow-downgrades install openvpn easy-rsa
+	else
+		apt-get -y --default-release install openvpn easy-rsa
+	fi
 	#wget -O /lib/systemd/network/openvpn.network ${VPSURL}${VPSPATH}/openvpn.network
 	rm -f /lib/systemd/network/openvpn.network
 	#if [ ! -f "/etc/openvpn/server/static.key" ]; then
@@ -1712,11 +1749,15 @@ if [ "$OPENVPN" = "yes" ]; then
 		# for old OpenVPN releases
 		sed -i 's/disable-dco//' /etc/openvpn/tun0.conf
 	fi
+	chmod 755 /etc/openvpn/ccd/
+	chmod 644 /etc/openvpn/ccd/*
 	chmod 644 /lib/systemd/system/openvpn*.service
 	systemctl enable openvpn@tun0.service
 	systemctl enable openvpn@tun1.service
 	if [ "$KERNEL" != "5.4" ]; then
-		mptcpize enable openvpn@tun0 >/dev/null 2>&1
+		if [ "$VERSION_ID" != "13" ] && [ "$ID" != "debian" ]; then
+			mptcpize enable openvpn@tun0 >/dev/null 2>&1
+		fi
 	fi
 	if [ "$OPENVPN_BONDING" = "yes" ]; then
 		systemctl enable openvpn@bonding1.service
@@ -1736,7 +1777,7 @@ if systemctl -q is-active glorytun-udp@tun0.service 2>/dev/null; then
 	systemctl -q stop 'glorytun-udp@*' > /dev/null 2>&1
 fi
 if [ "$GLORYTUN_UDP" = "yes" ]; then
-	if [ "$SOURCES" = "yes" ]; then
+	if [ "$SOURCES" = "yes" ] || [ "$ARCH" != "amd64" ]; then
 		rm -f /var/lib/dpkg/lock
 		rm -f /var/lib/dpkg/lock-frontend
 		rm -f /usr/bin/glorytun
@@ -1805,7 +1846,7 @@ if [ "$DSVPN" = "yes" ]; then
 		systemctl -q disable dsvpn-server > /dev/null 2>&1
 		systemctl -q stop dsvpn-server > /dev/null 2>&1
 	fi
-	if [ "$SOURCES" = "yes" ]; then
+	if [ "$SOURCES" = "yes" ] || [ "$ARCH" != "amd64" ]; then
 		rm -f /var/lib/dpkg/lock
 		rm -f /var/lib/dpkg/lock-frontend
 		apt-get install -y --no-install-recommends build-essential git ca-certificates
@@ -1857,7 +1898,7 @@ if systemctl -q is-active glorytun-tcp@tun0.service 2>/dev/null; then
 fi
 if [ "$GLORYTUN_TCP" = "yes" ]; then
 	echo "Install Glorytun-TCP..."
-	if [ "$SOURCES" = "yes" ]; then
+	if [ "$SOURCES" = "yes" ] || [ "$ARCH" != "amd64" ]; then
 		echo "install libsodium..."
 		if [ "$ID" = "debian" ]; then
 			if [ "$VERSION_ID" = "9" ]; then
@@ -2205,6 +2246,8 @@ fi
 if [ -f /etc/motd.head ]; then
 	if grep --quiet 'OpenMPTCProuter VPS' /etc/motd.head; then
 		sed -i "s:< OpenMPTCProuter VPS [0-9]*\.[0-9]*\(\|-test[0-9]*\) >:< OpenMPTCProuter VPS $OMR_VERSION >:g" /etc/motd.head
+		sed -i "s:< OpenMPTCProuter VPS [0-9]*\.[0-9]*\(\|-rolling[0-9]*\) >:< OpenMPTCProuter VPS $OMR_VERSION >:g" /etc/motd.head
+		sed -i "s:< OpenMPTCProuter VPS [0-9]*\.[0-9]*\(\|-rolling-test[0-9]*\) >:< OpenMPTCProuter VPS $OMR_VERSION >:g" /etc/motd.head
 		sed -i "s:< OpenMPTCProuter VPS \$OMR_VERSION >:< OpenMPTCProuter VPS $OMR_VERSION >:g" /etc/motd.head
 	else
 		echo "< OpenMPTCProuter VPS $OMR_VERSION >" >> /etc/motd.head
@@ -2212,6 +2255,8 @@ if [ -f /etc/motd.head ]; then
 elif [ -f /etc/motd ]; then
 	if grep --quiet 'OpenMPTCProuter VPS' /etc/motd; then
 		sed -i "s:< OpenMPTCProuter VPS [0-9]*\.[0-9]*\(\|-test[0-9]*\) >:< OpenMPTCProuter VPS $OMR_VERSION >:g" /etc/motd
+		sed -i "s:< OpenMPTCProuter VPS [0-9]*\.[0-9]*\(\|-rolling[0-9]*\) >:< OpenMPTCProuter VPS $OMR_VERSION >:g" /etc/motd
+		sed -i "s:< OpenMPTCProuter VPS [0-9]*\.[0-9]*\(\|-rolling-test[0-9]*\) >:< OpenMPTCProuter VPS $OMR_VERSION >:g" /etc/motd
 		sed -i "s:< OpenMPTCProuter VPS \$OMR_VERSION >:< OpenMPTCProuter VPS $OMR_VERSION >:g" /etc/motd
 	else
 		echo "< OpenMPTCProuter VPS $OMR_VERSION >" >> /etc/motd

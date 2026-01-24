@@ -109,7 +109,7 @@ VPSURL="https://www.openmptcprouter.com/"
 REPO="repo.openmptcprouter.com"
 CHINA=${CHINA:-no}
 
-OMR_VERSION="0.1046"
+OMR_VERSION="0.1047"
 
 DIR=$( pwd )
 #"
@@ -565,8 +565,8 @@ elif [ "$KERNEL" = "6.12" ] && [ "$ARCH" = "amd64" ]; then
 	if [ "$PSABI" = "x64v4" ]; then
 		PSABI="x64v3"
 	fi
-	KERNEL_VERSION="6.12.47"
-	KERNEL_REV="0~20250912.g88be869"
+	KERNEL_VERSION="6.12.67"
+	KERNEL_REV="0~20260123.ga077982"
 	if [ "$CHINA" = "yes" ]; then
 		wget -O /tmp/linux-image-${KERNEL_VERSION}-${PSABI}-xanmod1_${KERNEL_VERSION}-${PSABI}-xanmod1-${KERNEL_REV}_amd64.deb https://sourceforge.net/projects/xanmod/files/releases/lts/${KERNEL_VERSION}-xanmod1/${KERNEL_VERSION}-${PSABI}-xanmod1/linux-image-${KERNEL_VERSION}-${PSABI}-xanmod1_${KERNEL_VERSION}-${PSABI}-xanmod1-${KERNEL_REV}_amd64.deb
 		wget -O /tmp/linux-headers-${KERNEL_VERSION}-${PSABI}-xanmod1_${KERNEL_VERSION}-${PSABI}-xanmod1-${KERNEL_REV}_amd64.deb https://sourceforge.net/projects/xanmod/files/releases/lts/${KERNEL_VERSION}-xanmod1/${KERNEL_VERSION}-${PSABI}-xanmod1/linux-headers-${KERNEL_VERSION}-${PSABI}-xanmod1_${KERNEL_VERSION}-${PSABI}-xanmod1-${KERNEL_REV}_amd64.deb
@@ -771,7 +771,7 @@ if [ "$SHADOWSOCKS" = "yes" ]; then
 		sleep 1
 		rm -f /var/lib/dpkg/lock
 		rm -f /var/lib/dpkg/lock-frontend
-		systemctl enable haveged
+		systemctl enable haveged >/dev/null 2>&1 || true
 		if [ "$ID" = "debian" ]; then
 			rm -f /var/lib/dpkg/lock
 			rm -f /var/lib/dpkg/lock-frontend
@@ -802,6 +802,7 @@ if [ "$SHADOWSOCKS" = "yes" ]; then
 		#rm -rf /tmp/shadowsocks-libev-${SHADOWSOCKS_VERSION}
 		rm -rf /tmp/shadowsocks-libev
 	else
+		apt-get -y install haveged >/dev/null 2>&1 || true
 		apt-get -y -o Dpkg::Options::="--force-confold" -o Dpkg::Options::="--force-confdef" -o Dpkg::Options::="--force-overwrite" install omr-shadowsocks-libev=${SHADOWSOCKS_BINARY_VERSION}
 	fi
 fi

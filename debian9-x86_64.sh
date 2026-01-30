@@ -1364,7 +1364,7 @@ if [ "$XRAY" = "yes" ]; then
 			rm -f /tmp/xray-${XRAY_VERSION}-arm64.deb
 		fi
 	else
-		apt-get -o Dpkg::Options::="--force-confold" -o Dpkg::Options::="--force-confdef" -o Dpkg::Options::="--force-overwrite" -y install xray=${XRAY_VERSION}
+		apt-get -o Dpkg::Options::="--force-confold" -o Dpkg::Options::="--force-confdef" -o Dpkg::Options::="--force-overwrite" -y --allow-downgrades install xray=${XRAY_VERSION}
 	fi
 	if [ -f /etc/xray/xray-server.json ]; then
 		XRAY_UUID2=$(grep -Po '"'"id"'"\s*:\s*"\K([^"]*)' /etc/xray/xray-server.json | head -n 1 | tr -d "\n")

@@ -1066,7 +1066,11 @@ fi
 # Get shadowsocks optimization
 if [ "$LOCALFILES" = "no" ]; then
 	if [ "$KERNEL" != "5.4" ]; then
-		wget -O /etc/sysctl.d/90-shadowsocks.conf ${VPSURL}${VPSPATH}/shadowsocks.6.1.conf
+		if [ "$KERNEL" != "6.12" ] && [ "$KERNEL" != "6.6" ]; then
+			wget -O /etc/sysctl.d/90-shadowsocks.conf ${VPSURL}${VPSPATH}/shadowsocks.6.18.conf
+		else
+			wget -O /etc/sysctl.d/90-shadowsocks.conf ${VPSURL}${VPSPATH}/shadowsocks.6.1.conf
+		fi
 	else
 		wget -O /etc/sysctl.d/90-shadowsocks.conf ${VPSURL}${VPSPATH}/shadowsocks.conf
 	fi

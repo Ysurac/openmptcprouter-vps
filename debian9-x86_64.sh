@@ -585,7 +585,7 @@ elif [ "$KERNEL" = "6.12" ] && [ "$ARCH" = "amd64" ]; then
 	[ -f /etc/default/grub ] && {
 		sed -i "s@^\(GRUB_DEFAULT=\).*@\1\"0\"@" /etc/default/grub >/dev/null 2>&1
 		if [ -f /boot/grub/grub.cfg ]; then 
-			BOOTNB=$(grep vmlinuz- /boot/grub/grub.cfg | grep -n -m 1 xanmod | sed -e 's/:.*//g' | tr -d '\n')
+			BOOTNB=$(grep vmlinuz- /boot/grub/grub.cfg | tail -n +2 | grep -n -m 1 xanmod | sed -e 's/:.*//g' | tr -d '\n')
 			[ -n "$BOOTNB" ] && sed -i "s@^\(GRUB_DEFAULT=\).*@\1\"${BOOTNB}\"@" /etc/default/grub >/dev/null 2>&1
 			grub-mkconfig -o /boot/grub/grub.cfg >/dev/null 2>&1
 		fi

@@ -6,7 +6,7 @@
 # See /LICENSE for more information.
 #
 
-KERNEL=${KERNEL:-6.12}
+KERNEL=${KERNEL:-6.18}
 UPSTREAM=${UPSTREAM:-no}
 [ "$UPSTREAM" = "yes" ] && KERNEL="6.1"
 UPSTREAM6=${UPSTREAM6:-no}
@@ -450,6 +450,32 @@ if [ -z "$(dpkg-query -l | grep grub)" ]; then
 		echo 'GRUB_CMDLINE_LINUX="net.ifnames=0 biosdevname=0"' > /etc/default/grub
 	}
 fi
+
+set_grub_default_kernel() {
+	local version="$1" name="$2" entry_id found top=-1 sub=0 depth=0 trimmed
+	[ -f /etc/default/grub ] && [ -f /boot/grub/grub.cfg ] || return 1
+	grub-mkconfig -o /boot/grub/grub.cfg >/dev/null 2>&1
+	entry_id=$(grep -m1 "menuentry.*${version}.*${name}" /boot/grub/grub.cfg | grep -oP "\\\$menuentry_id_option '\K[^']+")
+	if [ -z "$entry_id" ]; then
+		while IFS= read -r line; do
+			trimmed="${line#"${line%%[! ]*}"}"
+			case "$trimmed" in
+			    submenu\ *) top=$((top+1)); sub=0; depth=$((depth+1)) ;;
+			    menuentry\ *)
+				[ $depth -eq 0 ] && top=$((top+1))
+				echo "$trimmed" | grep -q "${version}.*${name}" && { found="${depth:+${top}>}${depth:+$sub}${depth:-$top}"; break; }
+				[ $depth -gt 0 ] && sub=$((sub+1))
+				;;
+			    \}*) [ $depth -gt 0 ] && depth=$((depth-1)) ;;
+			esac
+		done < /boot/grub/grub.cfg
+		entry_id="$found"
+	fi
+	[ -z "$entry_id" ] && { echo "WARNING: kernel ${version} ${name} not found in grub.cfg" >&2; return 1; }
+	sed -i "s@^\(GRUB_DEFAULT=\).*@\1\"${entry_id}\"@" /etc/default/grub
+	grub-mkconfig -o /boot/grub/grub.cfg >/dev/null 2>&1
+}
+#"
 if [ "$KERNEL" = "5.4" ] || [ "$KERNEL" = "5.15" ]; then
 	if [ "$SOURCES" = "yes" ]; then
 		wget -O /tmp/linux-image-${KERNEL_RELEASE}_amd64.deb ${VPSURL}kernel/linux-image-${KERNEL_RELEASE}_amd64.deb
@@ -583,14 +609,15 @@ elif [ "$KERNEL" = "6.12" ] && [ "$ARCH" = "amd64" ]; then
 #	echo 'deb [signed-by=/usr/share/keyrings/xanmod-archive-keyring.gpg] http://deb.xanmod.org releases main' | tee /etc/apt/sources.list.d/xanmod-release.list
 #	apt-get update
 #	apt-get -y install linux-xanmod-lts-x64v3
-	[ -f /etc/default/grub ] && {
-		sed -i "s@^\(GRUB_DEFAULT=\).*@\1\"0\"@" /etc/default/grub >/dev/null 2>&1
-		if [ -f /boot/grub/grub.cfg ]; then 
-			BOOTNB=$(grep vmlinuz- /boot/grub/grub.cfg | grep -n -m 1 xanmod | sed -e 's/:.*//g' | tr -d '\n')
-			[ -n "$BOOTNB" ] && sed -i "s@^\(GRUB_DEFAULT=\).*@\1\"${BOOTNB}\"@" /etc/default/grub >/dev/null 2>&1
-			grub-mkconfig -o /boot/grub/grub.cfg >/dev/null 2>&1
-		fi
-	}
+#	[ -f /etc/default/grub ] && {
+#		sed -i "s@^\(GRUB_DEFAULT=\).*@\1\"0\"@" /etc/default/grub >/dev/null 2>&1
+#		if [ -f /boot/grub/grub.cfg ]; then 
+#			BOOTNB=$(grep vmlinuz- /boot/grub/grub.cfg | tail -n +2 | grep -n -m 1 xanmod | sed -e 's/:.*//g' | tr -d '\n')
+#			[ -n "$BOOTNB" ] && sed -i "s@^\(GRUB_DEFAULT=\).*@\1\"${BOOTNB}\"@" /etc/default/grub >/dev/null 2>&1
+#			grub-mkconfig -o /boot/grub/grub.cfg >/dev/null 2>&1
+#		fi
+#	}
+	set_grub_default_kernel "${KERNEL_VERSION}" "${PSABI}-xanmod"
 elif [ "$KERNEL" = "6.18" ] && [ "$ARCH" = "amd64" ]; then
 	# awk command from xanmod website
 	PSABI=$(awk 'BEGIN { while (!/flags/) if (getline < "/proc/cpuinfo" != 1) exit 1; if (/lm/&&/cmov/&&/cx8/&&/fpu/&&/fxsr/&&/mmx/&&/syscall/&&/sse2/) level = 1; if (level == 1 && /cx16/&&/lahf/&&/popcnt/&&/sse4_1/&&/sse4_2/&&/ssse3/) level = 2; if (level == 2 && /avx/&&/avx2/&&/bmi1/&&/bmi2/&&/f16c/&&/fma/&&/abm/&&/movbe/&&/xsave/) level = 3; if (level == 3 && /avx512f/&&/avx512bw/&&/avx512cd/&&/avx512dq/&&/avx512vl/) level = 4; if (level > 0) { print "x64v" level; exit level + 1 }; exit 1;}' | tr -d "\n")
@@ -615,14 +642,15 @@ elif [ "$KERNEL" = "6.18" ] && [ "$ARCH" = "amd64" ]; then
 #	echo 'deb [signed-by=/usr/share/keyrings/xanmod-archive-keyring.gpg] http://deb.xanmod.org releases main' | tee /etc/apt/sources.list.d/xanmod-release.list
 #	apt-get update
 #	apt-get -y install linux-xanmod-lts-x64v3
-	[ -f /etc/default/grub ] && {
-		sed -i "s@^\(GRUB_DEFAULT=\).*@\1\"0\"@" /etc/default/grub >/dev/null 2>&1
-		if [ -f /boot/grub/grub.cfg ]; then 
-			BOOTNB=$(grep vmlinuz- /boot/grub/grub.cfg | grep -n -m 1 xanmod | sed -e 's/:.*//g' | tr -d '\n')
-			[ -n "$BOOTNB" ] && sed -i "s@^\(GRUB_DEFAULT=\).*@\1\"${BOOTNB}\"@" /etc/default/grub >/dev/null 2>&1
-			grub-mkconfig -o /boot/grub/grub.cfg >/dev/null 2>&1
-		fi
-	}
+#	[ -f /etc/default/grub ] && {
+#		sed -i "s@^\(GRUB_DEFAULT=\).*@\1\"0\"@" /etc/default/grub >/dev/null 2>&1
+#		if [ -f /boot/grub/grub.cfg ]; then 
+#			BOOTNB=$(grep vmlinuz- /boot/grub/grub.cfg | tail -n +2 | grep -n -m 1 xanmod | sed -e 's/:.*//g' | tr -d '\n')
+#			[ -n "$BOOTNB" ] && sed -i "s@^\(GRUB_DEFAULT=\).*@\1\"${BOOTNB}\"@" /etc/default/grub >/dev/null 2>&1
+#			grub-mkconfig -o /boot/grub/grub.cfg >/dev/null 2>&1
+#		fi
+#	}
+	set_grub_default_kernel "${KERNEL_VERSION}" "${PSABI}-xanmod"
 elif [ "$KERNEL" = "6.6" ] && [ "$ID" = "debian" ]; then
 	echo 'deb http://deb.debian.org/debian bookworm-backports main' > /etc/apt/sources.list.d/bookworm-backports.list
 	apt-get update
@@ -1467,7 +1495,7 @@ if [ "$MLVPN" = "yes" ]; then
 		mlvpnupdate="1"
 	fi
 	mkdir -p /etc/mlvpn
-	if [ "$SOURCES" = "yes" ]; then
+	if [ "$SOURCES" = "yes" ] || [ "$ARCH" != "amd64" ]; then
 		rm -f /var/lib/dpkg/lock
 		rm -f /var/lib/dpkg/lock-frontend
 		apt-get -y install build-essential pkg-config autoconf automake libpcap-dev unzip git

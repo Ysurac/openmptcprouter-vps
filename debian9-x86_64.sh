@@ -2238,11 +2238,11 @@ else
 	cp ${DIR}/shorewall4/policy /etc/shorewall/policy
 	cp ${DIR}/shorewall4/params /etc/shorewall/params
 	cp ${DIR}/shorewall4/zones /etc/shorewall/zones
-	#cp ${DIR}/shorewall4/params.vpn /etc/shorewall/params.vpn
-	#cp ${DIR}/shorewall4/params.net /etc/shorewall/params.net
+	[ ! -f /etc/shorewall/params.vpn ] && cp ${DIR}/shorewall4/params.vpn /etc/shorewall/params.vpn
+	[ ! -f /etc/shorewall/params.net ] && cp ${DIR}/shorewall4/params.net /etc/shorewall/params.net
 	cp ${DIR}/shorewall6/params /etc/shorewall6/params
-	#cp ${DIR}/shorewall6/params.net /etc/shorewall6/params.net
-	#cp ${DIR}/shorewall6/params.vpn /etc/shorewall6/params.vpn
+	[ ! -f /etc/shorewall/params.net ] && cp ${DIR}/shorewall6/params.net /etc/shorewall6/params.net
+	[ ! -f /etc/shorewall/params.vpn ] && cp ${DIR}/shorewall6/params.vpn /etc/shorewall6/params.vpn
 	cp ${DIR}/shorewall6/interfaces /etc/shorewall6/interfaces
 	cp ${DIR}/shorewall6/stoppedrules /etc/shorewall6/stoppedrules
 	cp ${DIR}/shorewall6/snat /etc/shorewall6/snat

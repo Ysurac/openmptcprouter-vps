@@ -21,6 +21,8 @@ ACCEPT          mlvpn+		-
 ACCEPT          -               mlvpn+
 ACCEPT          dsvpn+		-
 ACCEPT          -               dsvpn+
+ACCEPT          mqvpn+		-
+ACCEPT          -               mqvpn+
 ACCEPT          tun+		-
 ACCEPT          -               tun+
 ACCEPT          wg+		-

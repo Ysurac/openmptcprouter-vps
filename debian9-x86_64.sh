@@ -266,7 +266,7 @@ if [ "$ID" = "debian" ] && [ "$VERSION_ID" = "10" ] && [ "$UPDATE_OS" = "yes" ];
 	sed -i 's:buster:bullseye:g' /etc/apt/sources.list
 	sed -i 's:archive:deb:g' /etc/apt/sources.list
 	sed -i 's:bullseye/updates:bullseye-security:g' /etc/apt/sources.list
-	sed -i 's:openmptcprouter:d' /etc/apt/sources.list
+	sed -i '/openmptcprouter/d' /etc/apt/sources.list
 	apt-get update --allow-releaseinfo-change
 	apt-get -y -o Dpkg::Options::="--force-confdef" -o Dpkg::Options::="--force-confnew" --allow-downgrades upgrade
 	apt-get -y -o Dpkg::Options::="--force-confdef" -o Dpkg::Options::="--force-confnew" --allow-downgrades dist-upgrade
@@ -324,7 +324,7 @@ if [ "$ID" = "ubuntu" ] && [ "$VERSION_ID" = "18.04" ] && [ "$UPDATE_OS" = "yes"
 	apt-get -y -o Dpkg::Options::="--force-confdef" -o Dpkg::Options::="--force-confnew" dist-upgrade
 	VERSION_ID="20.04"
 fi
-if [ "$ID" = "ubuntu" ] && [ "$VERSION_ID" = "18.04" ] && [ "$UPDATE_OS" = "yes" ]; then
+if [ "$ID" = "ubuntu" ] && [ "$VERSION_ID" = "20.04" ] && [ "$UPDATE_OS" = "yes" ]; then
 	echo "Update Ubuntu 20.04 to Ubuntu 22.04"
 	apt-get -y -f --force-yes --allow-downgrades upgrade
 	apt-get -y -f --force-yes --allow-downgrades dist-upgrade
@@ -439,18 +439,6 @@ if [ "$ID" = "debian" ] && [ "$VERSION_ID" = "13" ]; then
 else
 	apt-get -y install dirmngr patch rename curl libcurl4 unzip pkg-config ipset
 fi
-
-if [ -z "$(dpkg-query -l | grep grub)" ]; then
-	if [ -d /boot/grub2 ]; then
-		apt-get -y install grub2
-	elif [ -d /boot/grub ]; then
-		apt-get -y install grub-legacy
-	fi
-	[ -n "$(grep 'net.ifnames=0' /boot/grub/grub.cfg)" ] && [ ! -f /etc/default/grub ] && {
-		echo 'GRUB_CMDLINE_LINUX="net.ifnames=0 biosdevname=0"' > /etc/default/grub
-	}
-fi
-
 
 if [ -z "$(dpkg-query -l | grep grub)" ]; then
 	if [ -d /boot/grub2 ]; then

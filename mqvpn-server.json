@@ -1,0 +1,16 @@
+{
+  "mode": "server",
+  "listen": "0.0.0.0:65443",
+  "subnet": "10.255.220.0/24",
+  "tun_name": "mqvpn0",
+  "log_level": "info",
+  "cert_file": "/etc/mqvpn/server.crt",
+  "key_file": "/etc/mqvpn/server.key",
+  "users": [
+    { "name": "openmptcprouter", "key": "PSK" },
+  ],
+  "max_clients": 64,
+  "scheduler": "wlb",
+  "control_port": 9090,
+  "control_addr": "127.0.0.1"
+}

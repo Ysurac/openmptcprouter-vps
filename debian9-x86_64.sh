@@ -1,6 +1,6 @@
 #!/bin/sh
 #
-# Copyright (C) 2018-2025 Ycarus (Yannick Chabanois) <ycarus@zugaina.org> for OpenMPTCProuter
+# Copyright (C) 2018-2026 Ycarus (Yannick Chabanois) <ycarus@zugaina.org> for OpenMPTCProuter
 #
 # This is free software, licensed under the GNU General Public License v3 or later.
 # See /LICENSE for more information.
@@ -26,6 +26,7 @@ SHADOWSOCKS=${SHADOWSOCKS:-yes}
 SHADOWSOCKS_GO=${SHADOWSOCKS_GO:-yes}
 PSK=${PSK:-$(head -c 32 /dev/urandom | base64 -w0)}
 UPSK=${UPSK:-$(head -c 32 /dev/urandom | base64 -w0)}
+MQVPN_KEY=${MQVPN_KEY:-$(head -c 32 /dev/urandom | base64 -w0)}
 UPDATE_OS=${UPDATE_OS:-yes}
 FORCE_UPDATE_OS=${FORCE_UPDATE_OS:-no}
 UPDATE=${UPDATE:-yes}
@@ -37,6 +38,7 @@ MLVPN=${MLVPN:-yes}
 MLVPN_PASS=${MLVPN_PASS:-$(head -c 32 /dev/urandom | base64 -w0)}
 UBOND=${UBOND:-no}
 UBOND_PASS=${UBOND_PASS:-$(head -c 32 /dev/urandom | base64 -w0)}
+MQVPN=${MQVPN:-yes}
 OPENVPN=${OPENVPN:-yes}
 OPENVPN_BONDING=${OPENVPN_BONDING:-yes}
 SOFTETHERVPN=${SOFTETHERVPN:-no}
@@ -1653,6 +1655,34 @@ if [ "$WIREGUARD" = "yes" ]; then
 	echo "Install wireguard done"
 fi
 
+if systemctl -q is-active mqvpn.service 2>/dev/null; then
+	systemctl -q stop mqvpn > /dev/null 2>&1
+	systemctl -q disable mqvpn > /dev/null 2>&1
+fi
+if [ "$MQVPN" = "yes" ]; then
+	echo "Install MQVPN"
+	rm -f /var/lib/dpkg/lock
+	rm -f /var/lib/dpkg/lock-frontend
+	apt-get -o Dpkg::Options::="--force-confold" -o Dpkg::Options::="--force-confdef" -o Dpkg::Options::="--force-overwrite" -y install mqvpn
+	mkdir -p /etc/mqvpn
+	if [ -f /etc/mqvpn/server.json ]; then
+		MQVPN_KEY2=$(grep -Po '"key"\s*:\s*"\K([^"]*)' /etc/mqvpn/server.json | head -n 1 | tr -d "\n")
+		[ -n "$MQVPN_KEY2" ] && [ "$MQVPN_KEY2" != "PSK" ] && [ "$MQVPN_KEY2" != "null" ] && MQVPN_KEY="$MQVPN_KEY2"
+	fi
+	if [ "$LOCALFILES" = "no" ]; then
+		wget -O /etc/mqvpn/server.json ${VPSURL}${VPSPATH}/mqvpn-server.json
+		wget -O /lib/systemd/system/mqvpn.service ${VPSURL}${VPSPATH}/mqvpn-server.service
+	else
+		cp ${DIR}/mqvpn-server.json /etc/mqvpn/server.json
+		cp ${DIR}/mqvpn-server.service /lib/systemd/system/mqvpn.service
+	fi
+	sed -i "s:PSK:$MQVPN_KEY:g" /etc/mqvpn/server.json
+	chmod 644 /lib/systemd/system/mqvpn.service
+	systemctl daemon-reload
+	systemctl enable mqvpn.service
+	echo "Install MQVPN done"
+fi
+
 if systemctl -q is-active fail2ban.service 2>/dev/null; then
 	systemctl -q stop fail2ban > /dev/null 2>&1
 	systemctl -q disable fail2ban > /dev/null 2>&1
@@ -2379,6 +2409,11 @@ if [ "$update" = "0" ]; then
 		echo 'Your UBOND password: '
 		echo $UBOND_PASS
 	fi
+	if [ "$MQVPN" = "yes" ]; then
+		echo 'MQVPN port: 65443'
+		echo 'Your MQVPN key: '
+		echo $MQVPN_KEY
+	fi
 	if [ "$OMR_ADMIN" = "yes" ]; then
 		echo "OpenMPTCProuter API Admin key (only for configuration via API, you don't need it): "
 		echo $OMR_ADMIN_PASS_ADMIN
@@ -2440,6 +2475,12 @@ if [ "$update" = "0" ]; then
 		cat >> /root/openmptcprouter_config.txt <<-EOF
 		UBOND first port: 65251
 		Your UBOND password: $UBOND_PASS
+		EOF
+	fi
+	if [ "$MQVPN" = "yes" ]; then
+		cat >> /root/openmptcprouter_config.txt <<-EOF
+		MQVPN port: 65443
+		Your MQVPN key: $MQVPN_KEY
 		EOF
 	fi
 	if [ "$OMR_ADMIN" = "yes" ]; then

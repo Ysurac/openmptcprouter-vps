@@ -1663,7 +1663,16 @@ if [ "$MQVPN" = "yes" ]; then
 	echo "Install MQVPN"
 	rm -f /var/lib/dpkg/lock
 	rm -f /var/lib/dpkg/lock-frontend
-	apt-get -o Dpkg::Options::="--force-confold" -o Dpkg::Options::="--force-confdef" -o Dpkg::Options::="--force-overwrite" -y install mqvpn
+	if [ "$ARCH" = "amd64" ]; then
+		apt-get -o Dpkg::Options::="--force-confold" -o Dpkg::Options::="--force-confdef" -o Dpkg::Options::="--force-overwrite" -y install mqvpn
+	elif [ "$ARCH" = "arm64" ]; then
+		wget -O /tmp/mqvpn-${MQVPN_VERSION}_arm64.deb ${VPSURL}/debian/mqvpn-${MQVPN_VERSION}_arm64.deb
+		wget -O /tmp/libmqvpn0-${MQVPN_VERSION}_arm64.deb ${VPSURL}/debian/libmqvpn0-${MQVPN_VERSION}_arm64.deb
+		dpkg --force-all -i -B /tmp/libmqvpn0-${MQVPN_VERSION}_arm64.deb
+		dpkg --force-all -i -B /tmp/mqvpn-${MQVPN_VERSION}_arm64.deb
+		rm -f /tmp/mqvpn-${MQVPN_VERSION}_arm64.deb
+		rm -f /tmp/libmqvpn0-${MQVPN_VERSION}_arm64.deb
+	fi
 	mkdir -p /etc/mqvpn
 	if [ -f /etc/mqvpn/server.json ]; then
 		MQVPN_KEY2=$(grep -Po '"key"\s*:\s*"\K([^"]*)' /etc/mqvpn/server.json | head -n 1 | tr -d "\n")
@@ -2298,7 +2307,7 @@ fi
 # Limit /var/log/journal size
 sed -i 's/#SystemMaxUse=/SystemMaxUse=100M/' /etc/systemd/journald.conf
 
-if [ "$BPFTUNE" = "yes" ]; then
+if [ "$BPFTUNE" = "yes" ] && [ "$ARCH" = "amd64" ]; then
 	apt-get -y install bpftune
 	systemctl enable bpftune
 fi

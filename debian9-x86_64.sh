@@ -39,6 +39,7 @@ MLVPN_PASS=${MLVPN_PASS:-$(head -c 32 /dev/urandom | base64 -w0)}
 UBOND=${UBOND:-no}
 UBOND_PASS=${UBOND_PASS:-$(head -c 32 /dev/urandom | base64 -w0)}
 MQVPN=${MQVPN:-yes}
+MQVPN_VERSION="0.5.0-1"
 OPENVPN=${OPENVPN:-yes}
 OPENVPN_BONDING=${OPENVPN_BONDING:-yes}
 SOFTETHERVPN=${SOFTETHERVPN:-no}

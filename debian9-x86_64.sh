@@ -1667,12 +1667,12 @@ if [ "$MQVPN" = "yes" ]; then
 	if [ "$ARCH" = "amd64" ]; then
 		apt-get -o Dpkg::Options::="--force-confold" -o Dpkg::Options::="--force-confdef" -o Dpkg::Options::="--force-overwrite" -y install mqvpn
 	elif [ "$ARCH" = "arm64" ]; then
-		wget -O /tmp/mqvpn-${MQVPN_VERSION}_arm64.deb ${VPSURL}/debian/mqvpn-${MQVPN_VERSION}_arm64.deb
-		wget -O /tmp/libmqvpn0-${MQVPN_VERSION}_arm64.deb ${VPSURL}/debian/libmqvpn0-${MQVPN_VERSION}_arm64.deb
+		wget -O /tmp/mqvpn_${MQVPN_VERSION}_arm64.deb ${VPSURL}/debian/mqvpn_${MQVPN_VERSION}_arm64.deb
+		wget -O /tmp/libmqvpn0_${MQVPN_VERSION}_arm64.deb ${VPSURL}/debian/libmqvpn0_${MQVPN_VERSION}_arm64.deb
 		dpkg --force-all -i -B /tmp/libmqvpn0-${MQVPN_VERSION}_arm64.deb
-		dpkg --force-all -i -B /tmp/mqvpn-${MQVPN_VERSION}_arm64.deb
-		rm -f /tmp/mqvpn-${MQVPN_VERSION}_arm64.deb
-		rm -f /tmp/libmqvpn0-${MQVPN_VERSION}_arm64.deb
+		dpkg --force-all -i -B /tmp/mqvpn_${MQVPN_VERSION}_arm64.deb
+		rm -f /tmp/mqvpn_${MQVPN_VERSION}_arm64.deb
+		rm -f /tmp/libmqvpn0_${MQVPN_VERSION}_arm64.deb
 	fi
 	mkdir -p /etc/mqvpn
 	if [ -f /etc/mqvpn/server.json ]; then

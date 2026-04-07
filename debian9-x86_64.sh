@@ -39,7 +39,6 @@ MLVPN_PASS=${MLVPN_PASS:-$(head -c 32 /dev/urandom | base64 -w0)}
 UBOND=${UBOND:-no}
 UBOND_PASS=${UBOND_PASS:-$(head -c 32 /dev/urandom | base64 -w0)}
 MQVPN=${MQVPN:-yes}
-MQVPN_VERSION="0.5.0-1"
 OPENVPN=${OPENVPN:-yes}
 OPENVPN_BONDING=${OPENVPN_BONDING:-yes}
 SOFTETHERVPN=${SOFTETHERVPN:-no}
@@ -89,11 +88,12 @@ MLVPN_BINARY_VERSION="3.0.0+20211028.git.ddafba3"
 UBOND_VERSION="31af0f69ebb6d07ed9348dca2fced33b956cedee"
 OBFS_VERSION="486bebd9208539058e57e23a12f23103016e09b4"
 OBFS_BINARY_VERSION="0.0.5-1"
-OMR_ADMIN_VERSION="ccac898d295e5c0d74229d66f0eb04c9f051349d"
-OMR_ADMIN_BINARY_VERSION="0.16+20260113"
+OMR_ADMIN_VERSION="6bbf527876d92f49084e7886aa48fcc56456f65b"
+OMR_ADMIN_BINARY_VERSION="0.17+20260407"
 #OMR_ADMIN_BINARY_VERSION="0.3+20220827"
 DSVPN_VERSION="3b99d2ef6c02b2ef68b5784bec8adfdd55b29b1a"
 DSVPN_BINARY_VERSION="0.1.4-2"
+MQVPN_VERSION="0.5.0-1"
 V2RAY_VERSION="5.32.0"
 V2RAY_PLUGIN_VERSION="4.43.0"
 XRAY_VERSION="26.2.4"
@@ -1687,6 +1687,9 @@ if [ "$MQVPN" = "yes" ]; then
 		cp ${DIR}/mqvpn-server.service /lib/systemd/system/mqvpn.service
 	fi
 	sed -i "s:PSK:$MQVPN_KEY:g" /etc/mqvpn/server.json
+	if [ ! -f /etc/mqvpn/server.key ]; then
+		openssl req -new -newkey rsa:2048 -days 3650 -nodes -x509 -keyout /etc/mqvpn/server.key -out /etc/mqvpn/server.crt -subj "/C=US/ST=Oregon/L=Portland/O=OpenMPTCProuterVPS/OU=Org/CN=www.openmptcprouter.vps"
+	fi
 	chmod 644 /lib/systemd/system/mqvpn.service
 	systemctl daemon-reload
 	systemctl enable mqvpn.service

@@ -94,7 +94,7 @@ _shadowsocks() {
 _shadowsocks_go() {
 	if systemctl list-unit-files shadowsocks-go.service >/dev/null; then
 		[ -z "$(pgrep shadowsocks-go)" ] && {
-			logger -t "OMR-Service" "ss-server not detected, restart Shadowsocks go"
+			logger -t "OMR-Service" "shadowsocks-go not detected, restart Shadowsocks go"
 			systemctl restart shadowsocks-go
 		}
 	fi
@@ -103,7 +103,7 @@ _shadowsocks_go() {
 _xray() {
 	if systemctl list-unit-files xray.service >/dev/null; then
 		[ -z "$(pgrep xray)" ] && {
-			logger -t "OMR-Service" "ss-server not detected, restart XRay"
+			logger -t "OMR-Service" "xray not detected, restart XRay"
 			systemctl restart xray
 		}
 	fi
@@ -112,7 +112,7 @@ _xray() {
 _v2ray() {
 	if systemctl list-unit-files v2ray.service >/dev/null; then
 		[ -z "$(pgrep v2ray)" ] && {
-			logger -t "OMR-Service" "ss-server not detected, restart V2Ray"
+			logger -t "OMR-Service" "v2ray not detected, restart V2Ray"
 			systemctl restart v2ray
 		}
 	fi

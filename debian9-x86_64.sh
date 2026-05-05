@@ -93,7 +93,7 @@ OMR_ADMIN_BINARY_VERSION="0.17+20260504"
 #OMR_ADMIN_BINARY_VERSION="0.3+20220827"
 DSVPN_VERSION="3b99d2ef6c02b2ef68b5784bec8adfdd55b29b1a"
 DSVPN_BINARY_VERSION="0.1.4-2"
-MQVPN_VERSION="0.5.0-1"
+MQVPN_VERSION="0.3.2-1"
 V2RAY_VERSION="5.32.0"
 V2RAY_PLUGIN_VERSION="4.43.0"
 XRAY_VERSION="26.2.4"
@@ -1670,7 +1670,7 @@ if [ "$MQVPN" = "yes" ]; then
 	rm -f /var/lib/dpkg/lock
 	rm -f /var/lib/dpkg/lock-frontend
 	if [ "$ARCH" = "amd64" ]; then
-		apt-get -o Dpkg::Options::="--force-confold" -o Dpkg::Options::="--force-confdef" -o Dpkg::Options::="--force-overwrite" -y install mqvpn
+		apt-get -o Dpkg::Options::="--force-confold" -o Dpkg::Options::="--force-confdef" -o Dpkg::Options::="--force-overwrite" --allow-downgrades -y install mqvpn
 	elif [ "$ARCH" = "arm64" ]; then
 		wget -O /tmp/mqvpn_${MQVPN_VERSION}_arm64.deb ${VPSURL}/debian/mqvpn_${MQVPN_VERSION}_arm64.deb
 		wget -O /tmp/libmqvpn0_${MQVPN_VERSION}_arm64.deb ${VPSURL}/debian/libmqvpn0_${MQVPN_VERSION}_arm64.deb

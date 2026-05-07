@@ -10,7 +10,7 @@
     { "name": "openmptcprouter", "key": "PSK" }
   ],
   "max_clients": 64,
-  "scheduler": "wlb",
+  "scheduler": "minrtt",
   "control_port": 9090,
   "control_addr": "127.0.0.1"
 }

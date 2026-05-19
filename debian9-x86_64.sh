@@ -620,39 +620,40 @@ elif [ "$KERNEL" = "6.12" ] && [ "$ARCH" = "amd64" ]; then
 #		fi
 #	}
 	set_grub_default_kernel "${KERNEL_VERSION}" "${PSABI}-xanmod"
-elif [ "$KERNEL" = "6.18" ] && [ "$ARCH" = "amd64" ]; then
+#elif [ "$KERNEL" = "6.18" ] && [ "$ARCH" = "amd64" ]; then
+elif [ "$KERNEL" = "6.18" ]; then
 	# awk command from xanmod website
 	PSABI=$(awk 'BEGIN { while (!/flags/) if (getline < "/proc/cpuinfo" != 1) exit 1; if (/lm/&&/cmov/&&/cx8/&&/fpu/&&/fxsr/&&/mmx/&&/syscall/&&/sse2/) level = 1; if (level == 1 && /cx16/&&/lahf/&&/popcnt/&&/sse4_1/&&/sse4_2/&&/ssse3/) level = 2; if (level == 2 && /avx/&&/avx2/&&/bmi1/&&/bmi2/&&/f16c/&&/fma/&&/abm/&&/movbe/&&/xsave/) level = 3; if (level == 3 && /avx512f/&&/avx512bw/&&/avx512cd/&&/avx512dq/&&/avx512vl/) level = 4; if (level > 0) { print "x64v" level; exit level + 1 }; exit 1;}' | tr -d "\n")
 	#'
 	if [ "$PSABI" = "x64v4" ]; then
 		PSABI="x64v3"
 	fi
-	KERNEL_VERSION="6.18.31"
-	KERNEL_REV="0~20260516.g54defdf"
-	if [ "$CHINA" = "yes" ]; then
-		wget -O /tmp/linux-image-${KERNEL_VERSION}-${PSABI}-xanmod1_${KERNEL_VERSION}-${PSABI}-xanmod1-${KERNEL_REV}_amd64.deb https://sourceforge.net/projects/xanmod/files/releases/lts/${KERNEL_VERSION}-xanmod1/${KERNEL_VERSION}-${PSABI}-xanmod1/linux-image-${KERNEL_VERSION}-${PSABI}-xanmod1_${KERNEL_VERSION}-${PSABI}-xanmod1-${KERNEL_REV}_amd64.deb
-		wget -O /tmp/linux-headers-${KERNEL_VERSION}-${PSABI}-xanmod1_${KERNEL_VERSION}-${PSABI}-xanmod1-${KERNEL_REV}_amd64.deb https://sourceforge.net/projects/xanmod/files/releases/lts/${KERNEL_VERSION}-xanmod1/${KERNEL_VERSION}-${PSABI}-xanmod1/linux-headers-${KERNEL_VERSION}-${PSABI}-xanmod1_${KERNEL_VERSION}-${PSABI}-xanmod1-${KERNEL_REV}_amd64.deb
-	else
-		wget -O /tmp/linux-image-${KERNEL_VERSION}-${PSABI}-xanmod1_${KERNEL_VERSION}-${PSABI}-xanmod1-${KERNEL_REV}_amd64.deb ${VPSURL}kernel/linux-image-${KERNEL_VERSION}-${PSABI}-xanmod1_${KERNEL_VERSION}-${PSABI}-xanmod1-${KERNEL_REV}_amd64.deb
-		wget -O /tmp/linux-headers-${KERNEL_VERSION}-${PSABI}-xanmod1_${KERNEL_VERSION}-${PSABI}-xanmod1-${KERNEL_REV}_amd64.deb ${VPSURL}kernel/linux-headers-${KERNEL_VERSION}-${PSABI}-xanmod1_${KERNEL_VERSION}-${PSABI}-xanmod1-${KERNEL_REV}_amd64.deb
-	fi
-	echo "Install kernel linux-image-${KERNEL_VERSION}-${PSABI}-xanmod1 source release"
-	dpkg --force-all -i -B /tmp/linux-headers-${KERNEL_VERSION}-${PSABI}-xanmod1_${KERNEL_VERSION}-${PSABI}-xanmod1-${KERNEL_REV}_amd64.deb
-	dpkg --force-all -i -B /tmp/linux-image-${KERNEL_VERSION}-${PSABI}-xanmod1_${KERNEL_VERSION}-${PSABI}-xanmod1-${KERNEL_REV}_amd64.deb
-
-#	wget -qO - https://dl.xanmod.org/archive.key | gpg --batch --yes --dearmor -vo /usr/share/keyrings/xanmod-archive-keyring.gpg
-#	echo 'deb [signed-by=/usr/share/keyrings/xanmod-archive-keyring.gpg] http://deb.xanmod.org releases main' | tee /etc/apt/sources.list.d/xanmod-release.list
-#	apt-get update
-#	apt-get -y install linux-xanmod-lts-x64v3
-#	[ -f /etc/default/grub ] && {
-#		sed -i "s@^\(GRUB_DEFAULT=\).*@\1\"0\"@" /etc/default/grub >/dev/null 2>&1
-#		if [ -f /boot/grub/grub.cfg ]; then 
-#			BOOTNB=$(grep vmlinuz- /boot/grub/grub.cfg | tail -n +2 | grep -n -m 1 xanmod | sed -e 's/:.*//g' | tr -d '\n')
-#			[ -n "$BOOTNB" ] && sed -i "s@^\(GRUB_DEFAULT=\).*@\1\"${BOOTNB}\"@" /etc/default/grub >/dev/null 2>&1
-#			grub-mkconfig -o /boot/grub/grub.cfg >/dev/null 2>&1
-#		fi
-#	}
-	set_grub_default_kernel "${KERNEL_VERSION}" "${PSABI}-xanmod"
+	#KERNEL_VERSION="6.18.31"
+	#KERNEL_REV="0~20260516.g54defdf"
+	#if [ "$CHINA" = "yes" ]; then
+	#	wget -O /tmp/linux-image-${KERNEL_VERSION}-${PSABI}-xanmod1_${KERNEL_VERSION}-${PSABI}-xanmod1-${KERNEL_REV}_amd64.deb https://sourceforge.net/projects/xanmod/files/releases/lts/${KERNEL_VERSION}-xanmod1/${KERNEL_VERSION}-${PSABI}-xanmod1/linux-image-${KERNEL_VERSION}-${PSABI}-xanmod1_${KERNEL_VERSION}-${PSABI}-xanmod1-${KERNEL_REV}_amd64.deb
+	#	wget -O /tmp/linux-headers-${KERNEL_VERSION}-${PSABI}-xanmod1_${KERNEL_VERSION}-${PSABI}-xanmod1-${KERNEL_REV}_amd64.deb https://sourceforge.net/projects/xanmod/files/releases/lts/${KERNEL_VERSION}-xanmod1/${KERNEL_VERSION}-${PSABI}-xanmod1/linux-headers-${KERNEL_VERSION}-${PSABI}-xanmod1_${KERNEL_VERSION}-${PSABI}-xanmod1-${KERNEL_REV}_amd64.deb
+	#else
+	#	wget -O /tmp/linux-image-${KERNEL_VERSION}-${PSABI}-xanmod1_${KERNEL_VERSION}-${PSABI}-xanmod1-${KERNEL_REV}_amd64.deb ${VPSURL}kernel/linux-image-${KERNEL_VERSION}-${PSABI}-xanmod1_${KERNEL_VERSION}-${PSABI}-xanmod1-${KERNEL_REV}_amd64.deb
+	#	wget -O /tmp/linux-headers-${KERNEL_VERSION}-${PSABI}-xanmod1_${KERNEL_VERSION}-${PSABI}-xanmod1-${KERNEL_REV}_amd64.deb ${VPSURL}kernel/linux-headers-${KERNEL_VERSION}-${PSABI}-xanmod1_${KERNEL_VERSION}-${PSABI}-xanmod1-${KERNEL_REV}_amd64.deb
+	#fi
+	#echo "Install kernel linux-image-${KERNEL_VERSION}-${PSABI}-xanmod1 source release"
+	#dpkg --force-all -i -B /tmp/linux-headers-${KERNEL_VERSION}-${PSABI}-xanmod1_${KERNEL_VERSION}-${PSABI}-xanmod1-${KERNEL_REV}_amd64.deb
+	#dpkg --force-all -i -B /tmp/linux-image-${KERNEL_VERSION}-${PSABI}-xanmod1_${KERNEL_VERSION}-${PSABI}-xanmod1-${KERNEL_REV}_amd64.deb
+	#set_grub_default_kernel "${KERNEL_VERSION}" "${PSABI}-xanmod"
+	KERNEL_VERSION="6.18.32"
+	KERNEL_REV="20260519"
+	#if [ "$CHINA" = "yes" ]; then
+	#	wget -O /tmp/linux-image-${KERNEL_VERSION}-${PSABI}-xanmod1_${KERNEL_VERSION}-${PSABI}-xanmod1-${KERNEL_REV}_amd64.deb https://sourceforge.net/projects/xanmod/files/releases/lts/${KERNEL_VERSION}-xanmod1/${KERNEL_VERSION}-${PSABI}-xanmod1/linux-image-${KERNEL_VERSION}-${PSABI}-xanmod1_${KERNEL_VERSION}-${PSABI}-xanmod1-${KERNEL_REV}_amd64.deb
+	#	wget -O /tmp/linux-headers-${KERNEL_VERSION}-${PSABI}-xanmod1_${KERNEL_VERSION}-${PSABI}-xanmod1-${KERNEL_REV}_amd64.deb https://sourceforge.net/projects/xanmod/files/releases/lts/${KERNEL_VERSION}-xanmod1/${KERNEL_VERSION}-${PSABI}-xanmod1/linux-headers-${KERNEL_VERSION}-${PSABI}-xanmod1_${KERNEL_VERSION}-${PSABI}-xanmod1-${KERNEL_REV}_amd64.deb
+	#else
+	wget -O /tmp/linux-image-${KERNEL_VERSION}-${PSABI}-omr_${KERNEL_VERSION}-${PSABI}_${ARCH}.deb ${VPSURL}kernel/linux-image-${KERNEL_VERSION}-${PSABI}_${KERNEL_VERSION}-${PSABI}-omr_${ARCH}.deb
+	wget -O /tmp/linux-headers-${KERNEL_VERSION}-${PSABI}-omr_${KERNEL_VERSION}-${PSABI}_${ARCH}.deb ${VPSURL}kernel/linux-headers-${KERNEL_VERSION}-${PSABI}_${KERNEL_VERSION}-${PSABI}-omr_${ARCH}.deb
+	#fi
+	echo "Install kernel linux-image-${KERNEL_VERSION}-${PSABI}-omr source release"
+	dpkg --force-all -i -B /tmp/linux-headers-${KERNEL_VERSION}-${PSABI}-omr_${KERNEL_VERSION}-${PSABI}-omr_${KERNEL_REV}_${ARCH}.deb
+	dpkg --force-all -i -B /tmp/linux-image-${KERNEL_VERSION}-${PSABI}-omr_${KERNEL_VERSION}-${PSABI}-omr_${KERNEL_REV}_${ARCH}.deb
+	set_grub_default_kernel "${KERNEL_VERSION}" "${PSABI}-omr"
 elif [ "$KERNEL" = "6.6" ] && [ "$ID" = "debian" ]; then
 	echo 'deb http://deb.debian.org/debian bookworm-backports main' > /etc/apt/sources.list.d/bookworm-backports.list
 	apt-get update

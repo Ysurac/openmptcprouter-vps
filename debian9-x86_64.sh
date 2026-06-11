@@ -694,9 +694,7 @@ if [ "$KERNEL" = "6.18" ]; then
 	
 	echo "Install MPTCP BPF schedulers for kernel 6.18..."
 	for pkg in mptcp-bpf-bkup mptcp-bpf-burst mptcp-bpf-first mptcp-bpf-red mptcp-bpf-rr; do
-		if apt-cache show "${pkg}=${MPTCP_BPF_VERSION}" >/dev/null 2>&1; then
-			apt-get -o Dpkg::Options::="--force-confold" -o Dpkg::Options::="--force-confdef" -o Dpkg::Options::="--force-overwrite" -y install ${pkg}=${MPTCP_BPF_VERSION}
-		else
+		if ! apt-get -o Dpkg::Options::="--force-confold" -o Dpkg::Options::="--force-confdef" -o Dpkg::Options::="--force-overwrite" -y install ${pkg}=${MPTCP_BPF_VERSION}; then
 			wget -O /tmp/${pkg}_${MPTCP_BPF_VERSION}_${ARCH}.deb ${VPSURL}debian/${pkg}_${MPTCP_BPF_VERSION}_${ARCH}.deb
 			dpkg --force-confold --force-confdef --force-overwrite -i /tmp/${pkg}_${MPTCP_BPF_VERSION}_${ARCH}.deb
 			rm -f /tmp/${pkg}_${MPTCP_BPF_VERSION}_${ARCH}.deb
@@ -1078,9 +1076,7 @@ if [ "$OMR_ADMIN" = "yes" ]; then
 			OMR_ADMIN_PASS_ADMIN2=$(cat /etc/openmptcprouter-vps-admin/omr-admin-config.json | jq -r .users[0].admin.user_password | tr -d "\n")
 			[ -n "$OMR_ADMIN_PASS_ADMIN2" ] && [ "$OMR_ADMIN_PASS_ADMIN2" != "AdminMySecretKey" ] && OMR_ADMIN_PASS_ADMIN=$OMR_ADMIN_PASS_ADMIN2
 		fi
-		if apt-cache show "omr-vps-admin=${OMR_ADMIN_BINARY_VERSION}" >/dev/null 2>&1; then
-			apt-get -o Dpkg::Options::="--force-confold" -o Dpkg::Options::="--force-confdef" -o Dpkg::Options::="--force-overwrite" -y --allow-downgrades install omr-vps-admin=${OMR_ADMIN_BINARY_VERSION}
-		else
+		if ! apt-get -o Dpkg::Options::="--force-confold" -o Dpkg::Options::="--force-confdef" -o Dpkg::Options::="--force-overwrite" -y --allow-downgrades install omr-vps-admin=${OMR_ADMIN_BINARY_VERSION}; then
 			wget -O /tmp/omr-vps-admin-${OMR_ADMIN_BINARY_VERSION}.deb ${VPSURL}debian/omr-vps-admin-${OMR_ADMIN_BINARY_VERSION}.deb
 			dpkg --force-confold --force-confdef --force-overwrite -i /tmp/omr-vps-admin-${OMR_ADMIN_BINARY_VERSION}.deb
 			rm -f /tmp/omr-vps-admin-${OMR_ADMIN_BINARY_VERSION}.deb
@@ -1323,9 +1319,7 @@ if [ "$SHADOWSOCKS_GO" = "yes" ]; then
 			rm -f /tmp/shadowsocks-go-${SHADOWSOCKS_GO_VERSION}-arm64.deb
 		fi
 	else
-		if apt-cache show "shadowsocks-go=${SHADOWSOCKS_GO_VERSION}" >/dev/null 2>&1; then
-			apt-get -o Dpkg::Options::="--force-confold" -o Dpkg::Options::="--force-confdef" -o Dpkg::Options::="--force-overwrite" -y install shadowsocks-go=${SHADOWSOCKS_GO_VERSION}
-		else
+		if ! apt-get -o Dpkg::Options::="--force-confold" -o Dpkg::Options::="--force-confdef" -o Dpkg::Options::="--force-overwrite" -y install shadowsocks-go=${SHADOWSOCKS_GO_VERSION}; then
 			wget -O /tmp/shadowsocks-go-${SHADOWSOCKS_GO_VERSION}-${ARCH}.deb ${VPSURL}debian/shadowsocks-go-${SHADOWSOCKS_GO_VERSION}-${ARCH}.deb
 			dpkg --force-confold --force-confdef --force-overwrite -i /tmp/shadowsocks-go-${SHADOWSOCKS_GO_VERSION}-${ARCH}.deb
 			rm -f /tmp/shadowsocks-go-${SHADOWSOCKS_GO_VERSION}-${ARCH}.deb
@@ -1397,9 +1391,7 @@ if [ "$V2RAY" = "yes" ]; then
 #			wget -O /lib/systemd/system/v2ray.service ${VPSURL}${VPSPATH}/v2ray.service
 #		fi
 	else
-		if apt-cache show "v2ray=${V2RAY_VERSION}" >/dev/null 2>&1; then
-			apt-get -o Dpkg::Options::="--force-confold" -o Dpkg::Options::="--force-confdef" -o Dpkg::Options::="--force-overwrite" -y install v2ray=${V2RAY_VERSION}
-		else
+		if ! apt-get -o Dpkg::Options::="--force-confold" -o Dpkg::Options::="--force-confdef" -o Dpkg::Options::="--force-overwrite" -y install v2ray=${V2RAY_VERSION}; then
 			wget -O /tmp/v2ray-${V2RAY_VERSION}-${ARCH}.deb ${VPSURL}debian/v2ray-${V2RAY_VERSION}-${ARCH}.deb
 			dpkg --force-confold --force-confdef --force-overwrite -i /tmp/v2ray-${V2RAY_VERSION}-${ARCH}.deb
 			rm -f /tmp/v2ray-${V2RAY_VERSION}-${ARCH}.deb
@@ -1461,9 +1453,7 @@ if [ "$XRAY" = "yes" ]; then
 			rm -f /tmp/xray-${XRAY_VERSION}-arm64.deb
 		fi
 	else
-		if apt-cache show "xray=${XRAY_VERSION}" >/dev/null 2>&1; then
-			apt-get -o Dpkg::Options::="--force-confold" -o Dpkg::Options::="--force-confdef" -o Dpkg::Options::="--force-overwrite" -y --allow-downgrades install xray=${XRAY_VERSION}
-		else
+		if ! apt-get -o Dpkg::Options::="--force-confold" -o Dpkg::Options::="--force-confdef" -o Dpkg::Options::="--force-overwrite" -y --allow-downgrades install xray=${XRAY_VERSION}; then
 			wget -O /tmp/xray-${XRAY_VERSION}-${ARCH}.deb ${VPSURL}debian/xray-${XRAY_VERSION}-${ARCH}.deb
 			dpkg --force-confold --force-confdef --force-overwrite -i /tmp/xray-${XRAY_VERSION}-${ARCH}.deb
 			rm -f /tmp/xray-${XRAY_VERSION}-${ARCH}.deb

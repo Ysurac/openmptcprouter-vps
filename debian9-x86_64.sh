@@ -34,6 +34,8 @@ TLS=${TLS:-yes}
 OMR_ADMIN=${OMR_ADMIN:-yes}
 OMR_ADMIN_PASS=${OMR_ADMIN_PASS:-$(od -vN "32" -An -tx1 /dev/urandom | tr '[:lower:]' '[:upper:]' | tr -d " \n")}
 OMR_ADMIN_PASS_ADMIN=${OMR_ADMIN_PASS_ADMIN:-$(od -vN "32" -An -tx1 /dev/urandom | tr '[:lower:]' '[:upper:]' | tr -d " \n")}
+OMR_METRICS=${OMR_METRICS:-no}
+OMR_AI=${OMR_AI:-no}
 MLVPN=${MLVPN:-yes}
 MLVPN_PASS=${MLVPN_PASS:-$(head -c 32 /dev/urandom | base64 -w0)}
 UBOND=${UBOND:-no}
@@ -47,7 +49,7 @@ SOFTETHERVPN_PASS_USER=${SOFTETHERVPN_PASS_USER:-$(od -vN "16" -An -tx1 /dev/ura
 DSVPN=${DSVPN:-yes}
 WIREGUARD=${WIREGUARD:-yes}
 FAIL2BAN=${FAIL2BAN:-yes}
-BPFTUNE=${BPFTUNE:-yes}
+BPFTUNE=${BPFTUNE:-no}
 SOURCES=${SOURCES:-no}
 #if [ "$KERNEL" != "5.4" ]; then
 #	SOURCES="yes"
@@ -75,6 +77,7 @@ if [ "$KERNEL" = "6.1" ]; then
 	KERNEL_PACKAGE_VERSION="1.30"
 	KERNEL_RELEASE="${KERNEL_VERSION}-mptcp_${KERNEL_PACKAGE_VERSION}"
 fi
+MPTCP_BPF_VERSION="1.0-1"
 GLORYTUN_UDP=${GLORYTUN_UDP:-yes}
 GLORYTUN_UDP_VERSION="23100474922259d00a8c0c4b00a0c8de89202cf9"
 GLORYTUN_UDP_BINARY_VERSION="0.3.4-5"
@@ -88,14 +91,14 @@ MLVPN_BINARY_VERSION="3.0.0+20211028.git.ddafba3"
 UBOND_VERSION="31af0f69ebb6d07ed9348dca2fced33b956cedee"
 OBFS_VERSION="486bebd9208539058e57e23a12f23103016e09b4"
 OBFS_BINARY_VERSION="0.0.5-1"
-OMR_ADMIN_VERSION="1dc7763c0709cc630e3b64934284baf29d945b26"
-OMR_ADMIN_BINARY_VERSION="0.17+20260518b"
+OMR_ADMIN_VERSION="9b92c3c1dae87e396e83bbd8a93cb15015b62b8e"
+OMR_ADMIN_BINARY_VERSION="0.18+20260610"
 DSVPN_VERSION="3b99d2ef6c02b2ef68b5784bec8adfdd55b29b1a"
 DSVPN_BINARY_VERSION="0.1.4-2"
-MQVPN_VERSION="0.5.0-1"
+MQVPN_VERSION="0.7.0-1"
 V2RAY_VERSION="5.32.0"
 V2RAY_PLUGIN_VERSION="4.43.0"
-XRAY_VERSION="26.2.4"
+XRAY_VERSION="26.3.27"
 EASYRSA_VERSION="3.2.2"
 #SHADOWSOCKS_VERSION="7407b214f335f0e2068a8622ef3674d868218e17"
 #if [ "$UPSTREAM" = "yes" ] || [ "$UPSTREAM6" = "yes" ]; then
@@ -112,7 +115,7 @@ VPSURL="https://www.openmptcprouter.com/"
 REPO="repo.openmptcprouter.com"
 CHINA=${CHINA:-no}
 
-OMR_VERSION="0.1058-rolling-test"
+OMR_VERSION="0.1060-rolling-test"
 
 DIR=$( pwd )
 #"
@@ -158,11 +161,15 @@ if ([ "$KERNEL" = "5.4" ] || [ "$KERNEL" = "5.15" ]) && [ "$ARCH" != "amd64" ] &
 	exit 1
 fi
 
+echo "Check virtualized environment"
+VIRT="$(systemd-detect-virt 2>/dev/null || true)"
+IS_CONTAINER="no"
+if [ -n "$VIRT" ] && ([ "$VIRT" = "openvz" ] || [ "$VIRT" = "lxc" ] || [ "$VIRT" = "docker" ] || [ "$VIRT" = "podman" ] || [ "$VIRT" = "container-other" ]); then
+	IS_CONTAINER="yes"
+fi
 if [ "$KERNEL" = "5.4" ] || [ "$KERNEL" = "5.15" ]; then
-	echo "Check virtualized environment"
-	VIRT="$(systemd-detect-virt 2>/dev/null || true)"
-	if [ -z "$(uname -a | grep mptcp)" ] && [ -n "$VIRT" ] && ([ "$VIRT" = "openvz" ] || [ "$VIRT" = "lxc" ] || [ "$VIRT" = "docker" ]); then
-		echo "Container are not supported: kernel can't be modified."
+	if [ -z "$(uname -a | grep mptcp)" ] && [ "$IS_CONTAINER" = "yes" ]; then
+		echo "Container detected: kernel can't be modified."
 		exit 1
 	fi
 fi
@@ -437,7 +444,7 @@ echo "Install mptcp kernel and shadowsocks..."
 apt-get update --allow-releaseinfo-change
 sleep 2
 if [ "$ID" = "debian" ] && [ "$VERSION_ID" = "13" ]; then
-	apt-get -y install dirmngr patch rename curl unzip pkg-config ipset
+	apt-get -y install dirmngr patch rename curl unzip pkg-config ipset bpftool
 else
 	apt-get -y install dirmngr patch rename curl libcurl4 unzip pkg-config ipset
 fi
@@ -478,6 +485,9 @@ set_grub_default_kernel() {
 	grub-mkconfig -o /boot/grub/grub.cfg >/dev/null 2>&1
 }
 #"
+if [ "$IS_CONTAINER" = "yes" ]; then
+	echo "Container detected: skipping kernel installation."
+else
 if [ "$KERNEL" = "5.4" ] || [ "$KERNEL" = "5.15" ]; then
 	if [ "$SOURCES" = "yes" ]; then
 		wget -O /tmp/linux-image-${KERNEL_RELEASE}_amd64.deb ${VPSURL}kernel/linux-image-${KERNEL_RELEASE}_amd64.deb
@@ -646,8 +656,8 @@ elif [ "$KERNEL" = "6.18" ]; then
 	#dpkg --force-all -i -B /tmp/linux-headers-${KERNEL_VERSION}-${PSABI}-xanmod1_${KERNEL_VERSION}-${PSABI}-xanmod1-${KERNEL_REV}_amd64.deb
 	#dpkg --force-all -i -B /tmp/linux-image-${KERNEL_VERSION}-${PSABI}-xanmod1_${KERNEL_VERSION}-${PSABI}-xanmod1-${KERNEL_REV}_amd64.deb
 	#set_grub_default_kernel "${KERNEL_VERSION}" "${PSABI}-xanmod"
-	KERNEL_VERSION="6.18.32"
-	KERNEL_REV="20260519"
+	KERNEL_VERSION="6.18.35"
+	KERNEL_REV="20260610"
 	#if [ "$CHINA" = "yes" ]; then
 	#	wget -O /tmp/linux-image-${KERNEL_VERSION}-${PSABI}-xanmod1_${KERNEL_VERSION}-${PSABI}-xanmod1-${KERNEL_REV}_amd64.deb https://sourceforge.net/projects/xanmod/files/releases/lts/${KERNEL_VERSION}-xanmod1/${KERNEL_VERSION}-${PSABI}-xanmod1/linux-image-${KERNEL_VERSION}-${PSABI}-xanmod1_${KERNEL_VERSION}-${PSABI}-xanmod1-${KERNEL_REV}_amd64.deb
 	#	wget -O /tmp/linux-headers-${KERNEL_VERSION}-${PSABI}-xanmod1_${KERNEL_VERSION}-${PSABI}-xanmod1-${KERNEL_REV}_amd64.deb https://sourceforge.net/projects/xanmod/files/releases/lts/${KERNEL_VERSION}-xanmod1/${KERNEL_VERSION}-${PSABI}-xanmod1/linux-headers-${KERNEL_VERSION}-${PSABI}-xanmod1_${KERNEL_VERSION}-${PSABI}-xanmod1-${KERNEL_REV}_amd64.deb
@@ -677,6 +687,21 @@ else
 		sed -i "s@^\(GRUB_DEFAULT=\).*@\1\"0\"@" /etc/default/grub >/dev/null 2>&1
 		[ -f /boot/grub/grub.cfg ] && grub-mkconfig -o /boot/grub/grub.cfg >/dev/null 2>&1
 	}
+fi
+fi # IS_CONTAINER check
+
+if [ "$KERNEL" = "6.18" ]; then
+	
+	echo "Install MPTCP BPF schedulers for kernel 6.18..."
+	for pkg in mptcp-bpf-bkup mptcp-bpf-burst mptcp-bpf-first mptcp-bpf-red mptcp-bpf-rr; do
+		if apt-cache show "${pkg}=${MPTCP_BPF_VERSION}" >/dev/null 2>&1; then
+			apt-get -o Dpkg::Options::="--force-confold" -o Dpkg::Options::="--force-confdef" -o Dpkg::Options::="--force-overwrite" -y install ${pkg}=${MPTCP_BPF_VERSION}
+		else
+			wget -O /tmp/${pkg}_${MPTCP_BPF_VERSION}_${ARCH}.deb ${VPSURL}debian/${pkg}_${MPTCP_BPF_VERSION}_${ARCH}.deb
+			dpkg --force-confold --force-confdef --force-overwrite -i /tmp/${pkg}_${MPTCP_BPF_VERSION}_${ARCH}.deb
+			rm -f /tmp/${pkg}_${MPTCP_BPF_VERSION}_${ARCH}.deb
+		fi
+	done
 fi
 
 if [ "$ARCH" = "amd64" ]; then
@@ -1053,7 +1078,13 @@ if [ "$OMR_ADMIN" = "yes" ]; then
 			OMR_ADMIN_PASS_ADMIN2=$(cat /etc/openmptcprouter-vps-admin/omr-admin-config.json | jq -r .users[0].admin.user_password | tr -d "\n")
 			[ -n "$OMR_ADMIN_PASS_ADMIN2" ] && [ "$OMR_ADMIN_PASS_ADMIN2" != "AdminMySecretKey" ] && OMR_ADMIN_PASS_ADMIN=$OMR_ADMIN_PASS_ADMIN2
 		fi
-		apt-get -o Dpkg::Options::="--force-confold" -o Dpkg::Options::="--force-confdef" -o Dpkg::Options::="--force-overwrite" -y --allow-downgrades install omr-vps-admin
+		if apt-cache show "omr-vps-admin=${OMR_ADMIN_BINARY_VERSION}" >/dev/null 2>&1; then
+			apt-get -o Dpkg::Options::="--force-confold" -o Dpkg::Options::="--force-confdef" -o Dpkg::Options::="--force-overwrite" -y --allow-downgrades install omr-vps-admin=${OMR_ADMIN_BINARY_VERSION}
+		else
+			wget -O /tmp/omr-vps-admin-${OMR_ADMIN_BINARY_VERSION}.deb ${VPSURL}debian/omr-vps-admin-${OMR_ADMIN_BINARY_VERSION}.deb
+			dpkg --force-confold --force-confdef --force-overwrite -i /tmp/omr-vps-admin-${OMR_ADMIN_BINARY_VERSION}.deb
+			rm -f /tmp/omr-vps-admin-${OMR_ADMIN_BINARY_VERSION}.deb
+		fi
 		if [ ! -f /etc/openmptcprouter-vps-admin/omr-admin-config.json ]; then
 			cp /usr/share/omr-admin/omr-admin-config.json /etc/openmptcprouter-vps-admin/
 		fi
@@ -1101,6 +1132,15 @@ if [ "$OMR_ADMIN" = "yes" ]; then
 	if systemctl -q is-active omr-admin-ipv6.service 2>/dev/null; then
 		systemctl -q stop omr-admin-ipv6 >/dev/null 2>&1
 		systemctl -q disable omr-admin-ipv6 >/dev/null 2>&1
+	fi
+	if [ "$OMR_METRICS" = "yes" ]; then
+		mkdir -p /usr/share/omr-admin
+		wget -O /usr/share/omr-admin/omr_metrics.py https://raw.githubusercontent.com/Ysurac/openmptcprouter-vps-admin/refs/heads/develop/omr_metrics.py
+	fi
+	if [ "$OMR_AI" = "yes" ]; then
+		wget -O /tmp/install_omr-ai.sh https://raw.githubusercontent.com/Ysurac/openmptcprouter-vps-admin/refs/heads/develop/install_omr-ai.sh
+		bash /tmp/install_omr-ai.sh
+		rm -f /tmp/install_omr-ai.sh
 	fi
 fi
 
@@ -1283,7 +1323,13 @@ if [ "$SHADOWSOCKS_GO" = "yes" ]; then
 			rm -f /tmp/shadowsocks-go-${SHADOWSOCKS_GO_VERSION}-arm64.deb
 		fi
 	else
-		apt-get -o Dpkg::Options::="--force-confold" -o Dpkg::Options::="--force-confdef" -o Dpkg::Options::="--force-overwrite" -y install shadowsocks-go=${SHADOWSOCKS_GO_VERSION}
+		if apt-cache show "shadowsocks-go=${SHADOWSOCKS_GO_VERSION}" >/dev/null 2>&1; then
+			apt-get -o Dpkg::Options::="--force-confold" -o Dpkg::Options::="--force-confdef" -o Dpkg::Options::="--force-overwrite" -y install shadowsocks-go=${SHADOWSOCKS_GO_VERSION}
+		else
+			wget -O /tmp/shadowsocks-go-${SHADOWSOCKS_GO_VERSION}-${ARCH}.deb ${VPSURL}debian/shadowsocks-go-${SHADOWSOCKS_GO_VERSION}-${ARCH}.deb
+			dpkg --force-confold --force-confdef --force-overwrite -i /tmp/shadowsocks-go-${SHADOWSOCKS_GO_VERSION}-${ARCH}.deb
+			rm -f /tmp/shadowsocks-go-${SHADOWSOCKS_GO_VERSION}-${ARCH}.deb
+		fi
 	fi
 	if [ -f /etc/shadowsocks-go/server.json ]; then
 		PSK2=$(grep -Po '"'"psk"'"\s*:\s*"\K([^"]*)' /etc/shadowsocks-go/server.json | head -n 1 | tr -d "\n")
@@ -1351,7 +1397,13 @@ if [ "$V2RAY" = "yes" ]; then
 #			wget -O /lib/systemd/system/v2ray.service ${VPSURL}${VPSPATH}/v2ray.service
 #		fi
 	else
-		apt-get -o Dpkg::Options::="--force-confold" -o Dpkg::Options::="--force-confdef" -o Dpkg::Options::="--force-overwrite" -y install v2ray=${V2RAY_VERSION}
+		if apt-cache show "v2ray=${V2RAY_VERSION}" >/dev/null 2>&1; then
+			apt-get -o Dpkg::Options::="--force-confold" -o Dpkg::Options::="--force-confdef" -o Dpkg::Options::="--force-overwrite" -y install v2ray=${V2RAY_VERSION}
+		else
+			wget -O /tmp/v2ray-${V2RAY_VERSION}-${ARCH}.deb ${VPSURL}debian/v2ray-${V2RAY_VERSION}-${ARCH}.deb
+			dpkg --force-confold --force-confdef --force-overwrite -i /tmp/v2ray-${V2RAY_VERSION}-${ARCH}.deb
+			rm -f /tmp/v2ray-${V2RAY_VERSION}-${ARCH}.deb
+		fi
 	fi
 	if [ -f /etc/v2ray/v2ray-server.json ]; then
 		V2RAY_UUID2=$(grep -Po '"'"id"'"\s*:\s*"\K([^"]*)' /etc/v2ray/v2ray-server.json | head -n 1 | tr -d "\n")
@@ -1409,7 +1461,13 @@ if [ "$XRAY" = "yes" ]; then
 			rm -f /tmp/xray-${XRAY_VERSION}-arm64.deb
 		fi
 	else
-		apt-get -o Dpkg::Options::="--force-confold" -o Dpkg::Options::="--force-confdef" -o Dpkg::Options::="--force-overwrite" -y --allow-downgrades install xray=${XRAY_VERSION}
+		if apt-cache show "xray=${XRAY_VERSION}" >/dev/null 2>&1; then
+			apt-get -o Dpkg::Options::="--force-confold" -o Dpkg::Options::="--force-confdef" -o Dpkg::Options::="--force-overwrite" -y --allow-downgrades install xray=${XRAY_VERSION}
+		else
+			wget -O /tmp/xray-${XRAY_VERSION}-${ARCH}.deb ${VPSURL}debian/xray-${XRAY_VERSION}-${ARCH}.deb
+			dpkg --force-confold --force-confdef --force-overwrite -i /tmp/xray-${XRAY_VERSION}-${ARCH}.deb
+			rm -f /tmp/xray-${XRAY_VERSION}-${ARCH}.deb
+		fi
 	fi
 	if [ -f /etc/xray/xray-server.json ]; then
 		XRAY_UUID2=$(grep -Po '"'"id"'"\s*:\s*"\K([^"]*)' /etc/xray/xray-server.json | head -n 1 | tr -d "\n")
@@ -1543,7 +1601,13 @@ if [ "$MLVPN" = "yes" ]; then
 	else
 		rm -f /var/lib/dpkg/lock
 		rm -f /var/lib/dpkg/lock-frontend
-		apt-get -y -o Dpkg::Options::="--force-confold" -o Dpkg::Options::="--force-confdef" install omr-mlvpn=${MLVPN_BINARY_VERSION}
+		if apt-cache show "omr-mlvpn=${MLVPN_BINARY_VERSION}" >/dev/null 2>&1; then
+			apt-get -y -o Dpkg::Options::="--force-confold" -o Dpkg::Options::="--force-confdef" install omr-mlvpn=${MLVPN_BINARY_VERSION}
+		else
+			wget -O /tmp/omr-mlvpn-${MLVPN_BINARY_VERSION}.deb ${VPSURL}debian/omr-mlvpn-${MLVPN_BINARY_VERSION}.deb
+			dpkg --force-confold --force-confdef -i /tmp/omr-mlvpn-${MLVPN_BINARY_VERSION}.deb
+			rm -f /tmp/omr-mlvpn-${MLVPN_BINARY_VERSION}.deb
+		fi
 	fi
 	if [ "$mlvpnupdate" = "0" ]; then
 		sed -i "s:MLVPN_PASS:$MLVPN_PASS:" /etc/mlvpn/mlvpn0.conf
@@ -1675,7 +1739,15 @@ if [ "$MQVPN" = "yes" ]; then
 	rm -f /var/lib/dpkg/lock
 	rm -f /var/lib/dpkg/lock-frontend
 	if [ "$ARCH" = "amd64" ]; then
-		apt-get -o Dpkg::Options::="--force-confold" -o Dpkg::Options::="--force-confdef" -o Dpkg::Options::="--force-overwrite" --allow-downgrades -y install mqvpn
+		if apt-cache show "mqvpn=${MQVPN_VERSION}" >/dev/null 2>&1; then
+			apt-get -o Dpkg::Options::="--force-confold" -o Dpkg::Options::="--force-confdef" -o Dpkg::Options::="--force-overwrite" --allow-downgrades -y install mqvpn=${MQVPN_VERSION}
+		else
+			wget -O /tmp/mqvpn_${MQVPN_VERSION}_${ARCH}.deb ${VPSURL}debian/mqvpn_${MQVPN_VERSION}_${ARCH}.deb
+			wget -O /tmp/libmqvpn0_${MQVPN_VERSION}_${ARCH}.deb ${VPSURL}debian/libmqvpn0_${MQVPN_VERSION}_${ARCH}.deb
+			dpkg --force-all -i -B /tmp/libmqvpn0_${MQVPN_VERSION}_${ARCH}.deb
+			dpkg --force-all -i -B /tmp/mqvpn_${MQVPN_VERSION}_${ARCH}.deb
+			rm -f /tmp/mqvpn_${MQVPN_VERSION}_${ARCH}.deb /tmp/libmqvpn0_${MQVPN_VERSION}_${ARCH}.deb
+		fi
 	elif [ "$ARCH" = "arm64" ]; then
 		wget -O /tmp/mqvpn_${MQVPN_VERSION}_arm64.deb ${VPSURL}/debian/mqvpn_${MQVPN_VERSION}_arm64.deb
 		wget -O /tmp/libmqvpn0_${MQVPN_VERSION}_arm64.deb ${VPSURL}/debian/libmqvpn0_${MQVPN_VERSION}_arm64.deb
@@ -1944,7 +2016,13 @@ if [ "$GLORYTUN_UDP" = "yes" ]; then
 		rm -rf /tmp/glorytun-udp
 	else
 		rm -f /usr/local/bin/glorytun
-		apt-get -y -o Dpkg::Options::="--force-confdef" -o Dpkg::Options::="--force-confold" -o Dpkg::Options::="--force-overwrite" install --reinstall omr-glorytun=${GLORYTUN_UDP_BINARY_VERSION}
+		if apt-cache show "omr-glorytun=${GLORYTUN_UDP_BINARY_VERSION}" >/dev/null 2>&1; then
+			apt-get -y -o Dpkg::Options::="--force-confdef" -o Dpkg::Options::="--force-confold" -o Dpkg::Options::="--force-overwrite" install --reinstall omr-glorytun=${GLORYTUN_UDP_BINARY_VERSION}
+		else
+			wget -O /tmp/omr-glorytun-${GLORYTUN_UDP_BINARY_VERSION}.deb ${VPSURL}debian/omr-glorytun-${GLORYTUN_UDP_BINARY_VERSION}.deb
+			dpkg --force-confdef --force-confold --force-overwrite -i /tmp/omr-glorytun-${GLORYTUN_UDP_BINARY_VERSION}.deb
+			rm -f /tmp/omr-glorytun-${GLORYTUN_UDP_BINARY_VERSION}.deb
+		fi
 		chmod 644 /lib/systemd/system/glorytun-udp@.service
 		GLORYTUN_PASS="$(cat /etc/glorytun-udp/tun0.key | tr -d '\n')"
 	fi
@@ -1997,7 +2075,13 @@ if [ "$DSVPN" = "yes" ]; then
 		cd /tmp
 		rm -rf /tmp/dsvpn
 	else
-		apt-get -y -o Dpkg::Options::="--force-confdef" -o Dpkg::Options::="--force-confold" -o Dpkg::Options::="--force-overwrite" install omr-dsvpn=${DSVPN_BINARY_VERSION}
+		if apt-cache show "omr-dsvpn=${DSVPN_BINARY_VERSION}" >/dev/null 2>&1; then
+			apt-get -y -o Dpkg::Options::="--force-confdef" -o Dpkg::Options::="--force-confold" -o Dpkg::Options::="--force-overwrite" install omr-dsvpn=${DSVPN_BINARY_VERSION}
+		else
+			wget -O /tmp/omr-dsvpn-${DSVPN_BINARY_VERSION}.deb ${VPSURL}debian/omr-dsvpn-${DSVPN_BINARY_VERSION}.deb
+			dpkg --force-confdef --force-confold --force-overwrite -i /tmp/omr-dsvpn-${DSVPN_BINARY_VERSION}.deb
+			rm -f /tmp/omr-dsvpn-${DSVPN_BINARY_VERSION}.deb
+		fi
 		chmod 644 /lib/systemd/system/dsvpn-server@.service
 		DSVPN_PASS=$(cat /etc/dsvpn/dsvpn0.key | tr -d "\n")
 	fi
@@ -2084,7 +2168,13 @@ if [ "$GLORYTUN_TCP" = "yes" ]; then
 		rm -rf /tmp/glorytun-0.0.35
 	else
 		rm -f /usr/local/bin/glorytun-tcp
-		apt-get -y -o Dpkg::Options::="--force-confdef" -o Dpkg::Options::="--force-confold" -o Dpkg::Options::="--force-overwrite" install --reinstall omr-glorytun-tcp=${GLORYTUN_TCP_BINARY_VERSION}
+		if apt-cache show "omr-glorytun-tcp=${GLORYTUN_TCP_BINARY_VERSION}" >/dev/null 2>&1; then
+			apt-get -y -o Dpkg::Options::="--force-confdef" -o Dpkg::Options::="--force-confold" -o Dpkg::Options::="--force-overwrite" install --reinstall omr-glorytun-tcp=${GLORYTUN_TCP_BINARY_VERSION}
+		else
+			wget -O /tmp/omr-glorytun-tcp-${GLORYTUN_TCP_BINARY_VERSION}.deb ${VPSURL}debian/omr-glorytun-tcp-${GLORYTUN_TCP_BINARY_VERSION}.deb
+			dpkg --force-confdef --force-confold --force-overwrite -i /tmp/omr-glorytun-tcp-${GLORYTUN_TCP_BINARY_VERSION}.deb
+			rm -f /tmp/omr-glorytun-tcp-${GLORYTUN_TCP_BINARY_VERSION}.deb
+		fi
 	fi
 	[ "$(ip -6 a)" != "" ] && sed -i 's/0.0.0.0/::/g' /etc/glorytun-tcp/tun0
 fi

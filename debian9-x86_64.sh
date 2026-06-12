@@ -1591,9 +1591,7 @@ if [ "$MLVPN" = "yes" ]; then
 	else
 		rm -f /var/lib/dpkg/lock
 		rm -f /var/lib/dpkg/lock-frontend
-		if apt-cache show "omr-mlvpn=${MLVPN_BINARY_VERSION}" >/dev/null 2>&1; then
-			apt-get -y -o Dpkg::Options::="--force-confold" -o Dpkg::Options::="--force-confdef" install omr-mlvpn=${MLVPN_BINARY_VERSION}
-		else
+		if ! apt-get -y -o Dpkg::Options::="--force-confold" -o Dpkg::Options::="--force-confdef" install omr-mlvpn=${MLVPN_BINARY_VERSION}; then
 			wget -O /tmp/omr-mlvpn-${MLVPN_BINARY_VERSION}.deb ${VPSURL}debian/omr-mlvpn-${MLVPN_BINARY_VERSION}.deb
 			dpkg --force-confold --force-confdef -i /tmp/omr-mlvpn-${MLVPN_BINARY_VERSION}.deb
 			rm -f /tmp/omr-mlvpn-${MLVPN_BINARY_VERSION}.deb
@@ -1729,9 +1727,7 @@ if [ "$MQVPN" = "yes" ]; then
 	rm -f /var/lib/dpkg/lock
 	rm -f /var/lib/dpkg/lock-frontend
 	if [ "$ARCH" = "amd64" ]; then
-		if apt-cache show "mqvpn=${MQVPN_VERSION}" >/dev/null 2>&1; then
-			apt-get -o Dpkg::Options::="--force-confold" -o Dpkg::Options::="--force-confdef" -o Dpkg::Options::="--force-overwrite" --allow-downgrades -y install mqvpn=${MQVPN_VERSION}
-		else
+		if ! apt-get -o Dpkg::Options::="--force-confold" -o Dpkg::Options::="--force-confdef" -o Dpkg::Options::="--force-overwrite" --allow-downgrades -y install mqvpn=${MQVPN_VERSION}; then
 			wget -O /tmp/mqvpn_${MQVPN_VERSION}_${ARCH}.deb ${VPSURL}debian/mqvpn_${MQVPN_VERSION}_${ARCH}.deb
 			wget -O /tmp/libmqvpn0_${MQVPN_VERSION}_${ARCH}.deb ${VPSURL}debian/libmqvpn0_${MQVPN_VERSION}_${ARCH}.deb
 			dpkg --force-all -i -B /tmp/libmqvpn0_${MQVPN_VERSION}_${ARCH}.deb
@@ -2006,9 +2002,7 @@ if [ "$GLORYTUN_UDP" = "yes" ]; then
 		rm -rf /tmp/glorytun-udp
 	else
 		rm -f /usr/local/bin/glorytun
-		if apt-cache show "omr-glorytun=${GLORYTUN_UDP_BINARY_VERSION}" >/dev/null 2>&1; then
-			apt-get -y -o Dpkg::Options::="--force-confdef" -o Dpkg::Options::="--force-confold" -o Dpkg::Options::="--force-overwrite" install --reinstall omr-glorytun=${GLORYTUN_UDP_BINARY_VERSION}
-		else
+		if ! apt-get -y -o Dpkg::Options::="--force-confdef" -o Dpkg::Options::="--force-confold" -o Dpkg::Options::="--force-overwrite" install --reinstall omr-glorytun=${GLORYTUN_UDP_BINARY_VERSION}; then
 			wget -O /tmp/omr-glorytun-${GLORYTUN_UDP_BINARY_VERSION}.deb ${VPSURL}debian/omr-glorytun-${GLORYTUN_UDP_BINARY_VERSION}.deb
 			dpkg --force-confdef --force-confold --force-overwrite -i /tmp/omr-glorytun-${GLORYTUN_UDP_BINARY_VERSION}.deb
 			rm -f /tmp/omr-glorytun-${GLORYTUN_UDP_BINARY_VERSION}.deb
@@ -2065,9 +2059,7 @@ if [ "$DSVPN" = "yes" ]; then
 		cd /tmp
 		rm -rf /tmp/dsvpn
 	else
-		if apt-cache show "omr-dsvpn=${DSVPN_BINARY_VERSION}" >/dev/null 2>&1; then
-			apt-get -y -o Dpkg::Options::="--force-confdef" -o Dpkg::Options::="--force-confold" -o Dpkg::Options::="--force-overwrite" install omr-dsvpn=${DSVPN_BINARY_VERSION}
-		else
+		if ! apt-get -y -o Dpkg::Options::="--force-confdef" -o Dpkg::Options::="--force-confold" -o Dpkg::Options::="--force-overwrite" install omr-dsvpn=${DSVPN_BINARY_VERSION}; then
 			wget -O /tmp/omr-dsvpn-${DSVPN_BINARY_VERSION}.deb ${VPSURL}debian/omr-dsvpn-${DSVPN_BINARY_VERSION}.deb
 			dpkg --force-confdef --force-confold --force-overwrite -i /tmp/omr-dsvpn-${DSVPN_BINARY_VERSION}.deb
 			rm -f /tmp/omr-dsvpn-${DSVPN_BINARY_VERSION}.deb
@@ -2158,9 +2150,7 @@ if [ "$GLORYTUN_TCP" = "yes" ]; then
 		rm -rf /tmp/glorytun-0.0.35
 	else
 		rm -f /usr/local/bin/glorytun-tcp
-		if apt-cache show "omr-glorytun-tcp=${GLORYTUN_TCP_BINARY_VERSION}" >/dev/null 2>&1; then
-			apt-get -y -o Dpkg::Options::="--force-confdef" -o Dpkg::Options::="--force-confold" -o Dpkg::Options::="--force-overwrite" install --reinstall omr-glorytun-tcp=${GLORYTUN_TCP_BINARY_VERSION}
-		else
+		if ! apt-get -y -o Dpkg::Options::="--force-confdef" -o Dpkg::Options::="--force-confold" -o Dpkg::Options::="--force-overwrite" install --reinstall omr-glorytun-tcp=${GLORYTUN_TCP_BINARY_VERSION}; then
 			wget -O /tmp/omr-glorytun-tcp-${GLORYTUN_TCP_BINARY_VERSION}.deb ${VPSURL}debian/omr-glorytun-tcp-${GLORYTUN_TCP_BINARY_VERSION}.deb
 			dpkg --force-confdef --force-confold --force-overwrite -i /tmp/omr-glorytun-tcp-${GLORYTUN_TCP_BINARY_VERSION}.deb
 			rm -f /tmp/omr-glorytun-tcp-${GLORYTUN_TCP_BINARY_VERSION}.deb

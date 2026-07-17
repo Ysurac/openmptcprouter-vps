@@ -24,5 +24,6 @@ vpncl	client-wg+	nosmurfs,tcpflags
 vpn	dsvpn+		nosmurfs,tcpflags
 vpn	mqvpn+		nosmurfs,tcpflags
 vpn	gre-user+	nosmurfs,tcpflags
+vpn	vx-user+	tcpflags,routeback
 vpn	omr-bonding	nosmurfs,tcpflags
 vpn	tap_softether	nosmurfs,tcpflags

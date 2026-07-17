@@ -91,14 +91,14 @@ MLVPN_BINARY_VERSION="3.0.0+20211028.git.ddafba3"
 UBOND_VERSION="31af0f69ebb6d07ed9348dca2fced33b956cedee"
 OBFS_VERSION="486bebd9208539058e57e23a12f23103016e09b4"
 OBFS_BINARY_VERSION="0.0.5-1"
-OMR_ADMIN_VERSION="3c14ef0e21168dba40a673d6457c24feb371b688"
-OMR_ADMIN_BINARY_VERSION="0.18+20260625"
+OMR_ADMIN_VERSION="de269143fcaa643ed5863677a11de0d9b8553b2f"
+OMR_ADMIN_BINARY_VERSION="0.18+20260717"
 DSVPN_VERSION="3b99d2ef6c02b2ef68b5784bec8adfdd55b29b1a"
 DSVPN_BINARY_VERSION="0.1.4-2"
-MQVPN_VERSION="0.7.0-1"
+MQVPN_VERSION="0.12.1-1"
 V2RAY_VERSION="5.32.0"
 V2RAY_PLUGIN_VERSION="4.43.0"
-XRAY_VERSION="26.3.27"
+XRAY_VERSION="26.7.11"
 EASYRSA_VERSION="3.2.2"
 #SHADOWSOCKS_VERSION="7407b214f335f0e2068a8622ef3674d868218e17"
 #if [ "$UPSTREAM" = "yes" ] || [ "$UPSTREAM6" = "yes" ]; then
@@ -115,7 +115,7 @@ VPSURL="https://www.openmptcprouter.com/"
 REPO="repo.openmptcprouter.com"
 CHINA=${CHINA:-no}
 
-OMR_VERSION="0.1061-rolling-test"
+OMR_VERSION="0.1062-rolling-test"
 
 DIR=$( pwd )
 #"
@@ -1032,6 +1032,7 @@ if [ "$OMR_ADMIN" = "yes" ]; then
 		pip3 -q install starlette
 	fi
 	mkdir -p /etc/openmptcprouter-vps-admin/omr-6in4
+	mkdir -p /etc/openmptcprouter-vps-admin/omr-vxlan
 	mkdir -p /etc/openmptcprouter-vps-admin/intf
 	#[ ! -f "/etc/openmptcprouter-vps-admin/current-vpn" ] && echo "glorytun_tcp" > /etc/openmptcprouter-vps-admin/current-vpn
 	[ ! -f "/etc/openmptcprouter-vps-admin/current-vpn" ] && echo "openvpn" > /etc/openmptcprouter-vps-admin/current-vpn
@@ -2265,6 +2266,8 @@ if [ "$LOCALFILES" = "no" ]; then
 	wget -O /lib/systemd/system/omr.service ${VPSURL}${VPSPATH}/omr.service.in
 	wget -O /usr/local/bin/omr-6in4-run ${VPSURL}${VPSPATH}/omr-6in4-run
 	wget -O /lib/systemd/system/omr6in4@.service ${VPSURL}${VPSPATH}/omr6in4%40.service.in
+	wget -O /usr/local/bin/omr-vxlan-run ${VPSURL}${VPSPATH}/omr-vxlan-run
+	wget -O /lib/systemd/system/omr-vxlan@.service ${VPSURL}${VPSPATH}/omr-vxlan%40.service.in
 	wget -O /usr/local/bin/omr-bypass ${VPSURL}${VPSPATH}/omr-bypass
 	wget -O /lib/systemd/system/omr-bypass.service ${VPSURL}${VPSPATH}/omr-bypass.service.in
 	wget -O /lib/systemd/system/omr-bypass.timer ${VPSURL}${VPSPATH}/omr-bypass.timer.in
@@ -2273,6 +2276,8 @@ else
 	cp ${DIR}/omr.service.in /lib/systemd/system/omr.service
 	cp ${DIR}/omr-6in4-run /usr/local/bin/omr-6in4-run
 	cp ${DIR}/omr6in4@.service.in /lib/systemd/system/omr6in4@.service
+	cp ${DIR}/omr-vxlan-run /usr/local/bin/omr-vxlan-run
+	cp ${DIR}/omr-vxlan@.service.in /lib/systemd/system/omr-vxlan@.service
 	cp ${DIR}/omr-bypass /usr/local/bin/omr-bypass
 	cp ${DIR}/omr-bypass.service.in /lib/systemd/system/omr-bypass.service
 	cp ${DIR}/omr-bypass.timer.in /lib/systemd/system/omr-bypass.timer
@@ -2280,9 +2285,11 @@ else
 fi
 chmod 644 /lib/systemd/system/omr.service
 chmod 644 /lib/systemd/system/omr6in4@.service
+chmod 644 /lib/systemd/system/omr-vxlan@.service
 chmod 755 /usr/local/bin/omr-service
 chmod 755 /usr/local/bin/omr-bypass
 chmod 755 /usr/local/bin/omr-6in4-run
+chmod 755 /usr/local/bin/omr-vxlan-run
 chmod 644 /lib/systemd/system/omr-bypass.service
 chmod 644 /lib/systemd/system/omr-bypass.timer
 systemctl daemon-reload
@@ -2291,6 +2298,7 @@ if systemctl -q is-active omr-6in4.service 2>/dev/null; then
 	systemctl -q disable omr-6in4 > /dev/null 2>&1
 fi
 systemctl enable omr6in4@user0.service
+systemctl enable omr-vxlan@user0.service
 systemctl enable omr.service
 systemctl enable omr-bypass.timer
 systemctl enable omr-bypass.service

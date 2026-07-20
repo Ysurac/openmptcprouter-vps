@@ -91,8 +91,8 @@ MLVPN_BINARY_VERSION="3.0.0+20211028.git.ddafba3"
 UBOND_VERSION="31af0f69ebb6d07ed9348dca2fced33b956cedee"
 OBFS_VERSION="486bebd9208539058e57e23a12f23103016e09b4"
 OBFS_BINARY_VERSION="0.0.5-1"
-OMR_ADMIN_VERSION="de269143fcaa643ed5863677a11de0d9b8553b2f"
-OMR_ADMIN_BINARY_VERSION="0.18+20260717"
+OMR_ADMIN_VERSION="068a003a1d942cd7817f7f26873adc009f12f762"
+OMR_ADMIN_BINARY_VERSION="0.18+20260720"
 DSVPN_VERSION="3b99d2ef6c02b2ef68b5784bec8adfdd55b29b1a"
 DSVPN_BINARY_VERSION="0.1.4-2"
 MQVPN_VERSION="0.12.1-1"
@@ -115,7 +115,7 @@ VPSURL="https://www.openmptcprouter.com/"
 REPO="repo.openmptcprouter.com"
 CHINA=${CHINA:-no}
 
-OMR_VERSION="0.1062-rolling-test"
+OMR_VERSION="0.1063-rolling-test"
 
 DIR=$( pwd )
 #"
@@ -1467,10 +1467,12 @@ if [ "$XRAY" = "yes" ]; then
 		[ "$PSK2" != "null" ] && [ -n "$PSK2" ] && [ "$PSK2" != "XRAY_PSK" ] && PSK="$PSK2"
 		UPSK2=$(jq -r '.inbounds[] | select(.tag=="omrin-shadowsocks-tunnel") | .settings.clients[] | select(.email=="openmptcprouter") | .password' /etc/xray/xray-server.json | tr -d "\n")
 		[ "$UPSK2" != "null" ] && [ -n "$UPSK2" ] && [ "$UPSK2" != "XRAY_UPSK" ] && UPSK="$UPSK2"
-		XRAY_X25519_PRIVATE_KEY2=$(grep -Po '"'"privateKey"'"\s*:\s*"\K([^"]*)' /etc/xray/xray-vless_reality.json | head -n 1 | tr -d "\n")
+		XRAY_X25519_PRIVATE_KEY2=$(grep -Po '"'"privateKey"'"\s*:\s*"\K([^"]*)' /etc/xray/xray-vless-reality.json | head -n 1 | tr -d "\n")
 		[ -n "$XRAY_X25519_PRIVATE_KEY2" ] && [ "$XRAY_X25519_PRIVATE_KEY2" != "XRAY_X25519_PRIVATE_KEY" ] && XRAY_X25519_PRIVATE_KEY="$XRAY_X25519_PRIVATE_KEY2"
-		XRAY_X25519_PUBLIC_KEY2=$(grep -Po '"'"publicKey"'"\s*:\s*"\K([^"]*)' /etc/xray/xray-vless_reality.json | head -n 1 | tr -d "\n")
+		XRAY_X25519_PUBLIC_KEY2=$(grep -Po '"'"publicKey"'"\s*:\s*"\K([^"]*)' /etc/xray/xray-vless-reality.json | head -n 1 | tr -d "\n")
 		[ -n "$XRAY_X25519_PUBLIC_KEY2" ] && [ "$XRAY_X25519_PUBLIC_KEY2" != "XRAY_X25519_PUBLIC_KEY" ] && XRAY_X25519_PUBLIC_KEY="$XRAY_X25519_PUBLIC_KEY2"
+		XRAY_REVERSE_UUID2=$(jq -r '.inbounds[] | select(.tag=="omrin-tunnel") | .settings.clients[] | select(.reverse.tag=="OMRLan") | .id' /etc/xray/xray-server.json 2>/dev/null | head -n 1 | tr -d "\n")
+		[ -n "$XRAY_REVERSE_UUID2" ] && [ "$XRAY_REVERSE_UUID2" != "XRAY_REVERSE_UUID" ] && XRAY_REVERSE_UUID="$XRAY_REVERSE_UUID2"
 		#jq -M 'del(.transport)' /etc/xray/xray-server.json > /etc/xray/xray-server.json.tmp
 		#mv -f /etc/xray/xray-server.json.tmp /etc/xray/xray-server.json
 
@@ -1485,6 +1487,37 @@ if [ "$XRAY" = "yes" ]; then
 		mv -f /etc/xray/xray-server.json /etc/xray/xray-server.json.bak
 		mv -f /etc/xray/xray-server.json.new /etc/xray/xray-server.json
 	fi
+	if [ -f /etc/xray/xray-server.json ] && [ "$(jq -r '.reverse != null' /etc/xray/xray-server.json)" = "true" ]; then
+		# xray 26+ removed legacy reverse: a config still carrying it prevents xray from starting
+		jq -M 'del(.reverse) | if .routing.rules then .routing.rules |= map(select(.outboundTag != "OMRLan")) else . end' /etc/xray/xray-server.json > /etc/xray/xray-server.json.new
+		mv -f /etc/xray/xray-server.json /etc/xray/xray-server.json.bak
+		mv -f /etc/xray/xray-server.json.new /etc/xray/xray-server.json
+	fi
+	if [ -f /etc/xray/xray-server.json ] && [ "$(jq -r 'any(.inbounds[] | select(.tag=="omrin-tunnel") | .settings.clients[]; .reverse.tag=="OMRLan")' /etc/xray/xray-server.json)" = "false" ]; then
+		# VLESS Reverse Proxy (replaces legacy reverse on xray 26+): the VPS->LAN port
+		# forward feature needs a dedicated reverse client in the VLESS inbound
+		XRAY_REVERSE_UUID=$(/usr/bin/xray uuid | tr -d "\n")
+		jq -M --arg uuid "$XRAY_REVERSE_UUID" '(.inbounds[] | select(.tag=="omrin-tunnel") | .settings.clients) += [{"id": $uuid, "level": 0, "email": "omr-reverse", "reverse": {"tag": "OMRLan"}}]' /etc/xray/xray-server.json > /etc/xray/xray-server.json.new
+		mv -f /etc/xray/xray-server.json.new /etc/xray/xray-server.json
+	fi
+	if [ -f /etc/xray/xray-vless-reality.json ]; then
+		# older installs parsed the new "xray x25519" output wrong and left an empty
+		# privateKey, which makes xray refuse to start once the reality inbound is enabled
+		XRAY_REALITY_PRIVATE=$(jq -r '.inbounds[0].streamSettings.realitySettings.privateKey' /etc/xray/xray-vless-reality.json)
+		if [ -z "$XRAY_REALITY_PRIVATE" ] || [ "$XRAY_REALITY_PRIVATE" = "null" ] || [ "$XRAY_REALITY_PRIVATE" = "XRAY_X25519_PRIVATE_KEY" ]; then
+			XRAY_X25519_KEYS=$(/usr/bin/xray x25519)
+			XRAY_X25519_PRIVATE_KEY=$(echo "${XRAY_X25519_KEYS}" | grep Private | awk '{ print $NF }' | tr -d "\n")
+			XRAY_X25519_PUBLIC_KEY=$(echo "${XRAY_X25519_KEYS}" | grep Public | awk '{ print $NF }' | tr -d "\n")
+			if [ -n "$XRAY_X25519_PRIVATE_KEY" ] && [ -n "$XRAY_X25519_PUBLIC_KEY" ]; then
+				jq -M --arg priv "$XRAY_X25519_PRIVATE_KEY" --arg pub "$XRAY_X25519_PUBLIC_KEY" '(.inbounds[] | select(.tag=="omrin-vless-reality") | .streamSettings.realitySettings) |= (.privateKey=$priv | .publicKey=$pub)' /etc/xray/xray-vless-reality.json > /etc/xray/xray-vless-reality.json.new
+				mv -f /etc/xray/xray-vless-reality.json.new /etc/xray/xray-vless-reality.json
+				if [ -f /etc/xray/xray-server.json ] && [ "$(jq -r 'any(.inbounds[]; .tag=="omrin-vless-reality")' /etc/xray/xray-server.json)" = "true" ]; then
+					jq -M --arg priv "$XRAY_X25519_PRIVATE_KEY" --arg pub "$XRAY_X25519_PUBLIC_KEY" '(.inbounds[] | select(.tag=="omrin-vless-reality") | .streamSettings.realitySettings) |= (.privateKey=$priv | .publicKey=$pub)' /etc/xray/xray-server.json > /etc/xray/xray-server.json.new
+					mv -f /etc/xray/xray-server.json.new /etc/xray/xray-server.json
+				fi
+			fi
+		fi
+	fi
 	if [ ! -f /etc/xray/xray-server.json ] || [ -z "$(grep -i mptcp /etc/xray/xray-server.json | grep true)" ] || [ -z "$(grep -i transport /etc/xray/xray-server.json)" ]; then
 		if [ "$LOCALFILES" = "no" ]; then
 			wget -O /etc/xray/xray-server.json ${VPSURL}${VPSPATH}/xray-server.json
@@ -1495,6 +1528,8 @@ if [ "$XRAY" = "yes" ]; then
 		sed -i "s:V2RAY_UUID:$XRAY_UUID:g" /etc/xray/xray-server.json
 		sed -i "s:XRAY_PSK:$PSK:g" /etc/xray/xray-server.json
 		sed -i "s:XRAY_UPSK:$UPSK:g" /etc/xray/xray-server.json
+		[ -z "$XRAY_REVERSE_UUID" ] && XRAY_REVERSE_UUID=$(/usr/bin/xray uuid | tr -d "\n")
+		sed -i "s:XRAY_REVERSE_UUID:$XRAY_REVERSE_UUID:g" /etc/xray/xray-server.json
 		if [ "$LOCALFILES" = "no" ]; then
 			wget -O /etc/xray/xray-vless-reality.json ${VPSURL}${VPSPATH}/xray-vless-reality.json
 		else
@@ -1502,8 +1537,11 @@ if [ "$XRAY" = "yes" ]; then
 		fi
 		if [ -z "$XRAY_X25519_PRIVATE_KEY" ]; then
 			XRAY_X25519_KEYS=$(/usr/bin/xray x25519)
-			XRAY_X25519_PRIVATE_KEY=$(echo "${XRAY_X25519_KEYS}" | grep Private | awk '{ print $3 }' | tr -d "\n")
-			XRAY_X25519_PUBLIC_KEY=$(echo "${XRAY_X25519_KEYS}" | grep Public | awk '{ print $3 }' | tr -d "\n")
+			# output format depends on xray version:
+			#   old: "Private key: xxx" / "Public key: yyy"
+			#   26+: "PrivateKey: xxx" / "Password (PublicKey): yyy"
+			XRAY_X25519_PRIVATE_KEY=$(echo "${XRAY_X25519_KEYS}" | grep Private | awk '{ print $NF }' | tr -d "\n")
+			XRAY_X25519_PUBLIC_KEY=$(echo "${XRAY_X25519_KEYS}" | grep Public | awk '{ print $NF }' | tr -d "\n")
 		fi
 		sed -i "s:XRAY_UUID:$XRAY_UUID:g" /etc/xray/xray-vless-reality.json
 		sed -i "s:XRAY_X25519_PRIVATE_KEY:$XRAY_X25519_PRIVATE_KEY:g" /etc/xray/xray-vless-reality.json

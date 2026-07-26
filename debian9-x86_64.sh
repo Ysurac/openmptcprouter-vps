@@ -28,7 +28,7 @@ PSK=${PSK:-$(head -c 32 /dev/urandom | base64 -w0)}
 UPSK=${UPSK:-$(head -c 32 /dev/urandom | base64 -w0)}
 MQVPN_KEY=${MQVPN_KEY:-$(head -c 32 /dev/urandom | base64 -w0)}
 UPDATE_OS=${UPDATE_OS:-yes}
-FORCE_UPDATE_OS=${FORCE_UPDATE_OS:-no}
+FORCE_UPDATE_OS=${FORCE_UPDATE_OS:-yes}
 UPDATE=${UPDATE:-yes}
 TLS=${TLS:-yes}
 OMR_ADMIN=${OMR_ADMIN:-yes}
@@ -302,7 +302,7 @@ if [ "$ID" = "debian" ] && [ "$VERSION_ID" = "11" ] && [ "$UPDATE_OS" = "yes" ];
 fi
 
 # Update to Debian 13 only if FORCE_UPDATE_OS is set to yes. No problem to use Debian 12 if not.
-if [ "$ID" = "debian" ] && [ "$VERSION_ID" = "12" ] && [ "$UPDATE_OS" = "yes" ]; then
+if [ "$ID" = "debian" ] && [ "$VERSION_ID" = "12" ] && [ "$UPDATE_OS" = "yes" ] && [ "$FORCE_UPDATE_OS" = "yes" ]; then
 	echo "Update Debian 12 Bookworm to Debian 13 Trixie"
 	apt-get -y -f --force-yes -o Dpkg::Options::="--force-confdef" -o Dpkg::Options::="--force-confnew" --allow-downgrades upgrade
 	apt-get -y -f --force-yes -o Dpkg::Options::="--force-confdef" -o Dpkg::Options::="--force-confnew" --allow-downgrades dist-upgrade
@@ -461,7 +461,14 @@ if [ -z "$(dpkg-query -l | grep grub)" ]; then
 fi
 
 set_grub_default_kernel() {
-	local version="$1" name="$2" entry_id found top=-1 sub=0 depth=0 trimmed
+	version="$1"
+	name="$2"
+	entry_id=""
+	found=""
+	top=-1
+	sub=0
+	depth=0
+	trimmed=""
 	[ -f /etc/default/grub ] && [ -f /boot/grub/grub.cfg ] || return 1
 	grub-mkconfig -o /boot/grub/grub.cfg >/dev/null 2>&1
 	entry_id=$(grep -m1 "menuentry.*${version}.*${name}" /boot/grub/grub.cfg | grep -oP "\\\$menuentry_id_option '\K[^']+")
@@ -663,10 +670,13 @@ elif [ "$KERNEL" = "6.18" ]; then
 	#	wget -O /tmp/linux-headers-${KERNEL_VERSION}-${PSABI}-xanmod1_${KERNEL_VERSION}-${PSABI}-xanmod1-${KERNEL_REV}_amd64.deb https://sourceforge.net/projects/xanmod/files/releases/lts/${KERNEL_VERSION}-xanmod1/${KERNEL_VERSION}-${PSABI}-xanmod1/linux-headers-${KERNEL_VERSION}-${PSABI}-xanmod1_${KERNEL_VERSION}-${PSABI}-xanmod1-${KERNEL_REV}_amd64.deb
 	#else
 	wget -O /tmp/linux-image-${KERNEL_VERSION}-${KERNEL_REV}.${PSABI}-omr_${KERNEL_VERSION}-${KERNEL_REV}.${PSABI}-omr_${ARCH}.deb ${VPSURL}kernel/linux-image-${KERNEL_VERSION}-${KERNEL_REV}.${PSABI}-omr_${KERNEL_VERSION}-${KERNEL_REV}.${PSABI}-omr_${ARCH}.deb
-	wget -O /tmp/linux-headers-${KERNEL_VERSION}-${KERNEL_REV}.${PSABI}-omr_${KERNEL_VERSION}-${KERNEL_REV}.${PSABI}-omr_${ARCH}.deb ${VPSURL}kernel/linux-headers-${KERNEL_VERSION}-${KERNEL_REV}.${PSABI}-omr_${KERNEL_VERSION}-${KERNEL_REV}.${PSABI}-omr_${ARCH}.deb
-	#fi
+	if [ "$ARCH" = "amd64" ]; then
+		wget -O /tmp/linux-headers-${KERNEL_VERSION}-${KERNEL_REV}.${PSABI}-omr_${KERNEL_VERSION}-${KERNEL_REV}.${PSABI}-omr_${ARCH}.deb ${VPSURL}kernel/linux-headers-${KERNEL_VERSION}-${KERNEL_REV}.${PSABI}-omr_${KERNEL_VERSION}-${KERNEL_REV}.${PSABI}-omr_${ARCH}.deb
+	fi
 	echo "Install kernel linux-image-${KERNEL_VERSION}-${PSABI}-omr source release"
-	dpkg --force-all -i -B /tmp/linux-headers-${KERNEL_VERSION}-${KERNEL_REV}.${PSABI}-omr_${KERNEL_VERSION}-${KERNEL_REV}.${PSABI}-omr_${ARCH}.deb
+	if [ "$ARCH" = "amd64" ]; then
+		dpkg --force-all -i -B /tmp/linux-headers-${KERNEL_VERSION}-${KERNEL_REV}.${PSABI}-omr_${KERNEL_VERSION}-${KERNEL_REV}.${PSABI}-omr_${ARCH}.deb
+	fi
 	dpkg --force-all -i -B /tmp/linux-image-${KERNEL_VERSION}-${KERNEL_REV}.${PSABI}-omr_${KERNEL_VERSION}-${KERNEL_REV}.${PSABI}-omr_${ARCH}.deb
 	set_grub_default_kernel "${KERNEL_VERSION}" "${PSABI}-omr"
 elif [ "$KERNEL" = "6.6" ] && [ "$ID" = "debian" ]; then
@@ -681,7 +691,8 @@ elif [ "$KERNEL" = "6.6" ] && [ "$ID" = "debian" ]; then
 	}
 else 
 	if [ "$ID" = "ubuntu" ] && [ -z "$(uname -a | grep '6.1')" ]; then
-		apt-get -y install $(apt-cache search linux-image-unsigned-6.1 | tail -n 1 | cut -d" " -f1)
+		latestkernel=$(apt-cache search linux-image-unsigned-6.1 | tail -n 1 | cut -d" " -f1)
+		[ -n "$latestkernel" ] && apt-get -y install "$latestkernel"
 	fi
 	[ -f /etc/default/grub ] && {
 		sed -i "s@^\(GRUB_DEFAULT=\).*@\1\"0\"@" /etc/default/grub >/dev/null 2>&1
@@ -745,7 +756,7 @@ if [ "$IPERF" = "yes" ] && [ "$CHINA" != "yes" ]; then
 		mkdir -p /etc/iperf3
 		openssl genrsa -out /etc/iperf3/private.pem 2048
 		openssl rsa -in /etc/iperf3/private.pem -outform PEM -pubout -out /etc/iperf3/public.pem
-		IPERFPASS=$(echo -n "{openmptcprouter}openmptcprouter" | sha256sum | awk '{ print $1 }')
+		IPERFPASS=$(printf '%s' "{openmptcprouter}openmptcprouter" | sha256sum | awk '{ print $1 }')
 		echo "openmptcprouter,$IPERFPASS" > /etc/iperf3/users.csv
 	fi
 	chown -Rf iperf3 /etc/iperf3 || true
@@ -787,7 +798,7 @@ if [ "$KERNEL" != "5.4" ]; then
 		#cd iproute2-5.16.0
 		git clone git://git.kernel.org/pub/scm/network/iproute2/iproute2.git 
 		cd iproute2
-		git checkout 29da83f89f6e1fe528c59131a01f5d43bcd0a000
+		git checkout "$IPROUTE2_VERSION"
 		make
 		make install
 		cd /tmp
@@ -1178,7 +1189,7 @@ if [ "$SHADOWSOCKS" = "yes" ]; then
 		fi
 		SHADOWSOCKS_PASS_JSON=$(echo $SHADOWSOCKS_PASS | sed 's/+/-/g; s/\//_/g;')
 		if [ "$NBCPU" -gt "1" ]; then
-			for i in $(seq 2 NBCPU); do
+			for i in $(seq 2 "$NBCPU"); do
 				sed -i '0,/65101/ s/        "65101.*/&\n&/' /etc/shadowsocks-libev/manager.json
 			done
 		fi
@@ -1263,8 +1274,8 @@ fi
 # Install v2ray-plugin
 if [ "$V2RAY_PLUGIN" = "yes" ]; then
 	echo "Install v2ray plugin"
-	if [ "$SOURCES" = "yes" ] && [ "$ARCH" != "amd64" ]; then
-		rm -rf /tmp/v2ray-plugin-linux-amd64-${V2RAY_PLUGIN_VERSION}.tar.gz
+	if [ "$SOURCES" = "yes" ] && [ "$ARCH" = "amd64" ]; then
+		rm -rf /tmp/v2ray-plugin-linux-amd64-v${V2RAY_PLUGIN_VERSION}.tar.gz
 		#wget -O /tmp/v2ray-plugin-linux-amd64-v${V2RAY_PLUGIN_VERSION}.tar.gz https://github.com/shadowsocks/v2ray-plugin/releases/download/${V2RAY_PLUGIN_VERSION}/v2ray-plugin-linux-amd64-v${V2RAY_PLUGIN_VERSION}.tar.gz
 		#wget -O /tmp/v2ray-plugin-linux-amd64-v${V2RAY_PLUGIN_VERSION}.tar.gz ${VPSURL}${VPSPATH}/bin/v2ray-plugin-linux-amd64-v${V2RAY_PLUGIN_VERSION}.tar.gz
 		wget -O /tmp/v2ray-plugin-linux-amd64-v${V2RAY_PLUGIN_VERSION}.tar.gz https://github.com/teddysun/v2ray-plugin/releases/download/v${V2RAY_PLUGIN_VERSION}/v2ray-plugin-linux-amd64-v${V2RAY_PLUGIN_VERSION}.tar.gz
@@ -1273,7 +1284,7 @@ if [ "$V2RAY_PLUGIN" = "yes" ]; then
 		cp -f v2ray-plugin_linux_amd64 /usr/local/bin/v2ray-plugin
 		cd /tmp
 		rm -rf /tmp/v2ray-plugin_linux_amd64
-		rm -rf /tmp/v2ray-plugin-linux-amd64-${V2RAY_PLUGIN_VERSION}.tar.gz
+		rm -rf /tmp/v2ray-plugin-linux-amd64-v${V2RAY_PLUGIN_VERSION}.tar.gz
 	
 		#rm -rf /tmp/v2ray-plugin
 		#cd /tmp
@@ -2206,10 +2217,9 @@ if [ "$SOFTETHERVPN" = "yes" ]; then
 	set +e
 	softether_test() {
 		# Check if SoftEther VPN is available...
-		result=1
-		while ! $($@ About >/dev/null 2>&1); do
+		while ! "$@" About >/dev/null 2>&1; do
 			sleep 1
-			echo -n '.'
+			printf '.'
 		done
 		echo "Server ready for configuration..."
 	}

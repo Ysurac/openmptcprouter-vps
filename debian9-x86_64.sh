@@ -1780,15 +1780,19 @@ if [ "$MQVPN" = "yes" ]; then
 		if ! apt-get -o Dpkg::Options::="--force-confold" -o Dpkg::Options::="--force-confdef" -o Dpkg::Options::="--force-overwrite" --allow-downgrades -y install mqvpn=${MQVPN_VERSION}; then
 			wget -O /tmp/mqvpn_${MQVPN_VERSION}_${ARCH}.deb ${VPSURL}debian/mqvpn_${MQVPN_VERSION}_${ARCH}.deb
 			wget -O /tmp/libmqvpn0_${MQVPN_VERSION}_${ARCH}.deb ${VPSURL}debian/libmqvpn0_${MQVPN_VERSION}_${ARCH}.deb
+			apt-get -y install libevent-2.1-7
 			dpkg --force-all -i -B /tmp/libmqvpn0_${MQVPN_VERSION}_${ARCH}.deb
 			dpkg --force-all -i -B /tmp/mqvpn_${MQVPN_VERSION}_${ARCH}.deb
+			apt-get -o Dpkg::Options::="--force-confold" -o Dpkg::Options::="--force-confdef" -o Dpkg::Options::="--force-overwrite" -y --fix-broken install
 			rm -f /tmp/mqvpn_${MQVPN_VERSION}_${ARCH}.deb /tmp/libmqvpn0_${MQVPN_VERSION}_${ARCH}.deb
 		fi
 	elif [ "$ARCH" = "arm64" ]; then
 		wget -O /tmp/mqvpn_${MQVPN_VERSION}_arm64.deb ${VPSURL}/debian/mqvpn_${MQVPN_VERSION}_arm64.deb
 		wget -O /tmp/libmqvpn0_${MQVPN_VERSION}_arm64.deb ${VPSURL}/debian/libmqvpn0_${MQVPN_VERSION}_arm64.deb
+		apt-get -y install libevent-2.1-7
 		dpkg --force-all -i -B /tmp/libmqvpn0_${MQVPN_VERSION}_arm64.deb
 		dpkg --force-all -i -B /tmp/mqvpn_${MQVPN_VERSION}_arm64.deb
+		apt-get -o Dpkg::Options::="--force-confold" -o Dpkg::Options::="--force-confdef" -o Dpkg::Options::="--force-overwrite" -y --fix-broken install
 		rm -f /tmp/mqvpn_${MQVPN_VERSION}_arm64.deb
 		rm -f /tmp/libmqvpn0_${MQVPN_VERSION}_arm64.deb
 	fi

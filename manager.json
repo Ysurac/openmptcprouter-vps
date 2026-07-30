@@ -11,7 +11,7 @@
     "fast_open": true,
     "timeout": 1000,
     "port_key": {
-        "65101": "MySecretKey",
+        "65101": "MySecretKey"
     },
     "local_port": 1081,
     "verbose": 0,

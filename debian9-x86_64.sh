@@ -95,7 +95,7 @@ OMR_ADMIN_VERSION="fade29c5b45b7045843651ec5041e86c73e72a8a"
 OMR_ADMIN_BINARY_VERSION="0.18+20260724"
 DSVPN_VERSION="3b99d2ef6c02b2ef68b5784bec8adfdd55b29b1a"
 DSVPN_BINARY_VERSION="0.1.4-2"
-MQVPN_VERSION="0.14.0-1"
+MQVPN_VERSION="0.14.1-1"
 V2RAY_VERSION="5.32.0"
 V2RAY_PLUGIN_VERSION="4.43.0"
 XRAY_VERSION="26.7.11"
@@ -115,7 +115,7 @@ VPSURL="https://www.openmptcprouter.com/"
 REPO="repo.openmptcprouter.com"
 CHINA=${CHINA:-no}
 
-OMR_VERSION="0.1064-rolling-test"
+OMR_VERSION="0.1065-rolling-test"
 
 DIR=$( pwd )
 #"
@@ -663,8 +663,8 @@ elif [ "$KERNEL" = "6.18" ]; then
 	#dpkg --force-all -i -B /tmp/linux-headers-${KERNEL_VERSION}-${PSABI}-xanmod1_${KERNEL_VERSION}-${PSABI}-xanmod1-${KERNEL_REV}_amd64.deb
 	#dpkg --force-all -i -B /tmp/linux-image-${KERNEL_VERSION}-${PSABI}-xanmod1_${KERNEL_VERSION}-${PSABI}-xanmod1-${KERNEL_REV}_amd64.deb
 	#set_grub_default_kernel "${KERNEL_VERSION}" "${PSABI}-xanmod"
-	KERNEL_VERSION="6.18.35"
-	KERNEL_REV="20260610"
+	KERNEL_VERSION="6.18.41"
+	KERNEL_REV="20260730"
 	#if [ "$CHINA" = "yes" ]; then
 	#	wget -O /tmp/linux-image-${KERNEL_VERSION}-${PSABI}-xanmod1_${KERNEL_VERSION}-${PSABI}-xanmod1-${KERNEL_REV}_amd64.deb https://sourceforge.net/projects/xanmod/files/releases/lts/${KERNEL_VERSION}-xanmod1/${KERNEL_VERSION}-${PSABI}-xanmod1/linux-image-${KERNEL_VERSION}-${PSABI}-xanmod1_${KERNEL_VERSION}-${PSABI}-xanmod1-${KERNEL_REV}_amd64.deb
 	#	wget -O /tmp/linux-headers-${KERNEL_VERSION}-${PSABI}-xanmod1_${KERNEL_VERSION}-${PSABI}-xanmod1-${KERNEL_REV}_amd64.deb https://sourceforge.net/projects/xanmod/files/releases/lts/${KERNEL_VERSION}-xanmod1/${KERNEL_VERSION}-${PSABI}-xanmod1/linux-headers-${KERNEL_VERSION}-${PSABI}-xanmod1_${KERNEL_VERSION}-${PSABI}-xanmod1-${KERNEL_REV}_amd64.deb
@@ -869,6 +869,9 @@ if [ "$SHADOWSOCKS" = "yes" ]; then
 		rm -f /var/lib/dpkg/lock-frontend
 		apt-get -y install --no-install-recommends devscripts equivs apg libcap2-bin libpam-cap libc-ares2 libc-ares-dev libev4 haveged libpcre3-dev || true
 		apt-get -y install --no-install-recommends asciidoc-base asciidoc-common docbook-xml docbook-xsl libev-dev libmbedcrypto3 libmbedtls-dev libmbedtls12 libmbedx509-0 libxml2-utils libxslt1.1 pkg-config sgml-base sgml-data xml-core xmlto xsltproc || true
+		if [ "$ID" = "debian" ] && [ "$VERSION_ID" = "13" ]; then
+			apt-get -y --allow-downgrades install libmbedtls-dev=2.16.9-0.1 libmbedtls12=2.16.9-0.1 libmbedcrypto3=2.16.9-0.1 libmbedx509-0=2.16.9-0.1
+		fi
 		sleep 1
 		rm -f /var/lib/dpkg/lock
 		rm -f /var/lib/dpkg/lock-frontend
@@ -889,15 +892,29 @@ if [ "$SHADOWSOCKS" = "yes" ]; then
 		#cd /tmp/shadowsocks-libev-${SHADOWSOCKS_VERSION}
 		rm -f /var/lib/dpkg/lock
 		rm -f /var/lib/dpkg/lock-frontend
-		mk-build-deps --install --tool "apt-get -o Debug::pkgProblemResolver=yes --no-install-recommends -y" >/dev/null 2>&1 || true
+		if ! mk-build-deps --install --tool "apt-get -o Debug::pkgProblemResolver=yes --no-install-recommends -y"; then
+			echo "Unable to install Shadowsocks-libev build dependencies."
+		fi
 		rm -f /var/lib/dpkg/lock
 		rm -f /var/lib/dpkg/lock-frontend
-		dpkg-buildpackage -b -us -uc >/dev/null 2>&1 || true
+		if ! dpkg-buildpackage -b -us -uc; then
+			echo "Unable to build Shadowsocks-libev package."
+		fi
 		rm -f /var/lib/dpkg/lock
 		rm -f /var/lib/dpkg/lock-frontend
 		cd /tmp
 		#dpkg -i shadowsocks-libev_*.deb
-		dpkg -i omr-shadowsocks-libev_*.deb >/dev/null 2>&1 || true
+		if ls omr-shadowsocks-libev_*.deb >/dev/null 2>&1; then
+			if ! dpkg -i omr-shadowsocks-libev_*.deb; then
+				echo "Unable to install built Shadowsocks-libev package."
+			fi
+		else
+			echo "No omr-shadowsocks-libev package produced."
+		fi
+		if ! command -v ss-manager >/dev/null 2>&1; then
+			echo "Error: ss-manager was not installed." >&2
+			exit 1
+		fi
 		#mkdir -p /usr/lib/shadowsocks-libev
 		#cp -f /tmp/shadowsocks-libev-${SHADOWSOCKS_VERSION}/src/*.ebpf /usr/lib/shadowsocks-libev
 		#rm -rf /tmp/shadowsocks-libev-${SHADOWSOCKS_VERSION}
@@ -1188,19 +1205,11 @@ if [ "$SHADOWSOCKS" = "yes" ]; then
 			cp ${DIR}/manager.json /etc/shadowsocks-libev/manager.json
 		fi
 		SHADOWSOCKS_PASS_JSON=$(echo $SHADOWSOCKS_PASS | sed 's/+/-/g; s/\//_/g;')
-		if [ "$NBCPU" -gt "1" ]; then
-			for i in $(seq 2 "$NBCPU"); do
-				sed -i '0,/65101/ s/        "65101.*/&\n&/' /etc/shadowsocks-libev/manager.json
-			done
-		fi
 		#sed -i "s:MySecretKey:$SHADOWSOCKS_PASS_JSON:g" /etc/shadowsocks-libev/config.json
 		sed -i "s:MySecretKey:$SHADOWSOCKS_PASS_JSON:g" /etc/shadowsocks-libev/manager.json
 		[ "$(ip -6 a 2>/dev/null)" = "" ] && sed -i '/"\[::0\]"/d' /etc/shadowsocks-libev/manager.json
 	elif [ "$update" != "0" ] && [ -f /etc/shadowsocks-libev/manager.json ] && [ "$(grep -c '65101' /etc/shadowsocks-libev/manager.json | tr -d '\n')" != "$NBCPU" ] && [ -z "$(grep port_conf /etc/shadowsocks-libev/manager.json)" ]; then
-		for i in $(seq 2 $NBCPU); do
-			sed -i '0,/65101/ s/        "65101.*/&\n&/' /etc/shadowsocks-libev/manager.json
-		done
-		sed -i 's/       "65101.*"$/&,/' /etc/shadowsocks-libev/manager.json
+		echo "Keep a single Shadowsocks manager port entry"
 	fi
 	[ ! -f /etc/shadowsocks-libev/local.acl ] && touch /etc/shadowsocks-libev/local.acl
 	#sed -i 's:aes-256-cfb:chacha20:g' /etc/shadowsocks-libev/config.json
@@ -1211,7 +1220,7 @@ if [ "$SHADOWSOCKS" = "yes" ]; then
 		cp ${DIR}/shadowsocks-libev-manager@.service.in /lib/systemd/system/shadowsocks-libev-manager@.service
 	fi
 	if systemctl -q is-enabled shadowsocks-libev 2>/dev/null; then
-		systemctl -q disable shadowsocks-libev
+		systemctl -q disable --now shadowsocks-libev
 	fi
 	[ -f /etc/shadowsocks-libev/config.json ] && systemctl disable shadowsocks-libev-server@config.service
 	systemctl enable shadowsocks-libev-manager@manager.service

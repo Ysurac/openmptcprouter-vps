@@ -91,11 +91,11 @@ MLVPN_BINARY_VERSION="3.0.0+20211028.git.ddafba3"
 UBOND_VERSION="31af0f69ebb6d07ed9348dca2fced33b956cedee"
 OBFS_VERSION="486bebd9208539058e57e23a12f23103016e09b4"
 OBFS_BINARY_VERSION="0.0.5-1"
-OMR_ADMIN_VERSION="8052066e688d754a5422d21b35fa13cb63e38dee"
-OMR_ADMIN_BINARY_VERSION="0.18+20260803"
+OMR_ADMIN_VERSION="9b5eb4c66867087903ead1bc911752f4ccd21093"
+OMR_ADMIN_BINARY_VERSION="0.18+20260813"
 DSVPN_VERSION="3b99d2ef6c02b2ef68b5784bec8adfdd55b29b1a"
 DSVPN_BINARY_VERSION="0.1.4-2"
-MQVPN_VERSION="0.14.1-1"
+MQVPN_VERSION="0.16.0-1"
 V2RAY_VERSION="5.32.0"
 V2RAY_PLUGIN_VERSION="4.43.0"
 XRAY_VERSION="26.7.11"
@@ -115,7 +115,7 @@ VPSURL="https://www.openmptcprouter.com/"
 REPO="repo.openmptcprouter.com"
 CHINA=${CHINA:-no}
 
-OMR_VERSION="0.1066-rolling-test"
+OMR_VERSION="0.1067-rolling-test"
 
 DIR=$( pwd )
 #"
@@ -704,13 +704,17 @@ fi # IS_CONTAINER check
 if [ "$KERNEL" = "6.18" ]; then
 	
 	echo "Install MPTCP BPF schedulers for kernel 6.18..."
-	for pkg in mptcp-bpf-bkup mptcp-bpf-burst mptcp-bpf-first mptcp-bpf-red mptcp-bpf-rr; do
+	for pkg in mptcp-bpf-bkup mptcp-bpf-burst mptcp-bpf-first mptcp-bpf-red mptcp-bpf-rr mptcp-bpf-dscp mptcp-bpf-weight mptcp-bpf-weight-rr; do
 		if ! apt-get -o Dpkg::Options::="--force-confold" -o Dpkg::Options::="--force-confdef" -o Dpkg::Options::="--force-overwrite" -y install ${pkg}=${MPTCP_BPF_VERSION}; then
 			wget -O /tmp/${pkg}_${MPTCP_BPF_VERSION}_${ARCH}.deb ${VPSURL}debian/${pkg}_${MPTCP_BPF_VERSION}_${ARCH}.deb
 			dpkg --force-confold --force-confdef --force-overwrite -i /tmp/${pkg}_${MPTCP_BPF_VERSION}_${ARCH}.deb
 			rm -f /tmp/${pkg}_${MPTCP_BPF_VERSION}_${ARCH}.deb
 		fi
 	done
+	echo "Install MPTCP BPF DSCP and weight scheduler manager scripts..."
+	wget -O /usr/sbin/mptcp-scheduler-dscp.sh https://github.com/Ysurac/openmptcprouter-feeds/raw/refs/heads/develop/mptcp-dscp-manager/files/usr/sbin/mptcp-scheduler-dscp.sh
+	wget -O /usr/sbin/mptcp-scheduler-weight.sh https://github.com/Ysurac/openmptcprouter-feeds/raw/refs/heads/develop/mptcp-weight-manager/files/usr/sbin/mptcp-scheduler-weight.sh
+	chmod 755 /usr/sbin/mptcp-scheduler-dscp.sh /usr/sbin/mptcp-scheduler-weight.sh
 fi
 
 if [ "$ARCH" = "amd64" ]; then
@@ -1106,9 +1110,9 @@ if [ "$OMR_ADMIN" = "yes" ]; then
 			[ -n "$OMR_ADMIN_PASS_ADMIN2" ] && [ "$OMR_ADMIN_PASS_ADMIN2" != "AdminMySecretKey" ] && OMR_ADMIN_PASS_ADMIN=$OMR_ADMIN_PASS_ADMIN2
 		fi
 		if ! apt-get -o Dpkg::Options::="--force-confold" -o Dpkg::Options::="--force-confdef" -o Dpkg::Options::="--force-overwrite" -y --allow-downgrades install omr-vps-admin=${OMR_ADMIN_BINARY_VERSION}; then
-			wget -O /tmp/omr-vps-admin-${OMR_ADMIN_BINARY_VERSION}.deb ${VPSURL}debian/omr-vps-admin-${OMR_ADMIN_BINARY_VERSION}.deb
-			dpkg --force-confold --force-confdef --force-overwrite -i /tmp/omr-vps-admin-${OMR_ADMIN_BINARY_VERSION}.deb
-			rm -f /tmp/omr-vps-admin-${OMR_ADMIN_BINARY_VERSION}.deb
+			wget -O /tmp/omr-vps-admin_${OMR_ADMIN_BINARY_VERSION}_all.deb ${VPSURL}debian/omr-vps-admin_${OMR_ADMIN_BINARY_VERSION}_all.deb
+			dpkg --force-confold --force-confdef --force-overwrite -i /tmp/omr-vps-admin_${OMR_ADMIN_BINARY_VERSION}_all.deb
+			rm -f /tmp/omr-vps-admin_${OMR_ADMIN_BINARY_VERSION}_all.deb
 		fi
 		if [ ! -f /etc/openmptcprouter-vps-admin/omr-admin-config.json ]; then
 			cp /usr/share/omr-admin/omr-admin-config.json /etc/openmptcprouter-vps-admin/
@@ -1840,9 +1844,17 @@ if [ "$FAIL2BAN" = "yes" ]; then
 	if [ "$LOCALFILES" = "no" ]; then
 		wget -O /etc/fail2ban/jail.d/openmptcprouter.conf ${VPSURL}${VPSPATH}/fail2ban-jail-openmptcprouter.conf
 		wget -O /etc/fail2ban/filter.d/openvpn.conf ${VPSURL}${VPSPATH}/fail2ban-filter-openvpn.conf
+		wget -O /etc/fail2ban/filter.d/omradmin.conf ${VPSURL}${VPSPATH}/fail2ban-filter-omradmin.conf
+		wget -O /etc/fail2ban/filter.d/xray.conf ${VPSURL}${VPSPATH}/fail2ban-filter-xray.conf
+		wget -O /etc/fail2ban/filter.d/v2ray.conf ${VPSURL}${VPSPATH}/fail2ban-filter-v2ray.conf
+		wget -O /etc/fail2ban/filter.d/shadowsocks-go.conf ${VPSURL}${VPSPATH}/fail2ban-filter-shadowsocks-go.conf
 	else
 		cp ${DIR}/fail2ban-jail-openmptcprouter.conf /etc/fail2ban/jail.d/openmptcprouter.conf
 		cp ${DIR}/fail2ban-filter-openvpn.conf /etc/fail2ban/filter.d/openvpn.conf
+		cp ${DIR}/fail2ban-filter-omradmin.conf /etc/fail2ban/filter.d/omradmin.conf
+		cp ${DIR}/fail2ban-filter-xray.conf /etc/fail2ban/filter.d/xray.conf
+		cp ${DIR}/fail2ban-filter-v2ray.conf /etc/fail2ban/filter.d/v2ray.conf
+		cp ${DIR}/fail2ban-filter-shadowsocks-go.conf /etc/fail2ban/filter.d/shadowsocks-go.conf
 	fi
 	echo "Install Fail2ban done"
 fi
@@ -2765,6 +2777,11 @@ else
 	[ -n "$INTERFACE" ] && systemctl -q restart shorewall >/dev/null 2>&1 || true
 	[ -n "$INTERFACE6" ] && systemctl -q restart shorewall6 >/dev/null 2>&1 || true
 	echo 'done'
+	if [ "$FAIL2BAN" = "yes" ]; then
+		echo 'Restarting fail2ban...'
+		systemctl -q restart fail2ban
+		echo 'done'
+	fi
 	echo '===================================================================================='
 	echo '\033[1m  /!\ You need to reboot to use latest MPTCP kernel /!\ \033[0m'
 	echo '===================================================================================='

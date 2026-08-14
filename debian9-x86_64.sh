@@ -2078,7 +2078,7 @@ if [ "$GLORYTUN_UDP" = "yes" ]; then
 	else
 		rm -f /usr/local/bin/glorytun
 		if ! apt-get -y -o Dpkg::Options::="--force-confdef" -o Dpkg::Options::="--force-confold" -o Dpkg::Options::="--force-overwrite" install --reinstall omr-glorytun=${GLORYTUN_UDP_BINARY_VERSION}; then
-			wget -O /tmp/omr-glorytun-${GLORYTUN_UDP_BINARY_VERSION}.deb ${VPSURL}debian/omr-glorytun-${GLORYTUN_UDP_BINARY_VERSION}_amd64.deb
+			wget -O /tmp/omr-glorytun-${GLORYTUN_UDP_BINARY_VERSION}.deb ${VPSURL}debian/omr-glorytun_${GLORYTUN_UDP_BINARY_VERSION}_amd64.deb
 			dpkg --force-confdef --force-confold --force-overwrite -i /tmp/omr-glorytun-${GLORYTUN_UDP_BINARY_VERSION}.deb
 			rm -f /tmp/omr-glorytun-${GLORYTUN_UDP_BINARY_VERSION}.deb
 		fi
@@ -2135,7 +2135,7 @@ if [ "$DSVPN" = "yes" ]; then
 		rm -rf /tmp/dsvpn
 	else
 		if ! apt-get -y -o Dpkg::Options::="--force-confdef" -o Dpkg::Options::="--force-confold" -o Dpkg::Options::="--force-overwrite" install omr-dsvpn=${DSVPN_BINARY_VERSION}; then
-			wget -O /tmp/omr-dsvpn-${DSVPN_BINARY_VERSION}.deb ${VPSURL}debian/omr-dsvpn-${DSVPN_BINARY_VERSION}_amd64.deb
+			wget -O /tmp/omr-dsvpn-${DSVPN_BINARY_VERSION}.deb ${VPSURL}debian/omr-dsvpn_${DSVPN_BINARY_VERSION}_amd64.deb
 			dpkg --force-confdef --force-confold --force-overwrite -i /tmp/omr-dsvpn-${DSVPN_BINARY_VERSION}.deb
 			rm -f /tmp/omr-dsvpn-${DSVPN_BINARY_VERSION}.deb
 		fi
@@ -2226,7 +2226,7 @@ if [ "$GLORYTUN_TCP" = "yes" ]; then
 	else
 		rm -f /usr/local/bin/glorytun-tcp
 		if ! apt-get -y -o Dpkg::Options::="--force-confdef" -o Dpkg::Options::="--force-confold" -o Dpkg::Options::="--force-overwrite" install --reinstall omr-glorytun-tcp=${GLORYTUN_TCP_BINARY_VERSION}; then
-			wget -O /tmp/omr-glorytun-tcp-${GLORYTUN_TCP_BINARY_VERSION}.deb ${VPSURL}debian/omr-glorytun-tcp-${GLORYTUN_TCP_BINARY_VERSION}_amd64.deb
+			wget -O /tmp/omr-glorytun-tcp-${GLORYTUN_TCP_BINARY_VERSION}.deb ${VPSURL}debian/omr-glorytun-tcp_${GLORYTUN_TCP_BINARY_VERSION}_amd64.deb
 			dpkg --force-confdef --force-confold --force-overwrite -i /tmp/omr-glorytun-tcp-${GLORYTUN_TCP_BINARY_VERSION}.deb
 			rm -f /tmp/omr-glorytun-tcp-${GLORYTUN_TCP_BINARY_VERSION}.deb
 		fi

@@ -1,6 +1,6 @@
 [Unit]
 Description=OMR-ByPass
-After=network.target network-online.target shorewall.service
+After=network.target network-online.target nftables.service
 
 [Service]
 Type=simple

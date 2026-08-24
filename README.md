@@ -4,11 +4,12 @@ All scripts needed to install OpenMPTCProuter VPS.
 
 This is the VPS part of [OpenMPTCProuter](https://www.openmptcprouter.com/), a solution to aggregate multiple internet connections.
  
-* ```debian9-x86_64.sh```: The main script install ShadowSocks, Glorytun TCP, Glorytun UDP, Shorewall, the MPTCP kernel and can install OpenVPN
+* ```debian9-x86_64.sh```: The main script install ShadowSocks, Glorytun TCP, Glorytun UDP, nftables, the MPTCP kernel and can install OpenVPN
 * ```debian9-x86_64-mlvpn.sh```: Script to install MLVPN
 * ```config.json```: shadowsocks config
-* ```/shorewall4```: shorewall default configuration
-* ```/shorewall6```: shorewall6 default configuration
+* ```/nftables.conf```: installed at Debian's default nftables path, /etc/nftables.conf
+* ```/nftables```: native nftables ruleset (omr.nft) and per-install values (omr-vars.nft), installed under /etc/nftables/
+* ```/shorewall4```, ```/shorewall6```: legacy Shorewall configuration, kept for reference/rollback -- no longer installed by debian9-x86_64.sh
 * ```glorytun-tcp-run```: script to run glorytun with configuration parameters
 * ```glorytun-tcp@.service.in```: glorytun systemd service
 * ```glorytun.network```: glorytun systemd network (for DHCP)

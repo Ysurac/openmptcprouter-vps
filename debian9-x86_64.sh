@@ -91,8 +91,8 @@ MLVPN_BINARY_VERSION="3.0.0+20211028.git.ddafba3"
 UBOND_VERSION="31af0f69ebb6d07ed9348dca2fced33b956cedee"
 OBFS_VERSION="486bebd9208539058e57e23a12f23103016e09b4"
 OBFS_BINARY_VERSION="0.0.5-1"
-OMR_ADMIN_VERSION="9b5eb4c66867087903ead1bc911752f4ccd21093"
-OMR_ADMIN_BINARY_VERSION="0.18+20260813"
+OMR_ADMIN_VERSION="b67cd4030b831a44a688cb3f950a1934aa24e43e"
+OMR_ADMIN_BINARY_VERSION="0.18+20260824"
 DSVPN_VERSION="3b99d2ef6c02b2ef68b5784bec8adfdd55b29b1a"
 DSVPN_BINARY_VERSION="0.1.4-2"
 MQVPN_VERSION="0.16.0-1"
@@ -115,7 +115,7 @@ VPSURL="https://www.openmptcprouter.com/"
 REPO="repo.openmptcprouter.com"
 CHINA=${CHINA:-no}
 
-OMR_VERSION="0.1067-rolling-test"
+OMR_VERSION="0.1068-rolling-test"
 
 DIR=$( pwd )
 #"
@@ -1154,10 +1154,10 @@ if [ "$OMR_ADMIN" = "yes" ]; then
 	#}
 	systemctl daemon-reload
 	systemctl enable omr-admin.service
-	if [ "$KERNEL" != "5.4" ]; then
-		mptcpize enable omr-admin.service >/dev/null 2>&1
+	#if [ "$KERNEL" != "5.4" ]; then
+	#	mptcpize enable omr-admin.service >/dev/null 2>&1
 		#[ "$(ip -6 a)" != "" ] && mptcpize enable omr-admin-ipv6.service >/dev/null 2>&1
-	fi
+	#fi
 	if systemctl -q is-active omr-admin-ipv6.service 2>/dev/null; then
 		systemctl -q stop omr-admin-ipv6 >/dev/null 2>&1
 		systemctl -q disable omr-admin-ipv6 >/dev/null 2>&1
@@ -2386,87 +2386,29 @@ sed -i 's:Port 22:Port 65222:g' /etc/ssh/sshd_config
 # Remove fail2ban if available
 #systemctl -q disable fail2ban
 
-if [ "$update" = "0" ]; then
-	# Install and configure the firewall using shorewall
-	apt-get -y install shorewall shorewall6
-	if [ "$LOCALFILES" = "no" ]; then
-		wget -O /etc/shorewall/openmptcprouter-shorewall.tar.gz ${VPSURL}${VPSPATH}/openmptcprouter-shorewall.tar.gz
-	else
-		cp ${DIR}/openmptcprouter-shorewall.tar.gz /etc/shorewall/openmptcprouter-shorewall.tar.gz
-	fi
-	tar xzf /etc/shorewall/openmptcprouter-shorewall.tar.gz -C /etc/shorewall
-	rm /etc/shorewall/openmptcprouter-shorewall.tar.gz
-	if [ -n "$INTERFACE" ]; then
-		sed -i "s:eth0:$INTERFACE:g" /etc/shorewall/*
-		systemctl enable shorewall
-	fi
-	if [ "$LOCALFILES" = "no" ]; then
-		wget -O /etc/shorewall6/openmptcprouter-shorewall6.tar.gz ${VPSURL}${VPSPATH}/openmptcprouter-shorewall6.tar.gz
-	else
-		cp ${DIR}/openmptcprouter-shorewall6.tar.gz /etc/shorewall6/openmptcprouter-shorewall6.tar.gz
-	fi
-	tar xzf /etc/shorewall6/openmptcprouter-shorewall6.tar.gz -C /etc/shorewall6
-	rm /etc/shorewall6/openmptcprouter-shorewall6.tar.gz
-	if [ -n "$INTERFACE6" ]; then
-		sed -i "s:eth0:$INTERFACE6:g" /etc/shorewall6/*
-		systemctl enable shorewall6
-	fi
+# Install and configure the firewall using native nftables
+apt-get -y install nftables
+mkdir -p /etc/nftables
+if [ "$LOCALFILES" = "no" ]; then
+	wget -O /etc/nftables.conf ${VPSURL}${VPSPATH}/nftables.conf
+	wget -O /etc/nftables/omr-vars.nft ${VPSURL}${VPSPATH}/nftables/omr-vars.nft
+	wget -O /etc/nftables/omr.nft ${VPSURL}${VPSPATH}/nftables/omr.nft
 else
-	# Update only needed firewall files
-	if [ "$LOCALFILES" = "no" ]; then
-		mkdir -p ${DIR}
-		wget -O ${DIR}/openmptcprouter-shorewall.tar.gz ${VPSURL}${VPSPATH}/openmptcprouter-shorewall.tar.gz
-		wget -O ${DIR}/openmptcprouter-shorewall6.tar.gz ${VPSURL}${VPSPATH}/openmptcprouter-shorewall6.tar.gz
-		mkdir -p ${DIR}/shorewall4
-		tar xzvf ${DIR}/openmptcprouter-shorewall.tar.gz -C ${DIR}/shorewall4
-		mkdir -p ${DIR}/shorewall6
-		tar xzvf ${DIR}/openmptcprouter-shorewall6.tar.gz -C ${DIR}/shorewall6
-	fi
-	cp ${DIR}/shorewall4/interfaces /etc/shorewall/interfaces
-	cp ${DIR}/shorewall4/snat /etc/shorewall/snat
-	cp ${DIR}/shorewall4/stoppedrules /etc/shorewall/stoppedrules
-	cp ${DIR}/shorewall4/tcinterfaces /etc/shorewall/tcinterfaces
-	cp ${DIR}/shorewall4/shorewall.conf /etc/shorewall/shorewall.conf
-	cp ${DIR}/shorewall4/policy /etc/shorewall/policy
-	cp ${DIR}/shorewall4/params /etc/shorewall/params
-	cp ${DIR}/shorewall4/zones /etc/shorewall/zones
-	[ ! -f /etc/shorewall/params.vpn ] && cp ${DIR}/shorewall4/params.vpn /etc/shorewall/params.vpn
-	[ ! -f /etc/shorewall/params.net ] && cp ${DIR}/shorewall4/params.net /etc/shorewall/params.net
-	cp ${DIR}/shorewall6/params /etc/shorewall6/params
-	[ ! -f /etc/shorewall/params.net ] && cp ${DIR}/shorewall6/params.net /etc/shorewall6/params.net
-	[ ! -f /etc/shorewall/params.vpn ] && cp ${DIR}/shorewall6/params.vpn /etc/shorewall6/params.vpn
-	cp ${DIR}/shorewall6/interfaces /etc/shorewall6/interfaces
-	cp ${DIR}/shorewall6/stoppedrules /etc/shorewall6/stoppedrules
-	cp ${DIR}/shorewall6/snat /etc/shorewall6/snat
-	sed -i "s:eth0:$INTERFACE:g" /etc/shorewall/*
-	sed -i 's/^.*#DNAT/#DNAT/g' /etc/shorewall/rules
-	sed -i 's:10.0.0.2:$OMR_ADDR:g' /etc/shorewall/rules
-	sed -i "s:eth0:$INTERFACE6:g" /etc/shorewall6/*
-	if [ "$LOCALFILES" = "no" ]; then
-		rm -rf ${DIR}/shorewall4
-		rm -rf ${DIR}/shorewall6
-		rm -f ${DIR}/openmptcprouter-shorewall.tar.gz
-		rm -f ${DIR}/openmptcprouter-shorewall6.tar.gz
-	fi
-	if [ -f /etc/shorewall/params.vpn ]; then
-		awk '!seen[$0]++' /etc/shorewall/params.vpn > params.vpn.new
-		mv -f params.vpn.new params.vpn
-	fi
+	cp ${DIR}/nftables.conf /etc/nftables.conf
+	cp ${DIR}/nftables/omr-vars.nft /etc/nftables/omr-vars.nft
+	cp ${DIR}/nftables/omr.nft /etc/nftables/omr.nft
 fi
+[ -n "$INTERFACE" ] && sed -i "s:eth0:$INTERFACE:g" /etc/nftables/omr-vars.nft
+if [ "$(ip r | awk '/default/&&/src/ {print $7}')" != "" ] && [ "$(ip r | awk '/default/&&/src/ {print $7}')" != "dhcp" ]; then
+	sed -i "s/masquerade/snat ip to $(ip r | awk '/default/&&/src/ {print $7}')/" /etc/nftables/omr.nft
+fi
+systemctl mask --now shorewall shorewall6 >/dev/null 2>&1 || true
+systemctl enable --now nftables
 [ -z "$(grep nf_conntrack_sip /etc/modprobe.d/blacklist.conf)" ] && echo 'blacklist nf_conntrack_sip' >> /etc/modprobe.d/blacklist.conf
 if [ "$ID" = "debian" ] && [ "$VERSION_ID" = "10" ]; then
 	apt-get -y install iptables
 	update-alternatives --set iptables /usr/sbin/iptables-legacy
 	update-alternatives --set ip6tables /usr/sbin/ip6tables-legacy
-fi
-if ([ "$ID" = "debian" ] && [ "$VERSION_ID" = "10" ]) || ([ "$ID" = "ubuntu" ] && [ "$VERSION_ID" = "19.04" ]) || ([ "$ID" = "ubuntu" ] && [ "$VERSION_ID" = "20.04" ]); then
-	sed -i 's:DROP_DEFAULT=Drop:DROP_DEFAULT="Broadcast(DROP),Multicast(DROP)":g' /etc/shorewall/shorewall.conf
-	sed -i 's:REJECT_DEFAULT=Reject:REJECT_DEFAULT="Broadcast(DROP),Multicast(DROP)":g' /etc/shorewall/shorewall.conf
-	sed -i 's:DROP_DEFAULT=Drop:DROP_DEFAULT="Broadcast(DROP),Multicast(DROP)":g' /etc/shorewall6/shorewall6.conf
-	sed -i 's:REJECT_DEFAULT=Reject:REJECT_DEFAULT="Broadcast(DROP),Multicast(DROP)":g' /etc/shorewall6/shorewall6.conf
-fi
-if [ "$(ip r | awk '/default/&&/src/ {print $7}')" != "" ] && [ "$(ip r | awk '/default/&&/src/ {print $7}')" != "dhcp" ]; then
-	sed -i "s/MASQUERADE/SNAT($(ip r | awk '/default/&&/src/ {print $7}'))/" /etc/shorewall/snat
 fi
 
 # Limit /var/log/journal size
@@ -2484,10 +2426,8 @@ if [ "$TLS" = "yes" ]; then
 		if [ ! -f "/root/.acme.sh/$VPS_DOMAIN/$VPS_DOMAIN.cer" ]; then
 			echo "Generate certificate for V2Ray"
 			set +e
-			#[ "$(shorewall  status | grep stopped)" = "" ] && shorewall open all all tcp 443
 			curl https://get.acme.sh | sh
-			systemctl -q restart shorewall
-			~/.acme.sh/acme.sh --force --alpn --issue -d $VPS_DOMAIN --pre-hook 'shorewall open all all tcp 443 >/dev/null 2>&1' --post-hook 'shorewall close all all tcp 443 >/dev/null 2>&1' >/dev/null 2>&1
+			~/.acme.sh/acme.sh --force --alpn --issue -d $VPS_DOMAIN --pre-hook 'nft add rule inet omr install_tmp tcp dport 443 accept >/dev/null 2>&1' --post-hook 'nft flush chain inet omr install_tmp >/dev/null 2>&1' >/dev/null 2>&1
 			set -e
 			if [ -f /root/.acme.sh/$VPS_DOMAIN/$VPS_DOMAIN.cer ]; then
 				rm -f /etc/openmptcprouter-vps-admin/cert.pem
@@ -2498,7 +2438,6 @@ if [ "$TLS" = "yes" ]; then
 #			mkdir -p /etc/ssl/v2ray
 #			ln -f -s /root/.acme.sh/$reverse/$reverse.key /etc/ssl/v2ray/omr.key
 #			ln -f -s /root/.acme.sh/$reverse/fullchain.cer /etc/ssl/v2ray/omr.cer
-			#[ "$(shorewall  status | grep stopped)" = "" ] && shorewall close all all tcp 443
 		fi
 		VPS_CERT=1
 	else
@@ -2603,7 +2542,7 @@ if [ "$update" = "0" ]; then
 	echo '===================================================================================='
 	echo 'Keys are also saved in /root/openmptcprouter_config.txt, you are free to remove them'
 	echo '===================================================================================='
-	echo '\033[1m  /!\ You need to reboot to enable MPTCP, shadowsocks, glorytun and shorewall /!\ \033[0m'
+	echo '\033[1m  /!\ You need to reboot to enable MPTCP, shadowsocks and glorytun /!\ \033[0m'
 	echo '------------------------------------------------------------------------------------'
 	echo ' For kernel 5.4, after reboot, check with uname -a that the kernel name contain mptcp.'
 	echo ' Else, you may have to modify GRUB_DEFAULT in /etc/default/grub'
@@ -2668,7 +2607,7 @@ if [ "$update" = "0" ]; then
 else
 	echo '===================================================================================='
 	echo "OpenMPTCProuter Server is now updated to version $OMR_VERSION !"
-	echo 'Keys are not changed, shorewall rules files preserved'
+	echo 'Keys are not changed'
 	echo 'You need OpenMPTCProuter >= 0.30'
 	echo '===================================================================================='
 	echo 'Restarting systemd daemon...'
@@ -2773,9 +2712,16 @@ else
 #		done
 #	fi
 	echo 'done'
-	echo 'Restarting shorewall...'
-	[ -n "$INTERFACE" ] && systemctl -q restart shorewall >/dev/null 2>&1 || true
-	[ -n "$INTERFACE6" ] && systemctl -q restart shorewall6 >/dev/null 2>&1 || true
+	echo 'Restarting nftables...'
+	# Reloads the freshly-rewritten /etc/nftables.conf; that flushes the whole
+	# ruleset including omr-vps-admin's dynamic chains (user_accept, etc.),
+	# so restart omr-admin right after -- it repopulates them from its own
+	# persisted state on startup (see omradmin.py's _nft_resync_all()). That
+	# same startup resync also re-adds OpenVPN's client-to-client directive
+	# to tun0.conf if needed, which the OpenVPN block above this also just
+	# unconditionally regenerated from template (see docs/TECHNICAL.md §7).
+	systemctl -q restart nftables >/dev/null 2>&1 || true
+	systemctl -q restart omr-admin >/dev/null 2>&1 || true
 	echo 'done'
 	if [ "$FAIL2BAN" = "yes" ]; then
 		echo 'Restarting fail2ban...'

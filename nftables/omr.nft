@@ -1,0 +1,156 @@
+#
+# OpenMPTCProuter VPS -- native nftables ruleset.
+#
+# Replaces the Shorewall 4/6 setup in ../shorewall4/ and ../shorewall6/.
+# Only the OpenMPTCProuter-specific content is translated here -- the stock
+# Shorewall sample boilerplate (copyright headers, ?SECTION/?FORMAT
+# directives, column-header comments, purely illustrative commented-out
+# examples that were never enabled) has no nft equivalent and is dropped.
+# Each block below is annotated with the shorewall4 file/rule it replaces,
+# for anyone diffing against the old setup.
+#
+# Requires nftables/omr-vars.nft (defines) to be included first -- see
+# ../nftables.conf.
+#
+# --- Live extension points -----------------------------------------------
+# omr-vps-admin (omradmin.py) manages the *dynamic* parts of the firewall
+# (per-user opened/redirected ports, GRE-tunnel SNAT, the bulk 1-64999
+# redirect toggle, client-to-client, DSCP destination classification) by
+# flushing and repopulating these regular (non-base) chains -- it never
+# needs to touch the base chains/policy below, so a live config sync can't
+# accidentally perturb them:
+#   user_accept    -- ACCEPT-type opened ports                 (shorewall/rules ACCEPT lines)
+#   user_dnat      -- DNAT-type redirected ports + bulk toggle  (shorewall/rules DNAT lines)
+#   gre_snat       -- per-public-IP GRE tunnel SNAT pairs       (shorewall/snat SNAT(...) lines)
+#   client2client  -- vpn<->vpn forwarding toggle               (shorewall/policy `vpn vpn DROP`)
+#   dscp_mark      -- destination-DSCP classification           (shorewall/mangle DSCP(...) rows)
+#   ct_helpers     -- SIP ALG toggle                             (shorewall.conf DONT_LOAD/AUTOHELPERS)
+# All six are empty (disabled) by default, matching the shipped Shorewall
+# templates' own defaults (bulk redirect commented out, client2client
+# defaulting to DROP i.e. this chain staying empty, no DSCP classification
+# synced yet, no ports opened yet, no GRE tunnels provisioned yet, SIP ALG
+# left to whatever AUTOHELPERS defaulted to).
+#
+table inet omr {
+	chain user_accept {}
+	chain user_dnat {}
+	chain gre_snat {}
+	chain client2client {}
+	chain dscp_mark {}
+	chain ct_helpers {}
+	chain install_tmp {}
+
+	# --- shorewall4/6 zones + interfaces + policy -------------------------
+	# zones: fw (this box) / net ($NET_IFACE, the WAN) / vpn (tunnel ifaces
+	# below) / vpncl (client-wg* only). policy: vpn<->net/fw and fw->vpn/net
+	# ACCEPT, vpn<->vpncl ACCEPT, vpn<->vpn DROP (client2client), net->all
+	# DROP, trailing catch-all REJECT.
+	chain input {
+		type filter hook input priority filter; policy accept;
+
+		iifname "lo" accept
+		ct state established,related accept
+		ct state invalid drop                                  # shorewall/rules: Invalid(DROP) net all tcp
+
+		# Management access first and unconditional -- do not move this
+		# below anything that could reject/drop before it's evaluated.
+		tcp dport 65222 accept                                  # shorewall/rules: ACCEPT net $FW tcp 65222 (SSH)
+
+		# shorewall/rules: Ping(ACCEPT) net $FW / $FW vpn / vpn $FW
+		icmp type echo-request accept
+		icmpv6 type echo-request accept
+		ip6 nexthdr icmpv6 icmpv6 type { nd-neighbor-solicit, nd-router-advert, nd-neighbor-advert } accept
+
+		tcp dport 65000-65535 accept                            # shorewall/rules: shadowsocks/glorytun ephemeral range
+		udp dport 65000-65535 accept
+
+		iifname $VPN_IFACES accept                              # policy: vpn fw ACCEPT
+		iifname $VPNCL_IFACES accept                            # policy: vpncl reaching fw (approximated -- no explicit vpncl/fw row in the source policy table; kept permissive to match today's net-DROP-only default)
+
+		jump install_tmp                                        # one-off installer-owned temporary access (e.g. ACME challenge)
+		jump user_accept                                        # live per-user opened ports
+
+		reject with icmpx type port-unreachable                 # policy: net all DROP + trailing all all REJECT
+	}
+
+	chain forward {
+		type filter hook forward priority filter; policy accept;
+
+		ct state established,related accept
+		ct state invalid drop
+
+		iifname $VPN_IFACES oifname $NET_IFACE accept           # policy: vpn net ACCEPT
+		iifname $VPNCL_IFACES oifname $VPN_IFACES accept        # policy: vpncl vpn ACCEPT
+		iifname $VPN_IFACES oifname $VPNCL_IFACES accept        # policy: vpn vpncl ACCEPT
+
+		iifname $NET_IFACE oifname $VPN_IFACES accept
+
+		meta nfproto ipv6 iifname $VPN_IFACES accept            # shorewall6/policy: vpn all ACCEPT
+
+		jump client2client                                      # policy: vpn vpn DROP, unless /client2client enabled
+		iifname $VPN_IFACES oifname $VPN_IFACES drop
+
+		reject with icmpx type port-unreachable
+	}
+
+	chain output {
+		type filter hook output priority filter; policy accept;
+
+		oifname "lo" accept                                     # symmetric with input's iifname lo accept -- without this, every locally-generated connection to 127.0.0.1/::1 (omr-service's own API health-check, the InfluxDB metrics push, ...) falls through to the trailing reject below
+		oifname $VPN_IFACES accept                              # policy: fw vpn ACCEPT (also covers shorewall/rules DNS(ACCEPT)/DHCPfwd(ACCEPT) $FW->vpn, both already implied by this policy row)
+		oifname $NET_IFACE accept                               # policy: fw net ACCEPT (also covers DNS(ACCEPT) $FW net)
+		meta nfproto ipv6 accept                                # shorewall6/policy: fw all ACCEPT
+
+		reject with icmpx type port-unreachable
+	}
+
+	# --- shorewall4/snat -----------------------------------------------------
+	# ("dnat"/"snat" are reserved nft statement keywords, not valid chain
+	# names -- hence nat_prerouting/nat_postrouting below.)
+	chain nat_prerouting {
+		type nat hook prerouting priority dstnat; policy accept;
+		jump user_dnat
+		# Bulk "redirect ports 1-64999 to the router" toggle -- disabled by
+		# default here, exactly like shorewall4/rules ships it commented
+		# out. omr-vps-admin's /shorewall endpoint enables it by inserting
+		# into user_dnat (kept out of this base chain so a toggle can never
+		# touch anything else):
+		#   iifname $NET_IFACE tcp dport 1-64999 dnat ip to $OMR_ADDR
+		#   iifname $NET_IFACE udp dport 1-64999 dnat ip to $OMR_ADDR
+	}
+
+	chain nat_postrouting {
+		type nat hook postrouting priority srcnat; policy accept;
+
+		# shorewall4/snat: MASQUERADE for all tunnel-client subnets + RFC1918/
+		# link-local, egressing the WAN interface.
+		ip saddr { 10.255.247.0/24, 10.255.210.0/24, 10.255.220.0/24, 10.255.248.0/24, 10.255.250.0/24, 10.255.251.0/24, 10.255.252.0/24, 10.255.253.0/24, 10.255.254.0/24, 10.255.255.0/24, 169.254.0.0/16, 172.16.0.0/12, 192.168.0.0/16 } oifname $NET_IFACE masquerade
+
+		# shorewall4/snat's own commented-out example ("SNAT from VPN server
+		# for all VPN clients") -- disabled by default there too:
+		#   ip saddr 0.0.0.0/0 oifname $VPS_IFACE snat ip to $VPS_ADDR
+
+		jump gre_snat                                            # live GRE-tunnel-per-public-IP SNAT pairs
+	}
+
+	# --- shorewall4/mangle (DSCP destination classification) ----------------
+	chain mangle_post {
+		type filter hook postrouting priority mangle; policy accept;
+		jump dscp_mark
+	}
+
+	# --- shorewall.conf DONT_LOAD/AUTOHELPERS (SIP ALG) ---------------------
+	# ct helper assignment must happen before conntrack builds state, i.e. at
+	# raw priority -- both directions (prerouting for inbound SIP signalling,
+	# output for the box's own outbound SIP) to match the old conntrack
+	# file's "PO" (PREROUTING+OUTPUT) position marker.
+	chain raw_prerouting {
+		type filter hook prerouting priority raw; policy accept;
+		jump ct_helpers
+	}
+
+	chain raw_output {
+		type filter hook output priority raw; policy accept;
+		jump ct_helpers
+	}
+}

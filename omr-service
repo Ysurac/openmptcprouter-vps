@@ -3,7 +3,10 @@
 
 _multipath() {
 	# Force multipath status
-	source /etc/shorewall/params.net
+	# NET_IFACE used to come from Shorewall's params.net; derived directly
+	# from the default route now that Shorewall is gone (matches
+	# omradmin.py's own _detect_default_iface()).
+	NET_IFACE="$(ip -4 route show default 2>/dev/null | awk '{for(i=1;i<=NF;i++) if ($i=="dev"){print $(i+1); exit}}')"
 	for intf in `ls -1 /sys/class/net`; do
 		if [ "$intf" != "bonding_masters" ]; then
 			if ([ "$(ip a show dev lo | grep -v inet6 | grep global)" != "" ] && [ "$intf" = "lo" ]) || ([ "$intf" = "$NET_IFACE" ] && [ "$(ip a show dev lo | grep -v inet6 | grep global)" = "" ]); then
@@ -126,6 +129,15 @@ _wireguard() {
 	fi
 }
 
+_mqvpn() {
+	if systemctl list-unit-files mqvpn.service >/dev/null; then
+		[ -z "$(pgrep mqvpn)" ] && {
+			logger -t "OMR-Service" "mqvpn not detected, restart MQVPN"
+			systemctl restart mqvpn
+		}
+	fi
+}
+
 
 _omr_api() {
 	[ -z "$(pgrep curl)" ] && [ -z "$(curl -s -k -m 30 https://127.0.0.1:65500/)" ] && {
@@ -157,7 +169,10 @@ _lan_route() {
 }
 
 _gre_tunnels() {
-	. "$(readlink -f "/etc/shorewall/params.vpn")"
+	# OMR_ADDR used to come from Shorewall's params.vpn; read directly from
+	# the same omr-admin-config.json field omradmin.py's nft engine now
+	# treats as the source of truth (see _render_fw_ports there).
+	OMR_ADDR="$(jq -r '.users[0].openmptcprouter.vpnremoteip // empty' /etc/openmptcprouter-vps-admin/omr-admin-config.json)"
 	if [ -n "$OMR_ADDR" ]; then
 		for intf in /etc/openmptcprouter-vps-admin/intf/*; do
 			if [ -f "$intf" ]; then
@@ -234,6 +249,7 @@ while true; do
 	_dsvpn
 	_softethervpn
 	_wireguard
+	_mqvpn
 	_multipath
 	_omr_api
 	[ "$lan_routes" != "false" ] && _lan_route

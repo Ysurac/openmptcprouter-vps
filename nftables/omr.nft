@@ -31,6 +31,22 @@
 # synced yet, no ports opened yet, no GRE tunnels provisioned yet, SIP ALG
 # left to whatever AUTOHELPERS defaulted to).
 #
+# Two more chains exist for the admin's own custom rules (e.g. a service
+# running directly on the VPS, not behind a tunnel) -- omradmin.py never
+# touches either one, and they're populated only via /etc/nftables/custom.d/
+# (see ../nftables.conf), so they survive both `omr-admin` restarts and
+# installer updates:
+#   custom_dnat_bypass -- matched here short-circuits nat_prerouting (`accept`
+#                          in a nat chain just means "no NAT", a terminal
+#                          verdict for that hook) *before* user_dnat runs, so
+#                          e.g. a per-user DNAT redirect or the bulk
+#                          1-64999->router toggle can never steal a port a
+#                          VPS-hosted service needs -- no need to touch that
+#                          user's fw_ports/omr-admin-config.json to free it.
+#   custom_accept      -- ACCEPT-type rules for such services, same shape as
+#                          user_accept but never flushed/rebuilt by omradmin.
+# Together these are what turns "add an ACCEPT rule and remove the
+# conflicting DNAT entry" into "drop one file" -- see issue #4356.
 table inet omr {
 	chain user_accept {}
 	chain user_dnat {}
@@ -39,6 +55,8 @@ table inet omr {
 	chain dscp_mark {}
 	chain ct_helpers {}
 	chain install_tmp {}
+	chain custom_dnat_bypass {}
+	chain custom_accept {}
 
 	# --- shorewall4/6 zones + interfaces + policy -------------------------
 	# zones: fw (this box) / net ($NET_IFACE, the WAN) / vpn (tunnel ifaces
@@ -69,6 +87,7 @@ table inet omr {
 
 		jump install_tmp                                        # one-off installer-owned temporary access (e.g. ACME challenge)
 		jump user_accept                                        # live per-user opened ports
+		jump custom_accept                                      # admin-owned, from /etc/nftables/custom.d/ -- never touched by omr-admin
 
 		reject with icmpx type port-unreachable                 # policy: net all DROP + trailing all all REJECT
 	}
@@ -109,6 +128,7 @@ table inet omr {
 	# names -- hence nat_prerouting/nat_postrouting below.)
 	chain nat_prerouting {
 		type nat hook prerouting priority dstnat; policy accept;
+		jump custom_dnat_bypass                                 # admin-owned escape hatch, checked first -- a match here `accept`s (i.e. skips NAT) and never reaches user_dnat below
 		jump user_dnat
 		# Bulk "redirect ports 1-64999 to the router" toggle -- disabled by
 		# default here, exactly like shorewall4/rules ships it commented

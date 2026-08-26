@@ -1,3 +1,10 @@
+omr-server (0.1069) unstable; urgency=medium
+
+    * Add /etc/nftables/custom.d/ drop-in dir for admin firewall rules, persistent across updates (closes #4356)
+    * Add custom_accept/custom_dnat_bypass nftables chains so a VPS-hosted service's port can be opened and excluded from omr-admin's DNAT redirects with a single rule file, no omr-admin-config.json edit needed
+
+ -- OpenMPTCProuter <contact@openmptcprouter.com>  Wed, 26 Aug 2026 00:00:00 +0200
+
 omr-server (0.1068) unstable; urgency=medium
 
     * Replace Shorewall/Shorewall6 with a native nftables firewall (nftables.conf, nftables/omr.nft, nftables/omr-vars.nft)

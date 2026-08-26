@@ -115,7 +115,7 @@ VPSURL="https://www.openmptcprouter.com/"
 REPO="repo.openmptcprouter.com"
 CHINA=${CHINA:-no}
 
-OMR_VERSION="0.1068-rolling-test"
+OMR_VERSION="0.1069-rolling-test"
 
 DIR=$( pwd )
 #"
@@ -2389,6 +2389,10 @@ sed -i 's:Port 22:Port 65222:g' /etc/ssh/sshd_config
 # Install and configure the firewall using native nftables
 apt-get -y install nftables
 mkdir -p /etc/nftables
+# Drop-in dir for the admin's own rules (see nftables.conf/nftables/omr.nft) --
+# only ever created here, never written to or emptied, so anything already
+# there survives every re-run of this installer, including on update.
+mkdir -p /etc/nftables/custom.d
 if [ "$LOCALFILES" = "no" ]; then
 	wget -O /etc/nftables.conf ${VPSURL}${VPSPATH}/nftables.conf
 	wget -O /etc/nftables/omr-vars.nft ${VPSURL}${VPSPATH}/nftables/omr-vars.nft

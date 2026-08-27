@@ -25,16 +25,23 @@ _multipath() {
 _glorytun_udp() {
 	#if [ -n "$(systemctl -a | grep 'glorytun-udp')" ]; then
 	if systemctl list-unit-files glorytun-udp@.service >/dev/null; then
-		[ -z "$(glorytun show dev gt-udp-tun0 2>/dev/null | grep tunnel)" ] && {
-			logger -t "OMR-Service" "Restart Glorytun-UDP"
-			systemctl -q restart 'glorytun-udp@*'
-			sleep 10
-		}
-		if [ -z "$(pgrep post.sh)" ]; then
-			for intf in /etc/glorytun-udp/tun*; do
-				[ "$(echo $intf | grep key)" = "" ] && /etc/glorytun-udp/post.sh ${intf} &
-			done
-			#ip link set mtu 9000 dev gt-udp-tun0 >/dev/null 2>&1
+		# The unit template being installed doesn't mean any user actually
+		# selected Glorytun-UDP (the install script sets it up unconditionally).
+		# Only chase a missing tunnel when it's the currently active VPN,
+		# same gating _glorytun_tcp()/_dsvpn() use, to avoid restarting an
+		# unused tunnel in a loop (https://github.com/Ysurac/openmptcprouter-vps/issues/131).
+		if [ -f /etc/openmptcprouter-vps-admin/current-vpn ] && [ "$(cat /etc/openmptcprouter-vps-admin/current-vpn)" = "glorytun_udp" ]; then
+			[ -z "$(glorytun show dev gt-udp-tun0 2>/dev/null | grep tunnel)" ] && {
+				logger -t "OMR-Service" "Restart Glorytun-UDP"
+				systemctl -q restart 'glorytun-udp@*'
+				sleep 10
+			}
+			if [ -z "$(pgrep post.sh)" ]; then
+				for intf in /etc/glorytun-udp/tun*; do
+					[ "$(echo $intf | grep key)" = "" ] && /etc/glorytun-udp/post.sh ${intf} &
+				done
+				#ip link set mtu 9000 dev gt-udp-tun0 >/dev/null 2>&1
+			fi
 		fi
 	fi
 }

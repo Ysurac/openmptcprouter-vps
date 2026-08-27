@@ -1,3 +1,10 @@
+omr-server (0.1070) unstable; urgency=medium
+
+    * Fix omr-service restarting Glorytun-UDP in a loop when no user has it selected as their active VPN (closes #131)
+    * Harden secret-bearing config/key files (omr-admin-config.json, xray-server.json, shadowsocks-libev/shadowsocks-go configs, glorytun tun0.key) to root:root 0600 after every rewrite instead of leaving them at umask-default 0644 (closes #132)
+
+ -- OpenMPTCProuter <contact@openmptcprouter.com>  Thu, 27 Aug 2026 00:00:00 +0200
+
 omr-server (0.1069) unstable; urgency=medium
 
     * Add /etc/nftables/custom.d/ drop-in dir for admin firewall rules, persistent across updates (closes #4356)

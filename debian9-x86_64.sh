@@ -115,7 +115,7 @@ VPSURL="https://www.openmptcprouter.com/"
 REPO="repo.openmptcprouter.com"
 CHINA=${CHINA:-no}
 
-OMR_VERSION="0.1069-rolling-test"
+OMR_VERSION="0.1070-rolling-test"
 
 DIR=$( pwd )
 #"
@@ -123,7 +123,16 @@ set -e
 umask 0022
 export LC_ALL=C
 export PATH=$PATH:/sbin
-export DEBIAN_FRONTEND=noninteractive 
+export DEBIAN_FRONTEND=noninteractive
+
+harden_secret_files() {
+	for f in "$@"; do
+		if [ -e "$f" ]; then
+			chown root:root "$f" 2>/dev/null || true
+			chmod 0600 "$f" 2>/dev/null || true
+		fi
+	done
+}
 
 echo "Check user..."
 if [ "$(id -u)" -ne 0 ]; then echo 'Please run as root.' >&2; exit 1; fi
@@ -2071,6 +2080,7 @@ if [ "$GLORYTUN_UDP" = "yes" ]; then
 		elif [ ! -f /etc/glorytun-udp/tun0.key ] && [ -f /etc/glorytun-tcp/tun0.key ]; then
 			cp /etc/glorytun-tcp/tun0.key /etc/glorytun-udp/tun0.key
 		fi
+		harden_secret_files /etc/glorytun-udp/tun0.key
 		systemctl enable glorytun-udp@tun0.service
 		systemctl enable systemd-networkd.service
 		cd /tmp
@@ -2219,6 +2229,7 @@ if [ "$GLORYTUN_TCP" = "yes" ]; then
 		if [ "$update" = "0" ]; then
 			echo "$GLORYTUN_PASS" > /etc/glorytun-tcp/tun0.key
 		fi
+		harden_secret_files /etc/glorytun-tcp/tun0.key
 		systemctl enable glorytun-tcp@tun0.service
 		#systemctl enable systemd-networkd.service
 		cd /tmp
@@ -2311,6 +2322,19 @@ if [ "$SOFTETHERVPN" = "yes" ]; then
 	$softetherhubrun PortsUDPSet 0
 	set -e
 fi
+
+# Post-install permission sweep: every secret-bearing config/key file the
+# script above may have created or rewritten gets re-hardened to root:root
+# 0600 here as a final safety net, regardless of which features were
+# enabled. See https://github.com/Ysurac/openmptcprouter-vps/issues/132
+harden_secret_files \
+	/etc/openmptcprouter-vps-admin/omr-admin-config.json \
+	/etc/xray/xray-server.json \
+	/etc/shadowsocks-libev/manager.json \
+	/etc/shadowsocks-go/server.json \
+	/etc/shadowsocks-go/upsks.json \
+	/etc/glorytun-tcp/tun0.key \
+	/etc/glorytun-udp/tun0.key
 
 # Load tun module at boot time
 if ! grep -q tun /etc/modules ; then

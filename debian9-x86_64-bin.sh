@@ -44,8 +44,6 @@ rm -f /etc/kernel-img.conf
 echo "Install all"
 DEBIAN_FRONTEND=noninteractive apt-get -y -o Dpkg::Options::="--force-overwrite" -o Dpkg::Options::="--force-confdef" -o Dpkg::Options::="--force-confold" install omr-vps
 
-systemctl -q enable shorewall
-systemctl -q enable shorewall6
 
 # Change SSH port to 65222
 sed -i 's:#Port 22:Port 65222:g' /etc/ssh/sshd_config

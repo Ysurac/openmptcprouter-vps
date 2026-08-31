@@ -1,0 +1,54 @@
+#!/bin/sh
+
+set -e
+
+if [ ! -f "$2" ]; then
+        echo "usage: $(basename "$0") start FILE"
+        exit 0
+fi
+
+. "$(readlink -f "$2")"
+
+DEV="vx-$(basename "$2")"
+PORT=${PORT:-4789}
+
+MODE=${MODE:-l3}
+SYSFS_NET=${SYSFS_NET:-/sys/class/net}
+
+if [ "$1" = "start" ]; then
+        if [ -n "$(ip link show ${DEV} 2>/dev/null)" ]; then
+                ip link del ${DEV} 2>&1 >/dev/null
+        fi
+        ip link add ${DEV} type vxlan id ${VNI} local ${LOCALIP} remote ${REMOTEIP} dstport ${PORT}
+        if [ "${MODE}" = "l2" ]; then
+                # L2: no address on the raw device, it only ever switches frames
+                # for whichever bridge it joins (usually shared by every client on
+                # the same VNI, so their LANs merge into one broadcast domain)
+                if [ -n "${BRIDGE}" ]; then
+                        if [ ! -d "${SYSFS_NET}/${BRIDGE}" ]; then
+                                ip link add ${BRIDGE} type bridge
+                        fi
+                        ip link set ${BRIDGE} up
+                        ip link set ${DEV} master ${BRIDGE}
+                fi
+        else
+                if [ -n "${LOCALTUNIP}" ]; then
+                        ip addr add ${LOCALTUNIP} dev ${DEV}
+                fi
+                if [ -n "${LOCALTUNIP6}" ]; then
+                        ip -6 addr add ${LOCALTUNIP6} dev ${DEV}
+                fi
+        fi
+        if [ -n "${MTU}" ]; then
+                ip link set mtu ${MTU} dev ${DEV}
+        fi
+        ip link set ${DEV} up
+fi
+if [ "$1" = "stop" ]; then
+        ip link del ${DEV}
+        # Drop the shared bridge once its last VXLAN port is gone; harmless if
+        # another user's device is still enslaved to it (brif stays non-empty)
+        if [ -n "${BRIDGE}" ] && [ -d "${SYSFS_NET}/${BRIDGE}/brif" ] && [ -z "$(ls ${SYSFS_NET}/${BRIDGE}/brif 2>/dev/null)" ]; then
+                ip link del ${BRIDGE}
+        fi
+fi

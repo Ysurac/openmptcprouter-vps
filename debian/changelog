@@ -1,3 +1,79 @@
+omr-server (0.1071) unstable; urgency=medium
+
+    * Update omr-admin to 0.18+20260831 (fix /mptcp BPF scheduler setting, add vpn_list and proxy_list endpoints)
+
+ -- OpenMPTCProuter <contact@openmptcprouter.com>  Mon, 31 Aug 2026 00:00:00 +0200
+
+omr-server (0.1070) unstable; urgency=medium
+
+    * Fix omr-service restarting Glorytun-UDP in a loop when no user has it selected as their active VPN (closes #131)
+    * Harden secret-bearing config/key files (omr-admin-config.json, xray-server.json, shadowsocks-libev/shadowsocks-go configs, glorytun tun0.key) to root:root 0600 after every rewrite instead of leaving them at umask-default 0644 (closes #132)
+
+ -- OpenMPTCProuter <contact@openmptcprouter.com>  Thu, 27 Aug 2026 00:00:00 +0200
+
+omr-server (0.1069) unstable; urgency=medium
+
+    * Add /etc/nftables/custom.d/ drop-in dir for admin firewall rules, persistent across updates (closes #4356)
+    * Add custom_accept/custom_dnat_bypass nftables chains so a VPS-hosted service's port can be opened and excluded from omr-admin's DNAT redirects with a single rule file, no omr-admin-config.json edit needed
+
+ -- OpenMPTCProuter <contact@openmptcprouter.com>  Wed, 26 Aug 2026 00:00:00 +0200
+
+omr-server (0.1068) unstable; urgency=medium
+
+    * Replace Shorewall/Shorewall6 with a native nftables firewall (nftables.conf, nftables/omr.nft, nftables/omr-vars.nft)
+    * Add omr-service watchdog check and restart for MQVPN
+    * Update omr-admin to 0.18+20260824
+    * Update fail2ban banaction from shorewall to nftables-multiport
+
+ -- OpenMPTCProuter <contact@openmptcprouter.com>  Mon, 24 Aug 2026 00:00:00 +0200
+
+omr-server (0.1067) unstable; urgency=medium
+
+    * Update omr-admin to 0.18+20260813 (MPTCP and mqvpn weight/DSCP support)
+    * Update mqvpn to 0.16.0
+    * Add MPTCP BPF DSCP and weight schedulers for kernel 6.18, with scheduler manager scripts
+    * Add fail2ban filter and jail for omr-admin API (brute-force login protection)
+    * Add fail2ban filters and jails for Xray, V2Ray and Shadowsocks-Go
+    * Fix omr-vps-admin fallback download using wrong package filename (was 404, aborted install)
+    * Fix fail2ban not restarted after config update, left inactive until reboot
+
+ -- OpenMPTCProuter <contact@openmptcprouter.com>  Thu, 13 Aug 2026 00:00:00 +0200
+
+omr-server (0.1066) unstable; urgency=medium
+
+    * Add VXLAN support with L2 bridging mode (omr-vxlan-run)
+    * Update omr-admin to 0.18+20260803
+    * Update mqvpn to 0.14.1
+    * Update xray to 26.7.11
+    * Update kernel 6.18, fix arm64 kernel build
+    * Fix libevent issue with mqvpn on arm
+    * Fix shadowsocks-libev on arm64
+    * Fix workaround for packages not in repo
+
+ -- OpenMPTCProuter <contact@openmptcprouter.com>  Mon, 03 Aug 2026 00:00:00 +0200
+
+omr-server (0.1060) unstable; urgency=medium
+
+    * Update omr-admin to 0.18+20260610
+    * Update xray to 26.3.27
+    * Update mqvpn to 0.7.0
+    * Add OMR_METRICS and OMR_AI options
+    * Add MPTCP_BPF support
+    * Disable bpftune by default
+    * Remove version pin for omr-vps-admin debian package
+
+ -- OpenMPTCProuter <contact@openmptcprouter.com>  Wed, 11 Jun 2026 00:00:00 +0200
+
+omr-server (0.1059) unstable; urgency=medium
+
+    * Skip kernel installation when running inside a container
+    * Add fallback to direct .deb download when package version not available in repo for: omr-vps-admin, shadowsocks-go, v2ray, xray, omr-mlvpn, mqvpn, omr-glorytun, omr-dsvpn, omr-glorytun-tcp
+    * Update kernel 6.18 to 6.18.32
+    * Update omr-admin
+    * Fix kernel package name
+
+ -- OpenMPTCProuter <contact@openmptcprouter.com>  Wed, 21 May 2026 00:00:00 +0200
+
 omr-server (0.1030) unstable; urgency=medium
 
     * Many changes

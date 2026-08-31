@@ -3,7 +3,10 @@
 
 _multipath() {
 	# Force multipath status
-	source /etc/shorewall/params.net
+	# NET_IFACE used to come from Shorewall's params.net; derived directly
+	# from the default route now that Shorewall is gone (matches
+	# omradmin.py's own _detect_default_iface()).
+	NET_IFACE="$(ip -4 route show default 2>/dev/null | awk '{for(i=1;i<=NF;i++) if ($i=="dev"){print $(i+1); exit}}')"
 	for intf in `ls -1 /sys/class/net`; do
 		if [ "$intf" != "bonding_masters" ]; then
 			if ([ "$(ip a show dev lo | grep -v inet6 | grep global)" != "" ] && [ "$intf" = "lo" ]) || ([ "$intf" = "$NET_IFACE" ] && [ "$(ip a show dev lo | grep -v inet6 | grep global)" = "" ]); then
@@ -22,16 +25,23 @@ _multipath() {
 _glorytun_udp() {
 	#if [ -n "$(systemctl -a | grep 'glorytun-udp')" ]; then
 	if systemctl list-unit-files glorytun-udp@.service >/dev/null; then
-		[ -z "$(glorytun show dev gt-udp-tun0 2>/dev/null | grep tunnel)" ] && {
-			logger -t "OMR-Service" "Restart Glorytun-UDP"
-			systemctl -q restart 'glorytun-udp@*'
-			sleep 10
-		}
-		if [ -z "$(pgrep post.sh)" ]; then
-			for intf in /etc/glorytun-udp/tun*; do
-				[ "$(echo $intf | grep key)" = "" ] && /etc/glorytun-udp/post.sh ${intf} &
-			done
-			#ip link set mtu 9000 dev gt-udp-tun0 >/dev/null 2>&1
+		# The unit template being installed doesn't mean any user actually
+		# selected Glorytun-UDP (the install script sets it up unconditionally).
+		# Only chase a missing tunnel when it's the currently active VPN,
+		# same gating _glorytun_tcp()/_dsvpn() use, to avoid restarting an
+		# unused tunnel in a loop (https://github.com/Ysurac/openmptcprouter-vps/issues/131).
+		if [ -f /etc/openmptcprouter-vps-admin/current-vpn ] && [ "$(cat /etc/openmptcprouter-vps-admin/current-vpn)" = "glorytun_udp" ]; then
+			[ -z "$(glorytun show dev gt-udp-tun0 2>/dev/null | grep tunnel)" ] && {
+				logger -t "OMR-Service" "Restart Glorytun-UDP"
+				systemctl -q restart 'glorytun-udp@*'
+				sleep 10
+			}
+			if [ -z "$(pgrep post.sh)" ]; then
+				for intf in /etc/glorytun-udp/tun*; do
+					[ "$(echo $intf | grep key)" = "" ] && /etc/glorytun-udp/post.sh ${intf} &
+				done
+				#ip link set mtu 9000 dev gt-udp-tun0 >/dev/null 2>&1
+			fi
 		fi
 	fi
 }
@@ -94,7 +104,7 @@ _shadowsocks() {
 _shadowsocks_go() {
 	if systemctl list-unit-files shadowsocks-go.service >/dev/null; then
 		[ -z "$(pgrep shadowsocks-go)" ] && {
-			logger -t "OMR-Service" "ss-server not detected, restart Shadowsocks go"
+			logger -t "OMR-Service" "shadowsocks-go not detected, restart Shadowsocks go"
 			systemctl restart shadowsocks-go
 		}
 	fi
@@ -112,7 +122,7 @@ _xray() {
 _v2ray() {
 	if systemctl list-unit-files v2ray.service >/dev/null; then
 		[ -z "$(pgrep v2ray)" ] && {
-			logger -t "OMR-Service" "ss-server not detected, restart V2Ray"
+			logger -t "OMR-Service" "v2ray not detected, restart V2Ray"
 			systemctl restart v2ray
 		}
 	fi
@@ -123,6 +133,15 @@ _wireguard() {
 	if systemctl list-unit-files wg-quick@.service >/dev/null; then
 		[ -z "$(ip a show dev wg0 | grep '10.255.247.1')" ] && ip a add 10.255.247.1/24 dev wg0 >/dev/null 2>&1
 		[ -z "$(ip a show dev client-wg0 | grep '10.255.246.1')" ] && ip a add 10.255.246.1/24 dev client-wg0 >/dev/null 2>&1
+	fi
+}
+
+_mqvpn() {
+	if systemctl list-unit-files mqvpn.service >/dev/null; then
+		[ -z "$(pgrep mqvpn)" ] && {
+			logger -t "OMR-Service" "mqvpn not detected, restart MQVPN"
+			systemctl restart mqvpn
+		}
 	fi
 }
 
@@ -157,7 +176,10 @@ _lan_route() {
 }
 
 _gre_tunnels() {
-	. "$(readlink -f "/etc/shorewall/params.vpn")"
+	# OMR_ADDR used to come from Shorewall's params.vpn; read directly from
+	# the same omr-admin-config.json field omradmin.py's nft engine now
+	# treats as the source of truth (see _render_fw_ports there).
+	OMR_ADDR="$(jq -r '.users[0].openmptcprouter.vpnremoteip // empty' /etc/openmptcprouter-vps-admin/omr-admin-config.json)"
 	if [ -n "$OMR_ADDR" ]; then
 		for intf in /etc/openmptcprouter-vps-admin/intf/*; do
 			if [ -f "$intf" ]; then
@@ -234,6 +256,7 @@ while true; do
 	_dsvpn
 	_softethervpn
 	_wireguard
+	_mqvpn
 	_multipath
 	_omr_api
 	[ "$lan_routes" != "false" ] && _lan_route

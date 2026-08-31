@@ -1,0 +1,24 @@
+[Unit]
+Description=mqvpn VPN Server
+After=network-online.target
+Wants=network-online.target
+Documentation=https://github.com/mp0rta/mqvpn
+StartLimitIntervalSec=60
+StartLimitBurst=3
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/mqvpn --config /etc/mqvpn/server.json
+Restart=on-failure
+RestartSec=5
+
+# Security hardening
+ProtectHome=true
+ProtectSystem=strict
+PrivateTmp=true
+ReadOnlyPaths=/etc/mqvpn
+ReadWritePaths=/dev/net/tun
+RuntimeDirectory=mqvpn
+
+[Install]
+WantedBy=multi-user.target

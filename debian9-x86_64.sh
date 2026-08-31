@@ -637,8 +637,8 @@ elif [ "$KERNEL" = "6.18" ] && [ "$ARCH" = "amd64" ]; then
 	if [ "$PSABI" = "x64v4" ]; then
 		PSABI="x64v3"
 	fi
-	KERNEL_VERSION="6.18.6"
-	KERNEL_REV="0~20260119.g84d30e6"
+	KERNEL_VERSION="6.18.31"
+	KERNEL_REV="0~20260516.g54defdf"
 	if [ "$CHINA" = "yes" ]; then
 		wget -O /tmp/linux-image-${KERNEL_VERSION}-${PSABI}-xanmod1_${KERNEL_VERSION}-${PSABI}-xanmod1-${KERNEL_REV}_amd64.deb https://sourceforge.net/projects/xanmod/files/releases/lts/${KERNEL_VERSION}-xanmod1/${KERNEL_VERSION}-${PSABI}-xanmod1/linux-image-${KERNEL_VERSION}-${PSABI}-xanmod1_${KERNEL_VERSION}-${PSABI}-xanmod1-${KERNEL_REV}_amd64.deb
 		wget -O /tmp/linux-headers-${KERNEL_VERSION}-${PSABI}-xanmod1_${KERNEL_VERSION}-${PSABI}-xanmod1-${KERNEL_REV}_amd64.deb https://sourceforge.net/projects/xanmod/files/releases/lts/${KERNEL_VERSION}-xanmod1/${KERNEL_VERSION}-${PSABI}-xanmod1/linux-headers-${KERNEL_VERSION}-${PSABI}-xanmod1_${KERNEL_VERSION}-${PSABI}-xanmod1-${KERNEL_REV}_amd64.deb
@@ -2240,11 +2240,11 @@ else
 	cp ${DIR}/shorewall4/policy /etc/shorewall/policy
 	cp ${DIR}/shorewall4/params /etc/shorewall/params
 	cp ${DIR}/shorewall4/zones /etc/shorewall/zones
-	#cp ${DIR}/shorewall4/params.vpn /etc/shorewall/params.vpn
-	#cp ${DIR}/shorewall4/params.net /etc/shorewall/params.net
+	[ ! -f /etc/shorewall/params.vpn ] && cp ${DIR}/shorewall4/params.vpn /etc/shorewall/params.vpn
+	[ ! -f /etc/shorewall/params.net ] && cp ${DIR}/shorewall4/params.net /etc/shorewall/params.net
 	cp ${DIR}/shorewall6/params /etc/shorewall6/params
-	#cp ${DIR}/shorewall6/params.net /etc/shorewall6/params.net
-	#cp ${DIR}/shorewall6/params.vpn /etc/shorewall6/params.vpn
+	[ ! -f /etc/shorewall6/params.net ] && cp ${DIR}/shorewall6/params.net /etc/shorewall6/params.net
+	[ ! -f /etc/shorewall6/params.vpn ] && cp ${DIR}/shorewall6/params.vpn /etc/shorewall6/params.vpn
 	cp ${DIR}/shorewall6/interfaces /etc/shorewall6/interfaces
 	cp ${DIR}/shorewall6/stoppedrules /etc/shorewall6/stoppedrules
 	cp ${DIR}/shorewall6/snat /etc/shorewall6/snat

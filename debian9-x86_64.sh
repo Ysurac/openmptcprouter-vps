@@ -1821,9 +1821,11 @@ if [ "$MQVPN" = "yes" ]; then
 		rm -f /tmp/libmqvpn0_${MQVPN_VERSION}_arm64.deb
 	fi
 	mkdir -p /etc/mqvpn
+	MQVPN_USERS=""
 	if [ -f /etc/mqvpn/server.json ]; then
 		MQVPN_KEY2=$(grep -Po '"key"\s*:\s*"\K([^"]*)' /etc/mqvpn/server.json | head -n 1 | tr -d "\n")
 		[ -n "$MQVPN_KEY2" ] && [ "$MQVPN_KEY2" != "PSK" ] && [ "$MQVPN_KEY2" != "null" ] && MQVPN_KEY="$MQVPN_KEY2"
+		MQVPN_USERS=$(jq -c '.users // empty' /etc/mqvpn/server.json 2>/dev/null)
 	fi
 	if [ "$LOCALFILES" = "no" ]; then
 		wget -O /etc/mqvpn/server.json ${VPSURL}${VPSPATH}/mqvpn-server.json
@@ -1833,6 +1835,9 @@ if [ "$MQVPN" = "yes" ]; then
 		cp ${DIR}/mqvpn-server.service /lib/systemd/system/mqvpn.service
 	fi
 	sed -i "s:PSK:$MQVPN_KEY:g" /etc/mqvpn/server.json
+	if [ -n "$MQVPN_USERS" ] && [ "$MQVPN_USERS" != "null" ] && [ "$MQVPN_USERS" != "[]" ]; then
+		jq --argjson users "$MQVPN_USERS" '.users = ($users + [.users[] | select(.name as $n | ($users | map(.name) | index($n)) == null)])' /etc/mqvpn/server.json > /etc/mqvpn/server.json.tmp && mv /etc/mqvpn/server.json.tmp /etc/mqvpn/server.json
+	fi
 	if [ ! -f /etc/mqvpn/server.key ]; then
 		openssl req -new -newkey rsa:2048 -days 3650 -nodes -x509 -keyout /etc/mqvpn/server.key -out /etc/mqvpn/server.crt -subj "/C=US/ST=Oregon/L=Portland/O=OpenMPTCProuterVPS/OU=Org/CN=www.openmptcprouter.vps"
 	fi

@@ -115,7 +115,7 @@ VPSURL="https://www.openmptcprouter.com/"
 REPO="repo.openmptcprouter.com"
 CHINA=${CHINA:-no}
 
-OMR_VERSION="0.1071-rolling-test"
+OMR_VERSION="0.1072-rolling-test"
 
 DIR=$( pwd )
 #"
@@ -2431,6 +2431,8 @@ if [ "$(ip r | awk '/default/&&/src/ {print $7}')" != "" ] && [ "$(ip r | awk '/
 	sed -i "s/masquerade/snat ip to $(ip r | awk '/default/&&/src/ {print $7}')/" /etc/nftables/omr.nft
 fi
 systemctl mask --now shorewall shorewall6 >/dev/null 2>&1 || true
+command -v ufw >/dev/null 2>&1 && ufw --force disable >/dev/null 2>&1 || true
+systemctl mask --now ufw firewalld >/dev/null 2>&1 || true
 systemctl enable --now nftables
 [ -z "$(grep nf_conntrack_sip /etc/modprobe.d/blacklist.conf)" ] && echo 'blacklist nf_conntrack_sip' >> /etc/modprobe.d/blacklist.conf
 if [ "$ID" = "debian" ] && [ "$VERSION_ID" = "10" ]; then

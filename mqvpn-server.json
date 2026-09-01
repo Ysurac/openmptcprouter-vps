@@ -11,6 +11,5 @@
   ],
   "max_clients": 64,
   "scheduler": "minrtt",
-  "control_port": 9090,
-  "control_addr": "127.0.0.1"
+  "control_listen": "127.0.0.1:9090"
 }

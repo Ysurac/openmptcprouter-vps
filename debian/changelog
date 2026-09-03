@@ -1,3 +1,9 @@
+omr-server (0.1075) unstable; urgency=medium
+
+    * Order omr-admin.service after nftables.service and install an nftables.service.d drop-in (nftables/omr-admin-resync.conf) whose ExecStartPost/ExecReload try-restart omr-admin, so any start, restart or reload of nftables (each re-runs /etc/nftables.conf, which begins with `flush ruleset` and thereby empties omr-admin's user_accept/user_dnat/gre_snat/dscp_mark/ct_helpers chains) makes omr-admin's startup resync repopulate the chains from omr-admin-config.json; previously only this installer's update path did that, and the router can't repair the chains itself since /shorewalllist is rendered from omr-admin's persisted state, not the live ruleset
+
+ -- OpenMPTCProuter <contact@openmptcprouter.com>  Thu, 03 Sep 2026 00:00:00 +0200
+
 omr-server (0.1074) unstable; urgency=medium
 
     * Enable kernel IP forwarding (IPv4+IPv6) via /etc/sysctl.d/90-omr-forwarding.conf: Shorewall used to turn it on itself (IP_FORWARDING=On) and the nftables migration lost that, silently dropping all VPN-forwarded client traffic (https://github.com/Ysurac/openmptcprouter/issues/4363)

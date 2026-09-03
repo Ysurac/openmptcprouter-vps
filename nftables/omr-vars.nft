@@ -3,17 +3,9 @@
 # shorewall6/params.net + params.vpn, merged into one file since a single
 # `inet` table serves both address families (no more separate v4/v6 stacks).
 #
-# NET_IFACE is replaced at install time exactly like shorewall4/6's own
-# `eth0` placeholder -- see debian9-x86_64.sh's
-#   sed -i "s:eth0:$INTERFACE:g" /etc/shorewall/*
-# (a matching line for this file should be added wherever that one lives).
-#
 # OMR_ADDR / OMR_ADDR6 / VPS_ADDR / VPS_IFACE are rewritten at runtime by
 # omr-vps-admin's /vpnips endpoint whenever the router (re)announces its
-# tunnel IPs -- these starting values just mirror shorewall4/6's own
-# defaults (params.vpn: VPS_ADDR=10.255.252.1, OMR_ADDR=10.255.252.2;
-# OMR_ADDR6 mirrors omradmin.py's per-user ULA synthesis for userid 0,
-# fd00::a0<hex(userid)>:2).
+# tunnel IPs.
 #
 define NET_IFACE = eth0
 define VPS_IFACE  = tun0

@@ -1,3 +1,11 @@
+omr-server (0.1074) unstable; urgency=medium
+
+    * Enable kernel IP forwarding (IPv4+IPv6) via /etc/sysctl.d/90-omr-forwarding.conf: Shorewall used to turn it on itself (IP_FORWARDING=On) and the nftables migration lost that, silently dropping all VPN-forwarded client traffic (https://github.com/Ysurac/openmptcprouter/issues/4363)
+    * Restore the IPv6 masquerade for client ULA/link-local sources (shorewall6/snat equivalent) missing from the nftables ruleset
+    * Fix the static-IP SNAT optimization in the installer: extract the source IP by walking the default route's fields instead of taking field 7, which emitted "snat ip to static" on "proto static" routes and made the whole nftables.conf fail to load; scope the substitution to the IPv4 masquerade line
+
+ -- OpenMPTCProuter <contact@openmptcprouter.com>  Thu, 03 Sep 2026 00:00:00 +0200
+
 omr-server (0.1073) unstable; urgency=medium
 
     * Update omr-admin to 0.18+20260902: fix the SIP ALG nftables sync on fresh installs (https://github.com/Ysurac/openmptcprouter/issues/4361) -- load nf_conntrack_sip explicitly when enabling SIP ALG (the installer's modprobe blacklist also blocked the ct helper object's module autoload), only flush the ct_helpers chain on disable instead of first re-creating helper objects that could only fail on the shipped default, default sipalg to off in the startup resync to match the router's own default, and return an error from POST /sipalg instead of 200 OK when the helpers could not be applied

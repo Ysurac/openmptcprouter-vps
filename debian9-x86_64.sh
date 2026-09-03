@@ -91,8 +91,8 @@ MLVPN_BINARY_VERSION="3.0.0+20211028.git.ddafba3"
 UBOND_VERSION="31af0f69ebb6d07ed9348dca2fced33b956cedee"
 OBFS_VERSION="486bebd9208539058e57e23a12f23103016e09b4"
 OBFS_BINARY_VERSION="0.0.5-1"
-OMR_ADMIN_VERSION="36801892c4c7c94cda8e387ba58e3d690ec3bf74"
-OMR_ADMIN_BINARY_VERSION="0.18+20260902"
+OMR_ADMIN_VERSION="c5bfb1028d26bbd74ed35446f3e4c31cfd217057"
+OMR_ADMIN_BINARY_VERSION="0.18+20260903"
 DSVPN_VERSION="3b99d2ef6c02b2ef68b5784bec8adfdd55b29b1a"
 DSVPN_BINARY_VERSION="0.1.4-2"
 MQVPN_VERSION="0.16.0-1"
@@ -115,7 +115,7 @@ VPSURL="https://www.openmptcprouter.com/"
 REPO="repo.openmptcprouter.com"
 CHINA=${CHINA:-no}
 
-OMR_VERSION="0.1074"
+OMR_VERSION="0.1076"
 
 DIR=$( pwd )
 #"
@@ -2424,14 +2424,21 @@ mkdir -p /etc/nftables
 # only ever created here, never written to or emptied, so anything already
 # there survives every re-run of this installer, including on update.
 mkdir -p /etc/nftables/custom.d
+# Drop-in for the stock nftables.service: try-restarts omr-admin after every
+# nftables start/reload (both re-run `flush ruleset`), so it repopulates its
+# dynamic chains from omr-admin-config.json whoever reloaded the firewall,
+# not only this script's update path (see nftables/omr-admin-resync.conf).
+mkdir -p /etc/systemd/system/nftables.service.d
 if [ "$LOCALFILES" = "no" ]; then
 	wget -O /etc/nftables.conf ${VPSURL}${VPSPATH}/nftables.conf
 	wget -O /etc/nftables/omr-vars.nft ${VPSURL}${VPSPATH}/nftables/omr-vars.nft
 	wget -O /etc/nftables/omr.nft ${VPSURL}${VPSPATH}/nftables/omr.nft
+	wget -O /etc/systemd/system/nftables.service.d/omr-admin-resync.conf ${VPSURL}${VPSPATH}/nftables/omr-admin-resync.conf
 else
 	cp ${DIR}/nftables.conf /etc/nftables.conf
 	cp ${DIR}/nftables/omr-vars.nft /etc/nftables/omr-vars.nft
 	cp ${DIR}/nftables/omr.nft /etc/nftables/omr.nft
+	cp ${DIR}/nftables/omr-admin-resync.conf /etc/systemd/system/nftables.service.d/omr-admin-resync.conf
 fi
 [ -n "$INTERFACE" ] && sed -i "s:eth0:$INTERFACE:g" /etc/nftables/omr-vars.nft
 # Static-IP optimization: replace the IPv4 masquerade with an explicit SNAT to
@@ -2448,6 +2455,7 @@ fi
 systemctl mask --now shorewall shorewall6 >/dev/null 2>&1 || true
 command -v ufw >/dev/null 2>&1 && ufw --force disable >/dev/null 2>&1 || true
 systemctl mask --now ufw firewalld >/dev/null 2>&1 || true
+systemctl daemon-reload
 systemctl enable --now nftables
 cat > /etc/sysctl.d/90-omr-forwarding.conf <<-EOF
 	net.ipv4.ip_forward = 1

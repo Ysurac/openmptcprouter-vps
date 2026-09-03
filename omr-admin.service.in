@@ -1,6 +1,11 @@
 [Unit]
 Description=OMR-Admin
-After=network.target network-online.target
+# nftables.service loads the base ruleset whose dynamic chains omradmin.py's
+# _nft_resync_all() repopulates at startup. The companion drop-in
+# nftables/omr-admin-resync.conf (installed under nftables.service.d/)
+# restarts this unit after every nftables start/reload, since both re-run
+# `flush ruleset` (see docs/TECHNICAL.md).
+After=network.target network-online.target nftables.service
 
 [Service]
 Type=simple

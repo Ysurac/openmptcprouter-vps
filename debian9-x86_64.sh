@@ -115,7 +115,7 @@ VPSURL="https://www.openmptcprouter.com/"
 REPO="repo.openmptcprouter.com"
 CHINA=${CHINA:-no}
 
-OMR_VERSION="0.1073"
+OMR_VERSION="0.1074"
 
 DIR=$( pwd )
 #"
@@ -2434,13 +2434,26 @@ else
 	cp ${DIR}/nftables/omr.nft /etc/nftables/omr.nft
 fi
 [ -n "$INTERFACE" ] && sed -i "s:eth0:$INTERFACE:g" /etc/nftables/omr-vars.nft
-if [ "$(ip r | awk '/default/&&/src/ {print $7}')" != "" ] && [ "$(ip r | awk '/default/&&/src/ {print $7}')" != "dhcp" ]; then
-	sed -i "s/masquerade/snat ip to $(ip r | awk '/default/&&/src/ {print $7}')/" /etc/nftables/omr.nft
+# Static-IP optimization: replace the IPv4 masquerade with an explicit SNAT to
+# the WAN source IP. The src token position varies with the route's proto
+# field ("default via GW dev IF proto static src IP ..."), so walk the fields
+# instead of hardcoding $7 -- that used to emit "snat ip to static" and make
+# the whole nftables.conf fail to load. Skipped on dhcp-managed routes (the IP
+# can change) and scoped to the "ip saddr" line so the IPv6 masquerade below
+# it is left alone.
+VPS_SRC_IP="$(ip -4 route show default 2>/dev/null | awk '{for(i=1;i<NF;i++) if ($i=="src") {print $(i+1); exit}}')"
+if [ -n "$VPS_SRC_IP" ] && [ -z "$(ip -4 route show default 2>/dev/null | grep -w dhcp)" ]; then
+	sed -i "/ip saddr/s/masquerade/snat ip to $VPS_SRC_IP/" /etc/nftables/omr.nft
 fi
 systemctl mask --now shorewall shorewall6 >/dev/null 2>&1 || true
 command -v ufw >/dev/null 2>&1 && ufw --force disable >/dev/null 2>&1 || true
 systemctl mask --now ufw firewalld >/dev/null 2>&1 || true
 systemctl enable --now nftables
+cat > /etc/sysctl.d/90-omr-forwarding.conf <<-EOF
+	net.ipv4.ip_forward = 1
+	net.ipv6.conf.all.forwarding = 1
+EOF
+sysctl -p /etc/sysctl.d/90-omr-forwarding.conf > /dev/null 2>&1 || true
 [ -z "$(grep nf_conntrack_sip /etc/modprobe.d/blacklist.conf)" ] && echo 'blacklist nf_conntrack_sip' >> /etc/modprobe.d/blacklist.conf
 if [ "$ID" = "debian" ] && [ "$VERSION_ID" = "10" ]; then
 	apt-get -y install iptables

@@ -146,6 +146,10 @@ table inet omr {
 		# link-local, egressing the WAN interface.
 		ip saddr { 10.255.247.0/24, 10.255.210.0/24, 10.255.220.0/24, 10.255.248.0/24, 10.255.250.0/24, 10.255.251.0/24, 10.255.252.0/24, 10.255.253.0/24, 10.255.254.0/24, 10.255.255.0/24, 169.254.0.0/16, 172.16.0.0/12, 192.168.0.0/16 } oifname $NET_IFACE masquerade
 
+		# shorewall6/snat: MASQUERADE fe80::/10,fd00::/8 $NET_IFACE -- NAT66
+		# for the clients' ULA (and link-local) sources egressing the WAN.
+		ip6 saddr { fe80::/10, fd00::/8 } oifname $NET_IFACE masquerade
+
 		# shorewall4/snat's own commented-out example ("SNAT from VPN server
 		# for all VPN clients") -- disabled by default there too:
 		#   ip saddr 0.0.0.0/0 oifname $VPS_IFACE snat ip to $VPS_ADDR

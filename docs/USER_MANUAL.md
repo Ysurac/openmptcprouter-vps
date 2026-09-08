@@ -189,7 +189,11 @@ If `FAIL2BAN=yes` (default), fail2ban is configured to watch:
 - OpenVPN's TLS handshake port (both TCP and UDP instances), banning on repeated
   `TLS Auth Error` / `VERIFY ERROR` / handshake failures
 - The omr-admin API (port 65500), banning on repeated failed logins to `/token` (used by the
-  router) or `/login_basic` (used by the `/docs` page) — 6 failures bans the source IP
+  router) or `/login_basic` (used by the `/docs` page) — 6 failures bans the source IP. Only a real
+  credential guess counts: a router that has not been given its VPS key yet keeps polling `/token`
+  with an empty password, and opening `/docs` in a browser always draws one Basic-auth challenge
+  before it can prompt, so neither of those adds a strike. Loopback is never banned (the VPS's own
+  `omr-service` probes the API there every 10s)
 - Xray and V2Ray, banning on repeated rejected inbound connections (invalid user/UUID, malformed
   requests, port scanning) — 6 rejections bans the source IP
 - Shadowsocks-Go, banning on repeated failed Shadowsocks-2022 handshakes (wrong key) — 6 failures

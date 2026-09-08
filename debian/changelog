@@ -1,3 +1,11 @@
+omr-server (0.1078) unstable; urgency=medium
+
+    * Update omr-admin to 0.18+20260907: fix POST /proxy answering 422 for xray-vless-reality, a name GET /config has advertised in proxy.available since VLESS Reality support was added while the PROXY validation enum never had it, so selecting "XRay VLESS Reality" in the router wizard could never be applied on the VPS
+    * Update omr-admin: build proxy.available (GET /config) and GET /proxy_list from the same helper instead of a list hardcoded in /config, so a proxy name can no longer be advertised on one side and refused on the other; proxy.available consequently also lists shadowsocks-rust (accepted by POST /proxy and the router's own default, but never advertised) and, like /proxy_list, now only lists the proxies whose config file is actually present on this VPS
+    * Update omr-admin: fix GET /config reporting v2ray.tx/rx and xray.tx/rx as 0 for every protocol variant, the counters being read only when the selected proxy was exactly 'v2ray' or 'xray' although xray-vless-reality, xray-vmess, v2ray-trojan and the others are served by the same process; both guards now match by substring like /status already did
+
+ -- OpenMPTCProuter <contact@openmptcprouter.com>  Tue, 08 Sep 2026 00:00:00 +0200
+
 omr-server (0.1077) unstable; urgency=medium
 
     * Update omr-admin to 0.18+20260906: add GET /mqvpn_users (admin only), listing each MQVPN user as configured in /etc/mqvpn/server.json (with its fixed_ip), known by the running daemon and currently connected, the three being able to differ since a user is persisted even when the live add_user call fails; the control socket address is now read from server.json's control_listen instead of a hardcoded 127.0.0.1:9090, and sessions authenticated with the server-wide key are counted in global_key_clients instead of being listed as users

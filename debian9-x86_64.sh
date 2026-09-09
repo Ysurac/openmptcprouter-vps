@@ -91,8 +91,8 @@ MLVPN_BINARY_VERSION="3.0.0+20211028.git.ddafba3"
 UBOND_VERSION="31af0f69ebb6d07ed9348dca2fced33b956cedee"
 OBFS_VERSION="486bebd9208539058e57e23a12f23103016e09b4"
 OBFS_BINARY_VERSION="0.0.5-1"
-OMR_ADMIN_VERSION="825059d2233be9a96c998d49291f593c2a1279e0"
-OMR_ADMIN_BINARY_VERSION="0.18+20260908"
+OMR_ADMIN_VERSION="d488b2f7fae09d4ebac89d9a0837bfe813cc7a6b"
+OMR_ADMIN_BINARY_VERSION="0.18+20260909"
 DSVPN_VERSION="3b99d2ef6c02b2ef68b5784bec8adfdd55b29b1a"
 DSVPN_BINARY_VERSION="0.1.4-2"
 MQVPN_VERSION="0.16.2-1"
@@ -115,7 +115,7 @@ VPSURL="https://www.openmptcprouter.com/"
 REPO="repo.openmptcprouter.com"
 CHINA=${CHINA:-no}
 
-OMR_VERSION="0.1079-rolling-test"
+OMR_VERSION="0.1080-rolling-test"
 
 DIR=$( pwd )
 #"
@@ -452,10 +452,14 @@ fi
 echo "Install mptcp kernel and shadowsocks..."
 apt-get update --allow-releaseinfo-change
 sleep 2
+# nftables belongs in this early list, not only in the firewall section a
+# thousand lines below: the omr-vps-admin deb Depends on it, and on a fresh VPS
+# that dependency is unsatisfied by the time this script installs it, which
+# leaves the package unconfigured and (set -e) ends the whole install
 if [ "$ID" = "debian" ] && [ "$VERSION_ID" = "13" ]; then
-	apt-get -y install dirmngr patch rename curl unzip pkg-config ipset bpftool
+	apt-get -y install dirmngr patch rename curl unzip pkg-config ipset bpftool nftables
 else
-	apt-get -y install dirmngr patch rename curl libcurl4 unzip pkg-config ipset
+	apt-get -y install dirmngr patch rename curl libcurl4 unzip pkg-config ipset nftables
 fi
 
 if [ -z "$(dpkg-query -l | grep grub)" ]; then
@@ -469,38 +473,135 @@ if [ -z "$(dpkg-query -l | grep grub)" ]; then
 	}
 fi
 
+# Print the path GRUB needs to select the menu entry matching $2 in the
+# grub.cfg passed as $1. GRUB resolves "default" against the top level menu
+# only: an entry buried in a submenu has to be named as the id (or index) of
+# every submenu above it, separated by ">" (see GRUB_DEFAULT in grub.info).
+# grub-mkconfig keeps only the highest version kernel at the top level and
+# puts every other one under "Advanced options", so the bare entry id is
+# almost never enough.
+grub_menu_entry_path() {
+	awk -v pat="$2" '
+		function entry_id(l,   k, n, a) {
+			k = index(l, "menuentry_id_option")
+			if (k == 0)
+				return ""
+			n = split(substr(l, k), a, q)
+			return (n >= 2) ? a[2] : ""
+		}
+		BEGIN {
+			q = sprintf("%c", 39)
+			depth = 0
+			inentry = 0
+			cnt[0] = 0
+			npfx[0] = ""
+			ipfx[0] = ""
+		}
+		{
+			line = $0
+			sub(/^[ \t]+/, "", line)
+			if (!inentry && line ~ /^submenu[ \t]/) {
+				id = entry_id(line)
+				num = npfx[depth] cnt[depth]
+				ids = (id == "") ? "" : ipfx[depth] id
+				cnt[depth]++
+				depth++
+				cnt[depth] = 0
+				npfx[depth] = num ">"
+				ipfx[depth] = (ids == "") ? "" : ids ">"
+				next
+			}
+			if (!inentry && line ~ /^menuentry[ \t]/) {
+				inentry = 1
+				if (line ~ pat && line !~ /recovery/) {
+					id = entry_id(line)
+					if (id != "" && (depth == 0 || ipfx[depth] != ""))
+						print ipfx[depth] id
+					else
+						print npfx[depth] cnt[depth]
+					exit
+				}
+				cnt[depth]++
+				next
+			}
+			if (line ~ /^}/) {
+				if (inentry)
+					inentry = 0
+				else if (depth > 0)
+					depth--
+			}
+		}
+	' "$1"
+}
+
 set_grub_default_kernel() {
 	version="$1"
 	name="$2"
-	entry_id=""
-	found=""
-	top=-1
-	sub=0
-	depth=0
-	trimmed=""
-	[ -f /etc/default/grub ] && [ -f /boot/grub/grub.cfg ] || return 1
-	grub-mkconfig -o /boot/grub/grub.cfg >/dev/null 2>&1
-	entry_id=$(grep -m1 "menuentry.*${version}.*${name}" /boot/grub/grub.cfg | grep -oP "\\\$menuentry_id_option '\K[^']+")
-	if [ -z "$entry_id" ]; then
-		while IFS= read -r line; do
-			trimmed="${line#"${line%%[! ]*}"}"
-			case "$trimmed" in
-			    submenu\ *) top=$((top+1)); sub=0; depth=$((depth+1)) ;;
-			    menuentry\ *)
-				[ $depth -eq 0 ] && top=$((top+1))
-				echo "$trimmed" | grep -q "${version}.*${name}" && { found="${depth:+${top}>}${depth:+$sub}${depth:-$top}"; break; }
-				[ $depth -gt 0 ] && sub=$((sub+1))
-				;;
-			    \}*) [ $depth -gt 0 ] && depth=$((depth-1)) ;;
-			esac
-		done < /boot/grub/grub.cfg
-		entry_id="$found"
+	grub_cfg=""
+	grub_deflt=""
+	entry=""
+	# grub.cfg is in /boot/grub on Debian and Ubuntu, /boot/grub2 elsewhere
+	grub_cfg="$(find /boot/grub /boot/grub2 -maxdepth 1 -name grub.cfg 2>/dev/null | head -n 1)"
+	grub_deflt="$(find /etc/default -maxdepth 1 \( -name grub -o -name grub2 \) 2>/dev/null | head -n 1)"
+	if [ -z "$grub_cfg" ] || [ -z "$grub_deflt" ]; then
+		echo "WARNING: no GRUB configuration found, can't set kernel ${version} ${name} as the default one" >&2
+		echo "WARNING: set the default boot kernel by hand, else this VPS reboots on $(uname -r)" >&2
+		return 1
 	fi
-	[ -z "$entry_id" ] && { echo "WARNING: kernel ${version} ${name} not found in grub.cfg" >&2; return 1; }
-	sed -i "s@^\(GRUB_DEFAULT=\).*@\1\"${entry_id}\"@" /etc/default/grub
-	grub-mkconfig -o /boot/grub/grub.cfg >/dev/null 2>&1
+	# The kernel package postinst already ran update-grub, but regenerate
+	# anyway: an interrupted or skipped hook would leave the new kernel out.
+	[ -n "$(which grub-mkconfig)" ] && grub-mkconfig -o "$grub_cfg" >/dev/null 2>&1
+	entry="$(grub_menu_entry_path "$grub_cfg" "${version}.*${name}")"
+	if [ -z "$entry" ]; then
+		echo "WARNING: kernel ${version} ${name} not found in ${grub_cfg}, GRUB default left untouched" >&2
+		echo "WARNING: set the default boot kernel by hand, else this VPS reboots on $(uname -r)" >&2
+		return 1
+	fi
+	if [ -n "$(grep -m1 '^[[:space:]]*GRUB_DEFAULT=' "$grub_deflt")" ]; then
+		sed -i "s@^[[:space:]]*\(GRUB_DEFAULT=\).*@\1\"${entry}\"@" "$grub_deflt"
+	else
+		echo "GRUB_DEFAULT=\"${entry}\"" >> "$grub_deflt"
+	fi
+	[ -n "$(which grub-mkconfig)" ] && grub-mkconfig -o "$grub_cfg" >/dev/null 2>&1
+	echo "GRUB default boot entry is now ${entry}"
 }
-#"
+
+# Report which kernel the VPS runs and which one it is meant to run. Upstream
+# MPTCP is in every mainline kernel since 5.6, so a distribution kernel can
+# carry MPTCP too (Debian 13's own 6.12 does): what the OpenMPTCProuter kernel
+# adds on top is the MPTCP BPF schedulers (the mptcp-bpf-* packages installed
+# for KERNEL=6.18), which load on no other kernel. The out of tree 5.4 kernel
+# is the exception, its MPTCP is the multipath-tcp.org fork and no distribution
+# kernel has it.
+check_running_kernel() {
+	expected=""
+	running=""
+	running="$(uname -r)"
+	expected="$(ls -1 /boot/vmlinuz-*-omr /boot/vmlinuz-*-xanmod* /boot/vmlinuz-*-mptcp 2>/dev/null | sed -e 's@.*/vmlinuz-@@' | sort -V | tail -n 1)"
+	echo " Running kernel                    : ${running}"
+	if [ -z "$expected" ]; then
+		echo ' OpenMPTCProuter kernel installed  : none found in /boot'
+		echo ' The MPTCP BPF schedulers need the OpenMPTCProuter kernel, they will not load.'
+		return 1
+	fi
+	echo " OpenMPTCProuter kernel installed  : ${expected}"
+	if [ "$running" = "$expected" ]; then
+		echo ' The OpenMPTCProuter kernel is already running.'
+		return 0
+	fi
+	echo " After the reboot, check with 'uname -r' that ${expected} is running."
+	case "$expected" in
+		*-mptcp)
+			echo ' If it is not, MPTCP, shadowsocks and the VPN can not work: check'
+			;;
+		*)
+			echo ' If it is not, MPTCP itself still works on any 5.6 or later kernel, but'
+			echo ' the MPTCP BPF schedulers only load on the OpenMPTCProuter kernel: check'
+			;;
+	esac
+	echo ' GRUB_DEFAULT in /etc/default/grub, run update-grub and reboot again.'
+}
+
 if [ "$IS_CONTAINER" = "yes" ]; then
 	echo "Container detected: skipping kernel installation."
 else
@@ -1120,7 +1221,10 @@ if [ "$OMR_ADMIN" = "yes" ]; then
 		fi
 		if ! apt-get -o Dpkg::Options::="--force-confold" -o Dpkg::Options::="--force-confdef" -o Dpkg::Options::="--force-overwrite" -y --allow-downgrades install omr-vps-admin=${OMR_ADMIN_BINARY_VERSION}; then
 			wget -O /tmp/omr-vps-admin_${OMR_ADMIN_BINARY_VERSION}_all.deb ${VPSURL}debian/omr-vps-admin_${OMR_ADMIN_BINARY_VERSION}_all.deb
-			dpkg --force-confold --force-confdef --force-overwrite -i /tmp/omr-vps-admin_${OMR_ADMIN_BINARY_VERSION}_all.deb
+			# Unlike the apt call above, dpkg resolves no dependency: pull
+			# anything the deb needs and is missing (nftables, python3-*)
+			# instead of leaving the package unconfigured
+			dpkg --force-confold --force-confdef --force-overwrite -i /tmp/omr-vps-admin_${OMR_ADMIN_BINARY_VERSION}_all.deb || apt-get -y --fix-broken install
 			rm -f /tmp/omr-vps-admin_${OMR_ADMIN_BINARY_VERSION}_all.deb
 		fi
 		if [ ! -f /etc/openmptcprouter-vps-admin/omr-admin-config.json ]; then
@@ -1194,8 +1298,15 @@ if [ "$LOCALFILES" = "no" ]; then
 		wget -O /etc/sysctl.d/90-shadowsocks.conf ${VPSURL}${VPSPATH}/shadowsocks.conf
 	fi
 else
+	# Same kernel split as the download branch above -- without the 6.18 case
+	# here, every LOCALFILES=yes run (which is every SOURCES=yes run, see
+	# above) installed the 6.1 sysctl set on a 6.18 kernel
 	if [ "$KERNEL" != "5.4" ]; then
-		cp ${DIR}/shadowsocks.6.1.conf /etc/sysctl.d/90-shadowsocks.conf
+		if [ "$KERNEL" != "6.12" ] && [ "$KERNEL" != "6.6" ]; then
+			cp ${DIR}/shadowsocks.6.18.conf /etc/sysctl.d/90-shadowsocks.conf
+		else
+			cp ${DIR}/shadowsocks.6.1.conf /etc/sysctl.d/90-shadowsocks.conf
+		fi
 	else
 		cp ${DIR}/shadowsocks.conf /etc/sysctl.d/90-shadowsocks.conf
 	fi
@@ -1659,6 +1770,10 @@ if [ "$MLVPN" = "yes" ]; then
 			else
 				cp ${DIR}/mlvpn0.conf /etc/mlvpn/mlvpn0.conf
 			fi
+			# Right here, not only in the chmod further down: mlvpn exits with
+			# "[CRIT/config] file is group/other accessible" and the omr-mlvpn
+			# deb installed below starts it before that later chmod runs
+			chmod 0600 /etc/mlvpn/mlvpn0.conf
 		fi
 	else
 		rm -f /var/lib/dpkg/lock
@@ -2408,6 +2523,20 @@ systemctl enable omr-bypass.service
 # Change SSH port to 65222
 sed -i 's:#Port 22:Port 65222:g' /etc/ssh/sshd_config
 sed -i 's:Port 22:Port 65222:g' /etc/ssh/sshd_config
+# ...and make it effective now. The nftables ruleset loaded further down opens
+# 65222 and rejects 22, so a running sshd left on port 22 until the next reboot
+# means no new SSH connection can reach this VPS at all, while the summary
+# printed at the end of this script already announces port 65222. The session
+# running this script survives (conntrack keeps it established), which is
+# precisely why the window went unnoticed; a dropped connection during it, or
+# any second login, needed the provider's console to get back in. Restarting
+# sshd never drops established sessions, only new connections use the new port.
+if sshd -t >/dev/null 2>&1; then
+	systemctl restart ssh >/dev/null 2>&1 || systemctl restart sshd >/dev/null 2>&1 || echo "WARNING: could not restart sshd, SSH stays on port 22 until this VPS reboots" >&2
+else
+	echo "WARNING: sshd -t rejects /etc/ssh/sshd_config, not restarting sshd" >&2
+	echo "WARNING: SSH stays on its current port, and the firewall below only opens 65222" >&2
+fi
 
 # Remove Bind9 if available
 #systemctl -q disable bind9
@@ -2427,16 +2556,23 @@ mkdir -p /etc/nftables/custom.d
 # dynamic chains from omr-admin-config.json whoever reloaded the firewall,
 # not only this script's update path (see nftables/omr-admin-resync.conf).
 mkdir -p /etc/systemd/system/nftables.service.d
+# Drop-in for the stock systemd-networkd-wait-online.service: it blocks the boot
+# until every managed link is up, so a VPS whose IPv6 never becomes routable
+# waits out the full 90s unit timeout on every boot (see
+# systemd/20-omr-wait-online-any.conf).
+mkdir -p /etc/systemd/system/systemd-networkd-wait-online.service.d
 if [ "$LOCALFILES" = "no" ]; then
 	wget -O /etc/nftables.conf ${VPSURL}${VPSPATH}/nftables.conf
 	wget -O /etc/nftables/omr-vars.nft ${VPSURL}${VPSPATH}/nftables/omr-vars.nft
 	wget -O /etc/nftables/omr.nft ${VPSURL}${VPSPATH}/nftables/omr.nft
 	wget -O /etc/systemd/system/nftables.service.d/omr-admin-resync.conf ${VPSURL}${VPSPATH}/nftables/omr-admin-resync.conf
+	wget -O /etc/systemd/system/systemd-networkd-wait-online.service.d/20-omr-wait-online-any.conf ${VPSURL}${VPSPATH}/systemd/20-omr-wait-online-any.conf
 else
 	cp ${DIR}/nftables.conf /etc/nftables.conf
 	cp ${DIR}/nftables/omr-vars.nft /etc/nftables/omr-vars.nft
 	cp ${DIR}/nftables/omr.nft /etc/nftables/omr.nft
 	cp ${DIR}/nftables/omr-admin-resync.conf /etc/systemd/system/nftables.service.d/omr-admin-resync.conf
+	cp ${DIR}/systemd/20-omr-wait-online-any.conf /etc/systemd/system/systemd-networkd-wait-online.service.d/20-omr-wait-online-any.conf
 fi
 [ -n "$INTERFACE" ] && sed -i "s:eth0:$INTERFACE:g" /etc/nftables/omr-vars.nft
 # Static-IP optimization: replace the IPv4 masquerade with an explicit SNAT to
@@ -2538,6 +2674,26 @@ if [ "$SOURCES" != "yes" ]; then
 	rm -f /etc/openmtpcprouter-vps-admin/update-bin
 fi
 
+# Give one last start to every service left failed by the install order. A deb
+# that ships its own configuration starts its daemon before this script has
+# written the OpenMPTCProuter one (xray's upstream config.json carries
+# "geoip:private" routing rules while no geoip.dat is installed, and mlvpn
+# refuses a config file that is still group/other readable, chmod 0600 coming
+# later), so the unit fails a few times, reaches StartLimitBurst and stays
+# dead: from then on even `systemctl restart` is a silent no-op ("Start request
+# repeated too quickly") until the counter is reset or the VPS reboots. The
+# update path restarts everything at its end, a fresh install did not, which is
+# how a brand new VPS ended up with xray and mlvpn failed while both their
+# configuration files on disk were perfectly valid.
+echo "Check services left failed by the install order..."
+for unit in shadowsocks-libev-manager@manager shadowsocks-go v2ray xray mlvpn@mlvpn0 ubond@ubond0 mqvpn dsvpn-server@dsvpn0 glorytun-tcp@tun0 glorytun-udp@tun0 omr-admin omr; do
+	systemctl is-enabled -q "$unit" 2>/dev/null || continue
+	systemctl is-failed -q "$unit" 2>/dev/null || continue
+	echo " ${unit} is failed, resetting its start counter and starting it again"
+	systemctl reset-failed "$unit" >/dev/null 2>&1 || true
+	systemctl start "$unit" >/dev/null 2>&1 || echo "WARNING: ${unit} still fails to start, see journalctl -u ${unit}" >&2
+done
+
 if [ "$update" = "0" ]; then
 	# Display important info
 	echo '===================================================================================='
@@ -2600,9 +2756,7 @@ if [ "$update" = "0" ]; then
 	echo '===================================================================================='
 	echo '\033[1m  /!\ You need to reboot to enable MPTCP, shadowsocks and glorytun /!\ \033[0m'
 	echo '------------------------------------------------------------------------------------'
-	echo ' For kernel 5.4, after reboot, check with uname -a that the kernel name contain mptcp.'
-	echo ' Else, you may have to modify GRUB_DEFAULT in /etc/default/grub'
-	echo ' For 6.x kernels, check that a 6.x kernel is used, no kernel name changes.'
+	check_running_kernel || true
 	echo '===================================================================================='
 
 	# Save info in file
@@ -2786,6 +2940,8 @@ else
 	fi
 	echo '===================================================================================='
 	echo '\033[1m  /!\ You need to reboot to use latest MPTCP kernel /!\ \033[0m'
+	echo '------------------------------------------------------------------------------------'
+	check_running_kernel || true
 	echo '===================================================================================='
 fi
 exit 0

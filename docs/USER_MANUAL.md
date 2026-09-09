@@ -24,7 +24,9 @@ You don't need to enable everything — most tunnel types are individually toggl
 
 - **OS**: Debian 9–13, 64-bit (amd64 or arm64)
 - **Kernel**: the installer manages this for you — supported MPTCP kernel lines are `5.4, 6.1, 6.6,
-  6.10, 6.11, 6.12, 6.18` (default `6.18`)
+  6.10, 6.11, 6.12, 6.18` (default `6.18`). MPTCP itself works on any 5.6 or later kernel, a
+  distribution kernel included (Debian 13's own 6.12 for instance); the OpenMPTCProuter `-omr`
+  kernel is what the MPTCP BPF schedulers need, they load on no other kernel
 - Run as **root**
 - Outbound internet access during install (packages/binaries are fetched from
   `repo.openmptcprouter.com` and GitHub)

@@ -120,7 +120,18 @@ table inet omr {
 		oifname $NET_IFACE accept                               # policy: fw net ACCEPT (also covers DNS(ACCEPT) $FW net)
 		meta nfproto ipv6 accept                                # shorewall6/policy: fw all ACCEPT
 
-		reject with icmpx type port-unreachable
+		# The only locally-generated traffic the source policy table really
+		# withholds is fw->vpncl (there is no such policy row, so it fell
+		# through to `all all REJECT`). Scope the reject to that, instead of
+		# rejecting everything that is not $NET_IFACE: a VPS often has a
+		# second physical NIC (a provider private network, a vRack) and the
+		# box itself has to be able to use it. On DigitalOcean the resolver
+		# handed out by DHCP (10.114.x.x) is reached through that private
+		# NIC, so a blanket reject here leaves the VPS with no working DNS
+		# at all as soon as the firewall starts -- and it bought nothing:
+		# fw->net being ACCEPT already lets this box reach anything.
+		oifname $VPNCL_IFACES reject with icmpx type port-unreachable
+		accept
 	}
 
 	# --- shorewall4/snat -----------------------------------------------------

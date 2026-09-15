@@ -1,0 +1,67 @@
+# Runs the test suite in tests/ on the repository as it stands -- no VPS, no
+# build. Everything these tests check is something that only shows up on a
+# customer's machine otherwise: a file the installer downloads that no longer
+# exists, a placeholder nothing substitutes any more, a fail2ban filter that
+# bans the wrong address (or nobody), an nftables ruleset that fails to load
+# and leaves the VPS with no firewall at all.
+#
+# The package test (tests/test_deb_contents.sh) needs a built .deb and is
+# skipped here; .github/workflows/build-deb.yml runs it against the artifact
+# it just built.
+name: Tests
+
+on:
+  push:
+    branches: [develop, master]
+    tags: ['v*']
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  tests:
+    name: tests/run_all.sh
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install what the tests use
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends jq nftables shellcheck
+
+      - name: Run the suite
+        run: |
+          set -o pipefail
+          bash tests/run_all.sh 2>&1 | tee /tmp/tests.log
+
+      # `nft -c -f` needs CAP_NET_ADMIN even to check a ruleset, so the run
+      # above reports the parse as skipped. This one actually parses it.
+      - name: Parse the nftables ruleset as root
+        run: sudo bash tests/test_nftables.sh
+
+      # Informational: shellcheck has never been clean on the installer and is
+      # not a gate, but a new script with a real quoting bug should be visible.
+      - name: shellcheck
+        continue-on-error: true
+        run: |
+          shellcheck -S warning tests/*.sh || true
+          shellcheck -S error omr-service omr-bypass omr-vxlan-run omr-6in4-run \
+            multipath update-grub.sh omr-update omr-test-speed || true
+
+      - name: Summary
+        if: always()
+        run: |
+          {
+            echo "## Tests"
+            echo
+            echo '```'
+            tail -n 12 /tmp/tests.log 2>/dev/null || echo "the suite did not run"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"

@@ -7,7 +7,36 @@ test $DEBIAN_SCRIPT_DEBUG && set -v -x
 
 sed -i -e "s/^LOCALFILES=.*$/LOCALFILES=no/" -e "s/^SOURCES=.*$/SOURCES=no/" /usr/share/omr-server/debian9-x86_64.sh
 systemctl daemon-reload
-systemctl restart omr-update
+
+# Ask omr-update to re-apply what this package just refreshed:
+# /usr/share/omr-server is only a copy, the installer is what puts each file
+# where it belongs and restarts what changed. omr-update takes that branch
+# when this flag file exists, and removes it when the run is done.
+#
+# Created here rather than shipped by debian/rules: dpkg flags anything under
+# /etc as a conffile, and a conffile the runtime deletes is not restored by a
+# later upgrade (checked on this package, 0.1082 -> 0.1083: the flag stayed
+# gone), so shipping it would arm the update once, on the first install only.
+#
+# Skipped while omr-update is already running: the installer it runs ends with
+# "apt-get -y install omr-server=${OMR_VERSION}", and if that resolves to a
+# version other than the installed one this script runs again -- restarting
+# omr-update there would kill the install halfway through its own run.
+if [ -e /run/omr-install.running ]; then
+	# The installer is running right now and is the thing that calls this
+	# script ("apt-get -y install omr-server=${OMR_VERSION}" is its last
+	# step): it applies these files itself, so asking omr-update for a second
+	# run on top of it would have two installs racing each other.
+	echo "omr-server: the installer is running, it applies these files itself"
+elif systemctl -q is-active omr-update.service; then
+	echo "omr-server: omr-update is already running, leaving it alone"
+else
+	mkdir -p /etc/openmptcprouter-vps-admin
+	touch /etc/openmptcprouter-vps-admin/update-bin
+	# Never fail the package over this: the unit can be masked or missing, and
+	# the flag stays on disk either way, so the next trigger picks it up.
+	systemctl restart omr-update || echo "omr-server: could not start omr-update, the update-bin flag stays for the next run"
+fi
 
 db_stop
 

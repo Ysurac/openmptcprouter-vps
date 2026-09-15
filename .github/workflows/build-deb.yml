@@ -1,0 +1,146 @@
+# Builds the omr-server Debian package, the one the installer pulls in at the
+# end of a run with "apt-get -y install omr-server=${OMR_VERSION}".
+#
+# The version that apt-get line asks for is OMR_VERSION (debian9-x86_64.sh),
+# not the bare number debian/changelog carries, so the changelog is stamped
+# with it before the build: a package built as "0.1082" can never answer a
+# request for "0.1082-rolling-test", and that apt-get line is silenced with
+# ">/dev/null 2>&1 || true", so the miss leaves no trace anywhere.
+name: Build .deb
+
+on:
+  push:
+    branches: [develop, master]
+    tags: ['v*']
+  pull_request:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Package version (default: OMR_VERSION from debian9-x86_64.sh)'
+        required: false
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  build:
+    name: Build omr-server .deb
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+      deb: ${{ steps.build.outputs.deb }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            build-essential debhelper dpkg-dev fakeroot lintian
+
+      - name: Resolve the package version
+        id: version
+        env:
+          INPUT_VERSION: ${{ inputs.version }}
+        run: |
+          set -eu
+          omr_version="$(grep -m1 '^OMR_VERSION=' debian9-x86_64.sh | cut -d'"' -f2)"
+          changelog_version="$(dpkg-parsechangelog -S Version)"
+          version="${INPUT_VERSION:-$omr_version}"
+          # A Debian version starts with a digit; anything else here would end
+          # up inside a sed expression below.
+          if ! printf '%s' "$version" | grep -q '^[0-9][A-Za-z0-9.+~:-]*$'; then
+            echo "::error::refusing to build '$version': not a valid Debian version"
+            exit 1
+          fi
+          echo "OMR_VERSION=$omr_version, debian/changelog=$changelog_version, building=$version"
+          if [ "$version" != "$changelog_version" ]; then
+            echo "::warning file=debian/changelog,line=1::debian/changelog says $changelog_version but the installer asks apt for $omr_version; stamping the build as $version"
+          fi
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "omr_version=$omr_version" >> "$GITHUB_OUTPUT"
+
+      - name: Stamp debian/changelog with that version
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          set -eu
+          # In place, on the top entry: keeping the entry text attached to the
+          # version it describes, where "dch -v" would add an empty one on top.
+          sed -i "1s/^omr-server ([^)]*)/omr-server ($VERSION)/" debian/changelog
+          head -n 1 debian/changelog
+
+      - name: Build
+        id: build
+        run: |
+          set -eu
+          dpkg-buildpackage -us -uc -b
+          mkdir -p dist
+          mv ../omr-server_*.deb dist/
+          mv ../omr-server_*.buildinfo ../omr-server_*.changes dist/ 2>/dev/null || true
+          deb="$(ls dist/omr-server_*.deb | head -n 1)"
+          echo "deb=$(basename "$deb")" >> "$GITHUB_OUTPUT"
+          ls -l dist/
+
+      - name: Verify the package against the installer it ships
+        env:
+          EXPECT_VERSION: ${{ steps.version.outputs.version }}
+        run: bash tests/test_deb_contents.sh "dist/${{ steps.build.outputs.deb }}"
+
+      - name: Lintian
+        continue-on-error: true
+        run: lintian --no-tag-display-limit "dist/${{ steps.build.outputs.deb }}"
+
+      - name: Summary
+        run: |
+          deb="dist/${{ steps.build.outputs.deb }}"
+          {
+            echo "## $(basename "$deb")"
+            echo
+            echo '```'
+            dpkg-deb --info "$deb" | sed -n '/^ Package:/,$p'
+            echo '```'
+            echo
+            echo "<details><summary>$(dpkg-deb --contents "$deb" | wc -l) files</summary>"
+            echo
+            echo '```'
+            dpkg-deb --contents "$deb" | awk '{print $6}'
+            echo '```'
+            echo
+            echo "</details>"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: omr-server_${{ steps.version.outputs.version }}
+          path: dist/
+          retention-days: 30
+          if-no-files-found: error
+
+  release:
+    name: Attach the .deb to the release
+    needs: build
+    if: startsWith(github.ref, 'refs/tags/')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: omr-server_${{ needs.build.outputs.version }}
+          path: dist
+
+      - name: Upload to the release for this tag
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          set -eu
+          gh release view "$TAG" >/dev/null 2>&1 || gh release create "$TAG" --title "$TAG" --generate-notes
+          gh release upload "$TAG" dist/*.deb --clobber

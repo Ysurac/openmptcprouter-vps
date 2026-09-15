@@ -1,11 +1,35 @@
 #!/bin/sh
+# Triggered by omr-vps-admin dropping a marker file: /update for a full
+# reinstall from the web, /update-bin for the binaries update the omr-server
+# package asks for from its postinst.
 if [ -f /etc/openmptcprouter-vps-admin/update ]; then
         wget -O - http://www.openmptcprouter.com/server/debian.sh | sh
         rm -f /etc/openmptcprouter-vps-admin/update
         reboot
 fi
 if [ -f /etc/openmptcprouter-vps-admin/update-bin ]; then
-        LOCALFILES=yes SOURCES=yes REINSTALL=no /usr/share/omr-server/debian9-x86_64.sh
-        rm -f /etc/openmptcprouter-vps-admin/update-bin
+        # Wait for the package manager first. This unit is started by the
+        # omr-server postinst, i.e. from inside an apt or dpkg run that still
+        # holds /var/lib/dpkg/lock-frontend, and the installer's own
+        # "apt-get check" a few lines into the run ends the whole thing there:
+        #   E: Unable to acquire the dpkg frontend lock ... process N (apt-get)
+        #   E: `apt-get check` failed, you may have broken packages. Aborting...
+        # which took one second and left nothing behind but the removed flag.
+        i=0
+        while [ $i -lt 600 ] && pgrep -x "apt|apt-get|dpkg|unattended-upgrade" >/dev/null 2>&1; do
+                sleep 1
+                i=$((i + 1))
+        done
+        # No LOCALFILES=/SOURCES= here on purpose: debian/postinst rewrites
+        # this copy's own "LOCALFILES=${LOCALFILES:-no}" and
+        # "SOURCES=${SOURCES:-no}" into plain "no", and a bare assignment beats
+        # the environment -- so passing them in only looked like it selected
+        # the local-files and build-from-sources paths. The run takes the
+        # download branch, which is what it has always done.
+        if REINSTALL=no /usr/share/omr-server/debian9-x86_64.sh; then
+                rm -f /etc/openmptcprouter-vps-admin/update-bin
+        else
+                echo "omr-update: the installer failed, keeping /etc/openmptcprouter-vps-admin/update-bin so the next run retries" >&2
+        fi
         #reboot
 fi

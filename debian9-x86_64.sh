@@ -109,17 +109,26 @@ SHADOWSOCKS_BINARY_VERSION="3.3.5-3"
 SHADOWSOCKS_GO_VERSION="1.14.0"
 DEFAULT_USER="openmptcprouter"
 VPS_DOMAIN=${VPS_DOMAIN:-$(wget -4 -qO- -T 2 http://hostname.openmptcprouter.com)}
-VPSPATH="server-test"
+VPSPATH="server"
 VPS_PUBLIC_IP=${VPS_PUBLIC_IP:-$(wget -4 -qO- -T 2 http://ip.openmptcprouter.com)}
 VPSURL="https://www.openmptcprouter.com/"
 REPO="repo.openmptcprouter.com"
 CHINA=${CHINA:-no}
 
-OMR_VERSION="0.1081"
+OMR_VERSION="0.1082"
 
 DIR=$( pwd )
 #"
 set -e
+# Tells the omr-server postinst that this script is already running. That
+# postinst arms an omr-update run (which runs this script), and the
+# "apt-get -y install omr-server" at the end of this script is one of the
+# things that calls it -- without this, a fresh install would start a second
+# run of itself on top of the first. /run is a tmpfs, so a lock left behind by
+# a killed run is gone at the next boot.
+OMR_INSTALL_LOCK=/run/omr-install.running
+touch "$OMR_INSTALL_LOCK" 2>/dev/null || true
+trap 'rm -f "$OMR_INSTALL_LOCK"' EXIT INT TERM
 umask 0022
 export LC_ALL=C
 export PATH=$PATH:/sbin
@@ -227,7 +236,11 @@ fi
 
 CURRENT_OMR="$(grep -s 'OpenMPTCProuter VPS' /etc/* | awk '{print $4}' || true)"
 if [ "$REINSTALL" = "no" ] && [ "$CURRENT_OMR" = "$OMR_VERSION" ]; then
-	exit 1
+	# Nothing to do, and that is a success: this is the normal end of an
+	# omr-update run on a VPS already at this version, and omr-update now
+	# keeps its update-bin flag for a retry when this script exits non-zero.
+	echo "This VPS already runs $OMR_VERSION, nothing to update"
+	exit 0
 fi
 
 # Force update key
@@ -621,6 +634,11 @@ if [ "$KERNEL" = "5.4" ] || [ "$KERNEL" = "5.15" ]; then
 			echo "\033[1m !!! if kernel install fail run: dpkg --remove --force-remove-reinstreq linux-image-${KERNEL_VERSION}-mptcp !!! \033[0m"
 			dpkg --force-all -i -B /tmp/linux-headers-${KERNEL_RELEASE}_amd64.deb
 			dpkg --force-all -i -B /tmp/linux-image-${KERNEL_RELEASE}_amd64.deb
+			# /tmp is a tmpfs on Debian 13: a kernel .deb left there costs
+			# that much RAM until the next reboot (95 MB + 10 MB measured),
+			# which on a 1 GB VPS is what makes the apt-get at the end of
+			# this script get OOM-killed.
+			rm -f /tmp/linux-headers-${KERNEL_RELEASE}_amd64.deb /tmp/linux-image-${KERNEL_RELEASE}_amd64.deb
 		fi
 	else
 		cd /boot
@@ -645,6 +663,7 @@ if [ "$KERNEL" = "5.4" ] || [ "$KERNEL" = "5.15" ]; then
 	rm -f /etc/grub.d/30_os-prober
 	bash update-grub.sh ${KERNEL_VERSION}-mptcp
 	bash update-grub.sh ${KERNEL_RELEASE}
+	rm -f /tmp/update-grub.sh
 	[ -f /boot/grub/grub.cfg ] && sed -i 's/default="1>0"/default="0"/' /boot/grub/grub.cfg >/dev/null 2>&1
 elif [ "$KERNEL" = "6.6" ] && [ "$ARCH" = "amd64" ]; then
 	# awk command from xanmod website
@@ -657,6 +676,8 @@ elif [ "$KERNEL" = "6.6" ] && [ "$ARCH" = "amd64" ]; then
 	echo "Install kernel linux-image-${KERNEL_VERSION}-${PSABI}-xanmod1 source release"
 	dpkg --force-all -i -B /tmp/linux-headers-${KERNEL_VERSION}-${PSABI}-xanmod1_${KERNEL_VERSION}-${PSABI}-xanmod1-${KERNEL_REV}_amd64.deb
 	dpkg --force-all -i -B /tmp/linux-image-${KERNEL_VERSION}-${PSABI}-xanmod1_${KERNEL_VERSION}-${PSABI}-xanmod1-${KERNEL_REV}_amd64.deb
+	# tmpfs /tmp: keeping these costs their size in RAM until a reboot
+	rm -f /tmp/linux-headers-${KERNEL_VERSION}-${PSABI}-xanmod1_${KERNEL_VERSION}-${PSABI}-xanmod1-${KERNEL_REV}_amd64.deb /tmp/linux-image-${KERNEL_VERSION}-${PSABI}-xanmod1_${KERNEL_VERSION}-${PSABI}-xanmod1-${KERNEL_REV}_amd64.deb
 
 #	wget -qO - https://dl.xanmod.org/archive.key | gpg --batch --yes --dearmor -vo /usr/share/keyrings/xanmod-archive-keyring.gpg
 #	echo 'deb [signed-by=/usr/share/keyrings/xanmod-archive-keyring.gpg] http://deb.xanmod.org releases main' | tee /etc/apt/sources.list.d/xanmod-release.list
@@ -681,6 +702,8 @@ elif [ "$KERNEL" = "6.10" ] && [ "$ARCH" = "amd64" ]; then
 	echo "Install kernel linux-image-${KERNEL_VERSION}-${PSABI}-xanmod1 source release"
 	dpkg --force-all -i -B /tmp/linux-headers-${KERNEL_VERSION}-${PSABI}-xanmod1_${KERNEL_VERSION}-${PSABI}-xanmod1-${KERNEL_REV}_amd64.deb
 	dpkg --force-all -i -B /tmp/linux-image-${KERNEL_VERSION}-${PSABI}-xanmod1_${KERNEL_VERSION}-${PSABI}-xanmod1-${KERNEL_REV}_amd64.deb
+	# tmpfs /tmp: keeping these costs their size in RAM until a reboot
+	rm -f /tmp/linux-headers-${KERNEL_VERSION}-${PSABI}-xanmod1_${KERNEL_VERSION}-${PSABI}-xanmod1-${KERNEL_REV}_amd64.deb /tmp/linux-image-${KERNEL_VERSION}-${PSABI}-xanmod1_${KERNEL_VERSION}-${PSABI}-xanmod1-${KERNEL_REV}_amd64.deb
 
 #	wget -qO - https://dl.xanmod.org/archive.key | gpg --batch --yes --dearmor -vo /usr/share/keyrings/xanmod-archive-keyring.gpg
 #	echo 'deb [signed-by=/usr/share/keyrings/xanmod-archive-keyring.gpg] http://deb.xanmod.org releases main' | tee /etc/apt/sources.list.d/xanmod-release.list
@@ -705,6 +728,8 @@ elif [ "$KERNEL" = "6.11" ] && [ "$ARCH" = "amd64" ]; then
 	echo "Install kernel linux-image-${KERNEL_VERSION}-${PSABI}-xanmod1 source release"
 	dpkg --force-all -i -B /tmp/linux-headers-${KERNEL_VERSION}-${PSABI}-xanmod1_${KERNEL_VERSION}-${PSABI}-xanmod1-${KERNEL_REV}_amd64.deb
 	dpkg --force-all -i -B /tmp/linux-image-${KERNEL_VERSION}-${PSABI}-xanmod1_${KERNEL_VERSION}-${PSABI}-xanmod1-${KERNEL_REV}_amd64.deb
+	# tmpfs /tmp: keeping these costs their size in RAM until a reboot
+	rm -f /tmp/linux-headers-${KERNEL_VERSION}-${PSABI}-xanmod1_${KERNEL_VERSION}-${PSABI}-xanmod1-${KERNEL_REV}_amd64.deb /tmp/linux-image-${KERNEL_VERSION}-${PSABI}-xanmod1_${KERNEL_VERSION}-${PSABI}-xanmod1-${KERNEL_REV}_amd64.deb
 
 #	wget -qO - https://dl.xanmod.org/archive.key | gpg --batch --yes --dearmor -vo /usr/share/keyrings/xanmod-archive-keyring.gpg
 #	echo 'deb [signed-by=/usr/share/keyrings/xanmod-archive-keyring.gpg] http://deb.xanmod.org releases main' | tee /etc/apt/sources.list.d/xanmod-release.list
@@ -733,6 +758,8 @@ elif [ "$KERNEL" = "6.12" ] && [ "$ARCH" = "amd64" ]; then
 	echo "Install kernel linux-image-${KERNEL_VERSION}-${PSABI}-xanmod1 source release"
 	dpkg --force-all -i -B /tmp/linux-headers-${KERNEL_VERSION}-${PSABI}-xanmod1_${KERNEL_VERSION}-${PSABI}-xanmod1-${KERNEL_REV}_amd64.deb
 	dpkg --force-all -i -B /tmp/linux-image-${KERNEL_VERSION}-${PSABI}-xanmod1_${KERNEL_VERSION}-${PSABI}-xanmod1-${KERNEL_REV}_amd64.deb
+	# tmpfs /tmp: keeping these costs their size in RAM until a reboot
+	rm -f /tmp/linux-headers-${KERNEL_VERSION}-${PSABI}-xanmod1_${KERNEL_VERSION}-${PSABI}-xanmod1-${KERNEL_REV}_amd64.deb /tmp/linux-image-${KERNEL_VERSION}-${PSABI}-xanmod1_${KERNEL_VERSION}-${PSABI}-xanmod1-${KERNEL_REV}_amd64.deb
 
 #	wget -qO - https://dl.xanmod.org/archive.key | gpg --batch --yes --dearmor -vo /usr/share/keyrings/xanmod-archive-keyring.gpg
 #	echo 'deb [signed-by=/usr/share/keyrings/xanmod-archive-keyring.gpg] http://deb.xanmod.org releases main' | tee /etc/apt/sources.list.d/xanmod-release.list
@@ -788,6 +815,8 @@ elif [ "$KERNEL" = "6.18" ]; then
 		dpkg --force-all -i -B /tmp/linux-headers-${KERNEL_VERSION}-${KERNEL_REV}.${PSABI}-omr_${KERNEL_VERSION}-${KERNEL_REV}.${PSABI}-omr_${ARCH}.deb
 	fi
 	dpkg --force-all -i -B /tmp/linux-image-${KERNEL_VERSION}-${KERNEL_REV}.${PSABI}-omr_${KERNEL_VERSION}-${KERNEL_REV}.${PSABI}-omr_${ARCH}.deb
+	# tmpfs /tmp: keeping these costs their size in RAM until a reboot
+	rm -f /tmp/linux-headers-${KERNEL_VERSION}-${KERNEL_REV}.${PSABI}-omr_${KERNEL_VERSION}-${KERNEL_REV}.${PSABI}-omr_${ARCH}.deb /tmp/linux-image-${KERNEL_VERSION}-${KERNEL_REV}.${PSABI}-omr_${KERNEL_VERSION}-${KERNEL_REV}.${PSABI}-omr_${ARCH}.deb
 	set_grub_default_kernel "${KERNEL_VERSION}" "${PSABI}-omr"
 elif [ "$KERNEL" = "6.6" ] && [ "$ID" = "debian" ]; then
 	echo 'deb http://deb.debian.org/debian bookworm-backports main' > /etc/apt/sources.list.d/bookworm-backports.list
@@ -1117,7 +1146,7 @@ if [ "$OMR_ADMIN" = "yes" ]; then
 			make
 			make altinstall
 			cd /tmp
-			rm -rf /tmp/Python-3.7.2
+			rm -rf /tmp/Python-3.7.2 /tmp/Python-3.7.2.tgz
 			update-alternatives --install /usr/bin/python3 python3 /usr/local/bin/python3.7 1
 			update-alternatives --install /usr/bin/pip3 pip3 /usr/local/bin/pip3.7 1
 			sed -i 's:/usr/bin/python3 :/usr/bin/python3\.7 :g' /usr/bin/lsb_release
@@ -1191,6 +1220,7 @@ if [ "$OMR_ADMIN" = "yes" ]; then
 		wget -O /tmp/openmptcprouter-vps-admin.zip https://github.com/Ysurac/openmptcprouter-vps-admin/archive/${OMR_ADMIN_VERSION}.zip
 		cd /tmp
 		unzip -q -o openmptcprouter-vps-admin.zip
+		rm -f /tmp/openmptcprouter-vps-admin.zip
 		if [ -f /tmp/openmptcprouter-vps-admin-${OMR_ADMIN_VERSION}/omr-admin.py ]; then
 			cp /tmp/openmptcprouter-vps-admin-${OMR_ADMIN_VERSION}/omr-admin.py /usr/bin/
 		else
@@ -1670,7 +1700,6 @@ if [ "$XRAY" = "yes" ]; then
 		else
 			cp ${DIR}/xray-server.json /etc/xray/xray-server.json
 		fi
-		sed -i "s:XRAY_UUID:$XRAY_UUID:g" /etc/xray/xray-server.json
 		sed -i "s:V2RAY_UUID:$XRAY_UUID:g" /etc/xray/xray-server.json
 		sed -i "s:XRAY_PSK:$PSK:g" /etc/xray/xray-server.json
 		sed -i "s:XRAY_UPSK:$UPSK:g" /etc/xray/xray-server.json
@@ -2014,6 +2043,7 @@ if [ "$OPENVPN" = "yes" ]; then
 		wget -O /tmp/EasyRSA-unix-v${EASYRSA_VERSION}.tgz https://github.com/OpenVPN/easy-rsa/releases/download/v${EASYRSA_VERSION}/EasyRSA-unix-v${EASYRSA_VERSION}.tgz
 		cd /tmp
 		tar xzvf EasyRSA-unix-v${EASYRSA_VERSION}.tgz
+		rm -f /tmp/EasyRSA-unix-v${EASYRSA_VERSION}.tgz
 		cd /tmp/EasyRSA-v${EASYRSA_VERSION}
 		mkdir -p /etc/openvpn/ca
 		cp easyrsa /etc/openvpn/ca/
@@ -2068,12 +2098,21 @@ if [ "$OPENVPN" = "yes" ]; then
 	if [ ! -f "/etc/openvpn/server/dh2048.pem" ]; then
 		openssl dhparam -out /etc/openvpn/server/dh2048.pem 2048
 	fi
+	# tun0.conf is written into place with a rename, never in place: omr-admin
+	# rewrites this same file whenever it syncs client-to-client (and once at
+	# every startup, which this script triggers), reading it line by line and
+	# moving its own copy over it. Seen on a test VPS: wget logged
+	# "'/etc/openvpn/tun0.conf' saved [770/770]" at 14:08:29 and omr-admin's
+	# sync, one second later, left the file 0 bytes -- after which openvpn@tun0
+	# only says "Options error: You must define TUN/TAP device (--dev)" and the
+	# tunnel is down until someone looks. A rename is atomic, so omr-admin sees
+	# either the old file or the new one, never a half-written one.
 	if [ "$LOCALFILES" = "no" ]; then
 		if [ "$KERNEL" != "5.4" ]; then
-			wget -O /etc/openvpn/tun0.conf ${VPSURL}${VPSPATH}/openvpn-tun0.6.1.conf
+			wget -O /etc/openvpn/.tun0.conf.new ${VPSURL}${VPSPATH}/openvpn-tun0.6.1.conf && mv -f /etc/openvpn/.tun0.conf.new /etc/openvpn/tun0.conf
 			wget -O /etc/openvpn/tun1.conf ${VPSURL}${VPSPATH}/openvpn-tun1.6.1.conf
 		else
-			wget -O /etc/openvpn/tun0.conf ${VPSURL}${VPSPATH}/openvpn-tun0.conf
+			wget -O /etc/openvpn/.tun0.conf.new ${VPSURL}${VPSPATH}/openvpn-tun0.conf && mv -f /etc/openvpn/.tun0.conf.new /etc/openvpn/tun0.conf
 			wget -O /etc/openvpn/tun1.conf ${VPSURL}${VPSPATH}/openvpn-tun1.conf
 		fi
 		if [ "$OPENVPN_BONDING" = "yes" ]; then
@@ -2088,10 +2127,10 @@ if [ "$OPENVPN" = "yes" ]; then
 		fi
 	else
 		if [ "$KERNEL" != "5.4" ]; then
-			cp ${DIR}/openvpn-tun0.6.1.conf /etc/openvpn/tun0.conf
+			cp ${DIR}/openvpn-tun0.6.1.conf /etc/openvpn/.tun0.conf.new && mv -f /etc/openvpn/.tun0.conf.new /etc/openvpn/tun0.conf
 			cp ${DIR}/openvpn-tun1.6.1.conf /etc/openvpn/tun1.conf
 		else
-			cp ${DIR}/openvpn-tun0.conf /etc/openvpn/tun0.conf
+			cp ${DIR}/openvpn-tun0.conf /etc/openvpn/.tun0.conf.new && mv -f /etc/openvpn/.tun0.conf.new /etc/openvpn/tun0.conf
 			cp ${DIR}/openvpn-tun1.conf /etc/openvpn/tun1.conf
 		fi
 		if [ "$OPENVPN_BONDING" = "yes" ]; then
@@ -2319,6 +2358,7 @@ if [ "$GLORYTUN_TCP" = "yes" ]; then
 		else
 			wget -O /tmp/glorytun-0.0.35.tar.gz https://github.com/angt/glorytun/releases/download/v0.0.35/glorytun-0.0.35.tar.gz
 			tar xzf glorytun-0.0.35.tar.gz
+			rm -f /tmp/glorytun-0.0.35.tar.gz
 			cd glorytun-0.0.35
 		fi
 		if [ "$ID" = "debian" ] && [ "$VERSION_ID" = "13" ]; then
@@ -2672,8 +2712,17 @@ else
 fi
 
 if [ "$SOURCES" != "yes" ]; then
-	apt-get -y install omr-server=${OMR_VERSION} >/dev/null 2>&1 || true
-	rm -f /etc/openmtpcprouter-vps-admin/update-bin
+	# Not silent any more: when this does not install, the VPS is left with no
+	# omr-server package and no version marker, and the two ways it fails look
+	# identical from the outside -- an unresolvable version (a pin in
+	# debian/control that drifted, or a version never published) and apt being
+	# OOM-killed on a small VPS, which is what a kernel .deb left in the tmpfs
+	# /tmp used to cause.
+	omr_server_install="$(apt-get -y install omr-server=${OMR_VERSION} 2>&1)" || {
+		echo "WARNING: omr-server=${OMR_VERSION} was not installed, this VPS keeps no version marker:" >&2
+		printf '%s\n' "$omr_server_install" | tail -n 5 >&2
+	}
+	rm -f /etc/openmptcprouter-vps-admin/update-bin
 fi
 
 # Give one last start to every service left failed by the install order. A deb

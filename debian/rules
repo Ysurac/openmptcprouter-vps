@@ -7,6 +7,16 @@ export DEB_BUILD_MAINT_OPTIONS = hardening=+all
 %:
 	dh $@
 
+# Compress with xz, explicitly, for both archive members. dpkg-deb's default
+# follows the distribution building the package: Debian uses xz, Ubuntu (which
+# is what .github/workflows/build-deb.yml runs on) uses zstd, and a
+# control.tar.zst is rejected by reprepro with
+#   Could not find a suitable control.tar file within '...omr-server_....deb'!
+# so a package built by CI could not be added to the apt repository at all,
+# while the same source built on Debian went in without a word.
+override_dh_builddeb:
+	dh_builddeb -- -Zxz
+
 override_dh_auto_install:
 	mkdir -p $(CURDIR)/debian/omr-server/usr/share/omr-server
 	find . -maxdepth 1 -type f -exec cp '{}' "$(CURDIR)/debian/omr-server/usr/share/omr-server/" ';'

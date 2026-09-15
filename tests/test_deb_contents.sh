@@ -147,6 +147,27 @@ else
     pass "the package declares no conffiles (nothing under /etc is shipped)"
 fi
 
+# ── 1c. archive members the apt repository can read ────────────────────────
+# dpkg-deb's default compression follows the distribution doing the build:
+# Debian writes xz, Ubuntu writes zstd, and .github/workflows/build-deb.yml
+# builds on ubuntu-latest. reprepro reads gzip and xz only, so a zstd package
+# is refused at the door with
+#   Could not find a suitable control.tar file within '...omr-server_....deb'!
+# and never reaches the repository the installer's own
+# "apt-get -y install omr-server=${OMR_VERSION}" pulls from.
+
+echo
+echo "== archive members =="
+members="$(ar t "$DEB" | tr '\n' ' ')"
+bad="$(printf '%s\n' $members | grep -vE '^(debian-binary|(control|data)\.tar\.(gz|xz))$' || true)"
+if [ -z "$bad" ]; then
+    pass "members are $members(reprepro reads all of these)"
+else
+    fail "members reprepro will refuse:"
+    printf '         %s\n' $bad
+    printf '         (debian/rules pins this with "dh_builddeb -- -Zxz")\n'
+fi
+
 # ── 2. dependency pins against the installer's own constants ────────────────
 # debian/control mirrors the versions the installer asks apt for; it is never
 # the source of truth, so every pin has to be checked against the constant it

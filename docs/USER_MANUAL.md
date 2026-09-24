@@ -36,7 +36,7 @@ You don't need to enable everything — most tunnel types are individually toggl
 The simplest install, run as root on a fresh VPS:
 
 ```sh
-wget -O - http://www.openmptcprouter.com/server/debian.sh | sh
+wget -O - https://www.openmptcprouter.com/server/debian.sh | sh
 ```
 
 This is fully non-interactive — there are no prompts. Everything is controlled by environment
@@ -44,7 +44,7 @@ variables read at the top of the script, each with a sensible default. To custom
 variables before running it, e.g.:
 
 ```sh
-MQVPN=no WIREGUARD=no SOFTETHERVPN=yes wget -O - http://www.openmptcprouter.com/server/debian.sh | sh
+MQVPN=no WIREGUARD=no SOFTETHERVPN=yes wget -O - https://www.openmptcprouter.com/server/debian.sh | sh
 ```
 
 ### Commonly-adjusted options

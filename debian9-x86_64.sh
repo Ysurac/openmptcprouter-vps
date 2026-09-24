@@ -77,7 +77,7 @@ if [ "$KERNEL" = "6.1" ]; then
 	KERNEL_PACKAGE_VERSION="1.30"
 	KERNEL_RELEASE="${KERNEL_VERSION}-mptcp_${KERNEL_PACKAGE_VERSION}"
 fi
-MPTCP_BPF_VERSION="1.0-1"
+MPTCP_BPF_VERSION="1.2-1"
 GLORYTUN_UDP=${GLORYTUN_UDP:-yes}
 GLORYTUN_UDP_VERSION="23100474922259d00a8c0c4b00a0c8de89202cf9"
 GLORYTUN_UDP_BINARY_VERSION="0.3.4-5"
@@ -91,8 +91,8 @@ MLVPN_BINARY_VERSION="3.0.0+20211028.git.ddafba3"
 UBOND_VERSION="31af0f69ebb6d07ed9348dca2fced33b956cedee"
 OBFS_VERSION="486bebd9208539058e57e23a12f23103016e09b4"
 OBFS_BINARY_VERSION="0.0.5-1"
-OMR_ADMIN_VERSION="11d4cab42c32218becf842d880fd419d3d1bb5dd"
-OMR_ADMIN_BINARY_VERSION="0.18+20260910"
+OMR_ADMIN_VERSION="68773ea9dba8e3ef603d20b2121cd1dcf3c087b2"
+OMR_ADMIN_BINARY_VERSION="0.18+20260924"
 DSVPN_VERSION="3b99d2ef6c02b2ef68b5784bec8adfdd55b29b1a"
 DSVPN_BINARY_VERSION="0.1.4-2"
 MQVPN_VERSION="0.16.2-1"
@@ -115,7 +115,7 @@ VPSURL="https://www.openmptcprouter.com/"
 REPO="repo.openmptcprouter.com"
 CHINA=${CHINA:-no}
 
-OMR_VERSION="0.1082-rolling-test"
+OMR_VERSION="0.1084-rolling-test"
 
 DIR=$( pwd )
 #"
@@ -1301,9 +1301,18 @@ if [ "$OMR_ADMIN" = "yes" ]; then
 	#	mptcpize enable omr-admin.service >/dev/null 2>&1
 		#[ "$(ip -6 a)" != "" ] && mptcpize enable omr-admin-ipv6.service >/dev/null 2>&1
 	#fi
+	# Best-effort: stop the unit before reconfiguring it, never fail the install
+	# because of it. `systemctl stop` returns non-zero when its job is superseded
+	# or cancelled, which happens when something else restarts the unit at the same
+	# moment -- omr-admin's POST /mptcp restarts exactly the units these blocks stop
+	# (shadowsocks-libev, shadowsocks-go, v2ray, xray, glorytun-tcp, openvpn), so a
+	# router pushing its config during an install could trip `set -e` here. The run
+	# then ended silently, the EXIT trap removing the lock on the way out and the
+	# log simply stopping mid-section. The `is-active` test is an `if` condition and
+	# so exempt from `set -e`; the commands in the body are not.
 	if systemctl -q is-active omr-admin-ipv6.service 2>/dev/null; then
-		systemctl -q stop omr-admin-ipv6 >/dev/null 2>&1
-		systemctl -q disable omr-admin-ipv6 >/dev/null 2>&1
+		systemctl -q stop omr-admin-ipv6 >/dev/null 2>&1 || true
+		systemctl -q disable omr-admin-ipv6 >/dev/null 2>&1 || true
 	fi
 	if [ "$OMR_METRICS" = "yes" ]; then
 		mkdir -p /usr/share/omr-admin
@@ -1374,7 +1383,7 @@ if [ "$SHADOWSOCKS" = "yes" ]; then
 		cp ${DIR}/shadowsocks-libev-manager@.service.in /lib/systemd/system/shadowsocks-libev-manager@.service
 	fi
 	if systemctl -q is-enabled shadowsocks-libev 2>/dev/null; then
-		systemctl -q disable --now shadowsocks-libev
+		systemctl -q disable --now shadowsocks-libev || true
 	fi
 	[ -f /etc/shadowsocks-libev/config.json ] && systemctl disable shadowsocks-libev-server@config.service
 	systemctl enable shadowsocks-libev-manager@manager.service
@@ -1384,7 +1393,7 @@ if [ "$SHADOWSOCKS" = "yes" ]; then
 		done
 	fi
 	if systemctl -q is-active shadowsocks-libev-manager@manager 2>/dev/null; then
-		systemctl -q stop shadowsocks-libev-manager@manager > /dev/null 2>&1
+		systemctl -q stop shadowsocks-libev-manager@manager > /dev/null 2>&1 || true
 	fi
 fi
 if ! grep -q 'DefaultLimitNOFILE=65536' /etc/systemd/system.conf ; then
@@ -1473,8 +1482,8 @@ if [ "$OBFS" = "no" ] && [ "$V2RAY_PLUGIN" = "no" ] && [ -f /etc/shadowsocks-lib
 fi
 
 if systemctl -q is-active shadowsocks-go.service 2>/dev/null; then
-	systemctl -q stop shadowsocks-go > /dev/null 2>&1
-	systemctl -q disable shadowsocks-go > /dev/null 2>&1
+	systemctl -q stop shadowsocks-go > /dev/null 2>&1 || true
+	systemctl -q disable shadowsocks-go > /dev/null 2>&1 || true
 fi
 
 if [ "$SHADOWSOCKS_GO" = "yes" ]; then
@@ -1524,8 +1533,8 @@ fi
 
 
 if systemctl -q is-active v2ray.service 2>/dev/null; then
-	systemctl -q stop v2ray > /dev/null 2>&1
-	systemctl -q disable v2ray > /dev/null 2>&1
+	systemctl -q stop v2ray > /dev/null 2>&1 || true
+	systemctl -q disable v2ray > /dev/null 2>&1 || true
 fi
 
 if [ "$V2RAY" = "yes" ]; then
@@ -1606,8 +1615,8 @@ if [ "$V2RAY" = "yes" ]; then
 fi
 
 if systemctl -q is-active xray.service 2>/dev/null; then
-	systemctl -q stop xray > /dev/null 2>&1
-	systemctl -q disable xray > /dev/null 2>&1
+	systemctl -q stop xray > /dev/null 2>&1 || true
+	systemctl -q disable xray > /dev/null 2>&1 || true
 fi
 
 if [ "$XRAY" = "yes" ]; then
@@ -1756,8 +1765,8 @@ if [ "$XRAY" = "yes" ]; then
 fi
 
 if systemctl -q is-active mlvpn@mlvpn0.service 2>/dev/null; then
-	systemctl -q stop mlvpn@mlvpn0 > /dev/null 2>&1
-	systemctl -q disable mlvpn@mlvpn0 > /dev/null 2>&1
+	systemctl -q stop mlvpn@mlvpn0 > /dev/null 2>&1 || true
+	systemctl -q disable mlvpn@mlvpn0 > /dev/null 2>&1 || true
 fi
 echo "install mlvpn"
 # Install MLVPN
@@ -1826,8 +1835,8 @@ if [ "$MLVPN" = "yes" ]; then
 	echo "install mlvpn done"
 fi
 if systemctl -q is-active ubond@ubond0.service 2>/dev/null; then
-	systemctl -q stop ubond@ubond0 > /dev/null 2>&1
-	systemctl -q disable ubond@ubond0 > /dev/null 2>&1
+	systemctl -q stop ubond@ubond0 > /dev/null 2>&1 || true
+	systemctl -q disable ubond@ubond0 > /dev/null 2>&1 || true
 fi
 echo "install ubond"
 # Install UBOND
@@ -1882,8 +1891,8 @@ if [ "$UBOND" = "yes" ]; then
 fi
 
 if systemctl -q is-active wg-quick@wg0.service 2>/dev/null; then
-	systemctl -q stop wg-quick@wg0 > /dev/null 2>&1
-	systemctl -q disable wg-quick@wg0 > /dev/null 2>&1
+	systemctl -q stop wg-quick@wg0 > /dev/null 2>&1 || true
+	systemctl -q disable wg-quick@wg0 > /dev/null 2>&1 || true
 fi
 
 if [ "$WIREGUARD" = "yes" ]; then
@@ -1935,8 +1944,8 @@ if [ "$WIREGUARD" = "yes" ]; then
 fi
 
 if systemctl -q is-active mqvpn.service 2>/dev/null; then
-	systemctl -q stop mqvpn > /dev/null 2>&1
-	systemctl -q disable mqvpn > /dev/null 2>&1
+	systemctl -q stop mqvpn > /dev/null 2>&1 || true
+	systemctl -q disable mqvpn > /dev/null 2>&1 || true
 fi
 if [ "$MQVPN" = "yes" ]; then
 	echo "Install MQVPN"
@@ -1990,8 +1999,8 @@ if [ "$MQVPN" = "yes" ]; then
 fi
 
 if systemctl -q is-active fail2ban.service 2>/dev/null; then
-	systemctl -q stop fail2ban > /dev/null 2>&1
-	systemctl -q disable fail2ban > /dev/null 2>&1
+	systemctl -q stop fail2ban > /dev/null 2>&1 || true
+	systemctl -q disable fail2ban > /dev/null 2>&1 || true
 fi
 if [ "$FAIL2BAN" = "yes" ]; then
 	echo "Install Fail2ban"
@@ -2018,8 +2027,8 @@ if [ "$FAIL2BAN" = "yes" ]; then
 fi
 
 if systemctl -q is-active openvpn-server@tun0.service 2>/dev/null; then
-	systemctl -q stop openvpn-server@tun0 > /dev/null 2>&1
-	systemctl -q disable openvpn-server@tun0 > /dev/null 2>&1
+	systemctl -q stop openvpn-server@tun0 > /dev/null 2>&1 || true
+	systemctl -q disable openvpn-server@tun0 > /dev/null 2>&1 || true
 fi
 if [ "$OPENVPN" = "yes" ]; then
 	echo "Install OpenVPN"
@@ -2192,7 +2201,7 @@ fi
 echo 'Glorytun UDP'
 # Install Glorytun UDP
 if systemctl -q is-active glorytun-udp@tun0.service 2>/dev/null; then
-	systemctl -q stop 'glorytun-udp@*' > /dev/null 2>&1
+	systemctl -q stop 'glorytun-udp@*' > /dev/null 2>&1 || true
 fi
 if [ "$GLORYTUN_UDP" = "yes" ]; then
 	if [ "$SOURCES" = "yes" ] || [ "$ARCH" != "amd64" ]; then
@@ -2266,8 +2275,8 @@ if [ "$DSVPN" = "yes" ]; then
 	echo 'A Dead Simple VPN'
 	# Install A Dead Simple VPN
 	if systemctl -q is-active dsvpn-server.service 2>/dev/null; then
-		systemctl -q disable dsvpn-server > /dev/null 2>&1
-		systemctl -q stop dsvpn-server > /dev/null 2>&1
+		systemctl -q disable dsvpn-server > /dev/null 2>&1 || true
+		systemctl -q stop dsvpn-server > /dev/null 2>&1 || true
 	fi
 	if [ "$SOURCES" = "yes" ] || [ "$ARCH" != "amd64" ]; then
 		rm -f /var/lib/dpkg/lock
@@ -2321,7 +2330,7 @@ fi
 
 # Install Glorytun TCP
 if systemctl -q is-active glorytun-tcp@tun0.service 2>/dev/null; then
-	systemctl -q stop 'glorytun-tcp@*' > /dev/null 2>&1
+	systemctl -q stop 'glorytun-tcp@*' > /dev/null 2>&1 || true
 fi
 if [ "$GLORYTUN_TCP" = "yes" ]; then
 	echo "Install Glorytun-TCP..."
@@ -2551,8 +2560,8 @@ chmod 644 /lib/systemd/system/omr-bypass.service
 chmod 644 /lib/systemd/system/omr-bypass.timer
 systemctl daemon-reload
 if systemctl -q is-active omr-6in4.service 2>/dev/null; then
-	systemctl -q stop omr-6in4 > /dev/null 2>&1
-	systemctl -q disable omr-6in4 > /dev/null 2>&1
+	systemctl -q stop omr-6in4 > /dev/null 2>&1 || true
+	systemctl -q disable omr-6in4 > /dev/null 2>&1 || true
 fi
 systemctl enable omr6in4@user0.service
 systemctl enable omr-vxlan@user0.service

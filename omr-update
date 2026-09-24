@@ -3,9 +3,27 @@
 # reinstall from the web, /update-bin for the binaries update the omr-server
 # package asks for from its postinst.
 if [ -f /etc/openmptcprouter-vps-admin/update ]; then
-        wget -O - http://www.openmptcprouter.com/server/debian.sh | sh
-        rm -f /etc/openmptcprouter-vps-admin/update
-        reboot
+	installer="$(mktemp /tmp/omr-update.XXXXXX)" || exit 1
+	# Do not pipe the network response into a root shell: POSIX pipelines report
+	# only the last command's status, so an empty response from a failed wget can
+	# look like a successful install.  Download over TLS, then execute only when
+	# the download completed successfully.
+	#
+	# Run it with sh, not bash: the installer is #!/bin/sh and carries no
+	# bashisms, and naming the interpreter here overrides its shebang.  Under
+	# bash the six `echo "\033[1m...\033[0m"` lines print their escapes
+	# literally instead of rendering, which includes the line that shows the
+	# generated omr-admin password.
+	if wget -O "$installer" https://www.openmptcprouter.com/server/debian.sh \
+		&& sh "$installer"; then
+		rm -f "$installer" /etc/openmptcprouter-vps-admin/update
+		reboot
+	else
+		rc=$?
+		rm -f "$installer"
+		echo "omr-update: the full installer failed, keeping /etc/openmptcprouter-vps-admin/update so the next run retries" >&2
+		exit "$rc"
+	fi
 fi
 if [ -f /etc/openmptcprouter-vps-admin/update-bin ]; then
         # Wait for the package manager first. This unit is started by the

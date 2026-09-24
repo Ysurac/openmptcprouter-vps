@@ -1,6 +1,10 @@
 #!/bin/bash
 # OpenMPTCProuter VPS service script
 
+_unit_exists() {
+	systemctl list-unit-files --no-legend "$1" 2>/dev/null | grep -q '[^[:space:]]'
+}
+
 _multipath() {
 	# Force multipath status
 	# NET_IFACE used to come from Shorewall's params.net; derived directly
@@ -24,7 +28,7 @@ _multipath() {
 
 _glorytun_udp() {
 	#if [ -n "$(systemctl -a | grep 'glorytun-udp')" ]; then
-	if systemctl list-unit-files glorytun-udp@.service >/dev/null; then
+	if _unit_exists glorytun-udp@.service; then
 		# The unit template being installed doesn't mean any user actually
 		# selected Glorytun-UDP (the install script sets it up unconditionally).
 		# Only chase a missing tunnel when it's the currently active VPN,
@@ -48,14 +52,14 @@ _glorytun_udp() {
 
 _glorytun_tcp() {
 	#if [ -n "$(systemctl -a | grep 'glorytun-tcp')" ]; then
-	if systemctl list-unit-files glorytun-tcp@.service >/dev/null; then
+	if _unit_exists glorytun-tcp@.service; then
 		for intf in /etc/glorytun-tcp/tun*; do
 			[ "$(echo $intf | grep key)" = "" ] && timeout 10 /etc/glorytun-tcp/post.sh ${intf}
 		done
 		if [ -f /etc/openmptcprouter-vps-admin/current-vpn ] && [ "$(cat /etc/openmptcprouter-vps-admin/current-vpn)" = "glorytun_tcp" ]; then
 			localip="$(cat /etc/glorytun-tcp/tun0 | grep LOCALIP | cut -d '=' -f2)"
 			[ -z "$localip" ] && localip="10.255.255.1"
-			remoteip="$(echo $localip | sed 's/\.1/\.2/')"
+			remoteip="$(printf '%s\n' "$localip" | sed 's/\.1$/.2/')"
 			if [ "$(ping -c 6 -w 50 $remoteip | grep '100%')" != "" ] && ([ -z "$(pgrep glorytun-tcp)" ] || [ "$(expr $(date +%s) - $(stat -c %Y /proc/$(pgrep glorytun-tcp)/exe ))" -gt "600" ]); then
 				logger -t "OMR-Service" "No answer from VPN client end, restart Glorytun-TCP"
 				systemctl restart glorytun-tcp@tun0
@@ -68,12 +72,12 @@ _glorytun_tcp() {
 
 _dsvpn() {
 	#if [ -n "$(systemctl -a | grep 'dsvpn')" ]; then
-	if systemctl list-unit-files dsvpn-server@.service >/dev/null; then
+	if _unit_exists dsvpn-server@.service; then
 		[ -n "$(ip -6 r show 64:ff9b::/96 dev dsvpn0)" ] && ip -6 r del 64:ff9b::/96 dev dsvpn0 >/dev/null 2>&1
 		if [ -f /etc/openmptcprouter-vps-admin/current-vpn ] && [ "$(cat /etc/openmptcprouter-vps-admin/current-vpn)" = "dsvpn" ]; then
 			localip="$(cat /etc/dsvpn/dsvpn0 | grep LOCALTUNIP | cut -d '=' -f2)"
 			[ -z "$localip" ] && localip="10.255.251.1"
-			remoteip="$(echo $localip | sed 's/\.1/\.2/')"
+			remoteip="$(printf '%s\n' "$localip" | sed 's/\.1$/.2/')"
 			if [ "$(ping -c 5 -w 5 $remoteip | grep '100%')" != "" ] && [ "$(expr $(date +%s) - $(stat -c %Y /proc/$(pgrep dsvpn)/exe ))" -gt "300" ]; then
 				logger -t "OMR-Service" "No answer from VPN client end, restart DSVPN"
 				systemctl restart dsvpn-server@dsvpn0
@@ -84,7 +88,7 @@ _dsvpn() {
 }
 
 _softethervpn() {
-	if systemctl list-unit-files softether-vpnserver.service >/dev/null; then
+	if _unit_exists softether-vpnserver.service; then
 		if [ -z "$(ip a show dev tap_softether | grep '10.255.210.1')" ]; then
 			ip a add 10.255.210.1/24 dev tap_softether >/dev/null 2>&1
 			ip link set promisc on tap_softether >/dev/null 2>&1
@@ -93,7 +97,7 @@ _softethervpn() {
 }
 
 _shadowsocks() {
-	if systemctl list-unit-files shadowsocks-libev-manager@.service >/dev/null; then
+	if _unit_exists shadowsocks-libev-manager@.service; then
 		[ -z "$(pgrep ss-server)" ] && {
 			logger -t "OMR-Service" "ss-server not detected, restart Shadowsocks libev"
 			systemctl restart shadowsocks-libev-manager@manager
@@ -102,7 +106,7 @@ _shadowsocks() {
 }
 
 _shadowsocks_go() {
-	if systemctl list-unit-files shadowsocks-go.service >/dev/null; then
+	if _unit_exists shadowsocks-go.service; then
 		[ -z "$(pgrep shadowsocks-go)" ] && {
 			logger -t "OMR-Service" "shadowsocks-go not detected, restart Shadowsocks go"
 			systemctl restart shadowsocks-go
@@ -111,7 +115,7 @@ _shadowsocks_go() {
 }
 
 _xray() {
-	if systemctl list-unit-files xray.service >/dev/null; then
+	if _unit_exists xray.service; then
 		[ -z "$(pgrep xray)" ] && {
 			logger -t "OMR-Service" "xray not detected, restart XRay"
 			systemctl restart xray
@@ -120,7 +124,7 @@ _xray() {
 }
 
 _v2ray() {
-	if systemctl list-unit-files v2ray.service >/dev/null; then
+	if _unit_exists v2ray.service; then
 		[ -z "$(pgrep v2ray)" ] && {
 			logger -t "OMR-Service" "v2ray not detected, restart V2Ray"
 			systemctl restart v2ray
@@ -130,14 +134,14 @@ _v2ray() {
 
 _wireguard() {
 	#if [ -n "$(systemctl -a | grep 'wg')" ]; then
-	if systemctl list-unit-files wg-quick@.service >/dev/null; then
+	if _unit_exists wg-quick@.service; then
 		[ -z "$(ip a show dev wg0 | grep '10.255.247.1')" ] && ip a add 10.255.247.1/24 dev wg0 >/dev/null 2>&1
 		[ -z "$(ip a show dev client-wg0 | grep '10.255.246.1')" ] && ip a add 10.255.246.1/24 dev client-wg0 >/dev/null 2>&1
 	fi
 }
 
 _mqvpn() {
-	if systemctl list-unit-files mqvpn.service >/dev/null; then
+	if _unit_exists mqvpn.service; then
 		[ -z "$(pgrep mqvpn)" ] && {
 			logger -t "OMR-Service" "mqvpn not detected, restart MQVPN"
 			systemctl restart mqvpn
@@ -224,15 +228,20 @@ _openvpn_bonding() {
 }
 
 _vpn1() {
-	vpn1route=$(ip r show dev vpn1 2>/dev/null | grep '0.0.0.0')
-	[ -z "$vpn1route" ] && vpn1route=$(ip r show dev vpn1 2>/dev/null | grep 'default')
+	local vpn1route
+	vpn1route="$(ip -4 route show default dev vpn1 2>/dev/null | head -n 1)"
 	if [ -n "$vpn1route" ]; then
-		ip r del $vpn1route
-		vpn1gw="$(echo \"$vpn1route\" | awk '{ print $3 }')"
-		ip r a default via $vpngw dev vpn1 table 991337
-		for route in $(ip r show dev vpn1); do
-			ip r a $route table 991337
-		done
+		# Preserve each route as one argument vector. Iterating over $(ip route)
+		# splits a route into words and produces commands such as "ip route add
+		# via table 991337". Install the policy-table copies before removing the
+		# main-table default so a failed copy cannot cut connectivity.
+		while IFS= read -r route; do
+			[ -n "$route" ] || continue
+			read -r -a route_args <<< "$route"
+			ip -4 route replace table 991337 "${route_args[@]}" || return
+		done < <(ip -4 route show dev vpn1 2>/dev/null)
+		read -r -a default_args <<< "$vpn1route"
+		ip -4 route del "${default_args[@]}"
 	fi
 }
 

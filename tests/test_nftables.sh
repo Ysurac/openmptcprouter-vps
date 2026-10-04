@@ -267,6 +267,25 @@ awk '
     && pass "the SSH rule and jump user_accept come before the trailing reject" \
     || fail "the input chain's trailing reject now comes before the SSH rule or jump user_accept"
 
+# #4384: omr-bypass routes what it marks out through bypass_intf (vpn1), no
+# zone of this ruleset. Unless forward accepts the mark ahead of its reject
+# and nat_postrouting masquerades it there, the router's bypassed IPv4 is
+# rejected, and what gets out leaves with a tunnel address.
+bypass_mark="$(sed -nE 's/^MARK="(0x[0-9a-fA-F]+)"$/\1/p' omr-bypass)"
+awk -v m="meta mark $bypass_mark accept" '
+    $1 == "chain" && $2 == "forward" { inside = 1; n = 0; next }
+    inside && /^\t\}/ { inside = 0 }
+    inside { n++; sub(/#.*/, ""); if (index($0, m) && $0 ~ /iifname \$VPN_IFACES/) acc = n; if ($0 ~ /reject/) rej = n }
+    END { exit !(acc && rej && acc < rej) }' "$RULES" \
+    && pass "forward accepts omr-bypass's mark ($bypass_mark) from the tunnels before its reject" \
+    || fail "forward does not accept omr-bypass's mark ($bypass_mark) before its reject; bypassed IPv4 is rejected (#4384)"
+if awk '$1 == "chain" && $2 == "nat_postrouting" { inside = 1 } inside && /^\t\}/ { inside = 0 } inside { sub(/#.*/, ""); print }' "$RULES" \
+    | grep -E "meta mark $bypass_mark " | grep -q masquerade; then
+    pass "nat_postrouting masquerades omr-bypass's mark ($bypass_mark)"
+else
+    fail "nat_postrouting does not masquerade omr-bypass's mark ($bypass_mark); bypassed traffic leaves vpn1 with a tunnel address (#4384)"
+fi
+
 # ── 5. a real parse ──────────────────────────────────────────────────────
 
 echo

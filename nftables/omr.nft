@@ -115,6 +115,11 @@ table inet omr {
 		iifname $VPN_IFACES oifname $NET_IFACE accept           # policy: vpn net ACCEPT
 		iifname $VPNCL_IFACES oifname $VPN_IFACES accept        # policy: vpncl vpn ACCEPT
 		iifname $VPN_IFACES oifname $VPNCL_IFACES accept        # policy: vpn vpncl ACCEPT
+		# omr-bypass marks (0x539) what goes to the bypassed addresses and
+		# routes it out through its bypass_intf (vpn1 by default), which is
+		# no zone here: without this the router's IPv4 for those addresses
+		# hits the trailing reject. Masqueraded in nat_postrouting.
+		iifname $VPN_IFACES meta mark 0x539 accept
 
 		meta nfproto ipv4 iifname $NET_IFACE oifname $VPN_IFACES accept
 		# IPv6 net->vpn: only what user_dnat redirected, as with shorewall6
@@ -186,6 +191,13 @@ table inet omr {
 		#   ip saddr 0.0.0.0/0 oifname $VPS_IFACE snat ip to $VPS_ADDR
 
 		jump gre_snat                                            # live GRE-tunnel-per-public-IP SNAT pairs
+
+		# omr-bypass (mark 0x539): the router's tunnel addresses (and the
+		# VPS's own WAN address, chosen before the mark rerouted it) mean
+		# nothing past bypass_intf, so take that interface's address. Not on
+		# the WAN, where the marked traffic only goes while bypass_intf has
+		# no route: the rules above already handle it there.
+		meta mark 0x539 oifname != $NET_IFACE oifname != $NET_IFACE6 masquerade
 	}
 
 	# --- shorewall4/mangle (DSCP destination classification) ----------------

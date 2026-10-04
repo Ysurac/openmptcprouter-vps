@@ -59,8 +59,8 @@ sed "s#/etc/openmptcprouter-vps-admin#$T/cfg#g" "$SCRIPT" > "$T/omr-bypass"
 # $T/sys: the real tools the script and the fakes use, and nothing else, so
 # that iptables and ipset only exist when a test puts a fake of them in $T/bin.
 mkdir -p "$T/sys"
-for c in jq awk grep tr md5sum mv cat sed rm touch basename; do
-    ln -s "$(command -v $c)" "$T/sys/$c"
+for c in jq awk grep tr md5sum mv cat sed rm touch basename chmod flock; do
+    tool="$(command -v $c 2> /dev/null)" && ln -s "$tool" "$T/sys/$c"
 done
 
 fake_nft() {
@@ -281,6 +281,18 @@ setup
 run_bypass
 assert_eq "no omr-bypass.json: exit 0" 0 "$RC"
 assert_eq "no omr-bypass.json: nothing is run" "" "$(cat "$T/log")"
+
+# The checksum write shares omr-admin's config, which holds user passwords
+# and keys: it must stay root-only and take omr-admin's lock (issue #62).
+check "the checksum write takes omr-admin's config lock" grep -q 'flock 9' "$SCRIPT"
+check "the lock is omr-admin's .omr-admin-config.lock" grep -q '\.omr-admin-config\.lock' "$SCRIPT"
+setup
+set_list '{"vpn1":{"ipv4":["8.8.8.8"]}}'
+chmod 644 "$T/cfg/omr-admin-config.json"
+run_bypass
+assert_eq "a run that saves the checksum leaves the config root-only (0600)" 600 "$(stat -c %a "$T/cfg/omr-admin-config.json")"
+assert_eq "the checksum is saved" "$(list_checksum)" "$(saved_checksum)"
+check "no leftover temp config" eval '! test -e "$T/cfg/omr-admin-config.json.tmp"'
 
 setup
 set_list '{"vpn1":{"ipv4":["8.8.8.8"]}}'

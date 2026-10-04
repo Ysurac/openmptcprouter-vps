@@ -91,8 +91,8 @@ MLVPN_BINARY_VERSION="3.0.0+20211028.git.ddafba3"
 UBOND_VERSION="31af0f69ebb6d07ed9348dca2fced33b956cedee"
 OBFS_VERSION="486bebd9208539058e57e23a12f23103016e09b4"
 OBFS_BINARY_VERSION="0.0.5-1"
-OMR_ADMIN_VERSION="68773ea9dba8e3ef603d20b2121cd1dcf3c087b2"
-OMR_ADMIN_BINARY_VERSION="0.18+20260924"
+OMR_ADMIN_VERSION="84b20c1e31564f46457c887b81b0758a757cca50"
+OMR_ADMIN_BINARY_VERSION="0.18+20261004"
 DSVPN_VERSION="3b99d2ef6c02b2ef68b5784bec8adfdd55b29b1a"
 DSVPN_BINARY_VERSION="0.1.4-2"
 MQVPN_VERSION="0.16.2-1"
@@ -115,7 +115,7 @@ VPSURL="https://www.openmptcprouter.com/"
 REPO="repo.openmptcprouter.com"
 CHINA=${CHINA:-no}
 
-OMR_VERSION="0.1084-rolling-test"
+OMR_VERSION="0.1085-rolling-test"
 
 DIR=$( pwd )
 #"
@@ -1250,11 +1250,18 @@ if [ "$OMR_ADMIN" = "yes" ]; then
 			[ -n "$OMR_ADMIN_PASS_ADMIN2" ] && [ "$OMR_ADMIN_PASS_ADMIN2" != "AdminMySecretKey" ] && OMR_ADMIN_PASS_ADMIN=$OMR_ADMIN_PASS_ADMIN2
 		fi
 		if ! apt-get -o Dpkg::Options::="--force-confold" -o Dpkg::Options::="--force-confdef" -o Dpkg::Options::="--force-overwrite" -y --allow-downgrades install omr-vps-admin=${OMR_ADMIN_BINARY_VERSION}; then
-			wget -O /tmp/omr-vps-admin_${OMR_ADMIN_BINARY_VERSION}_all.deb ${VPSURL}debian/omr-vps-admin_${OMR_ADMIN_BINARY_VERSION}_all.deb
-			# Unlike the apt call above, dpkg resolves no dependency: pull
-			# anything the deb needs and is missing (nftables, python3-*)
-			# instead of leaving the package unconfigured
-			dpkg --force-confold --force-confdef --force-overwrite -i /tmp/omr-vps-admin_${OMR_ADMIN_BINARY_VERSION}_all.deb || apt-get -y --fix-broken install
+			if wget -O /tmp/omr-vps-admin_${OMR_ADMIN_BINARY_VERSION}_all.deb ${VPSURL}debian/omr-vps-admin_${OMR_ADMIN_BINARY_VERSION}_all.deb; then
+				# Unlike the apt call above, dpkg resolves no dependency: pull
+				# anything the deb needs and is missing (nftables, python3-*)
+				# instead of leaving the package unconfigured
+				dpkg --force-confold --force-confdef --force-overwrite -i /tmp/omr-vps-admin_${OMR_ADMIN_BINARY_VERSION}_all.deb || apt-get -y --fix-broken install
+			else
+				# The pinned deb is not published yet (the version is bumped
+				# here before it is uploaded): keep going with the newest one
+				# the repository has rather than abort the whole install.
+				echo "WARNING: omr-vps-admin ${OMR_ADMIN_BINARY_VERSION} is not available, installing the repository's version instead" >&2
+				apt-get -o Dpkg::Options::="--force-confold" -o Dpkg::Options::="--force-confdef" -o Dpkg::Options::="--force-overwrite" -y install omr-vps-admin || echo "WARNING: omr-vps-admin could not be installed" >&2
+			fi
 			rm -f /tmp/omr-vps-admin_${OMR_ADMIN_BINARY_VERSION}_all.deb
 		fi
 		if [ ! -f /etc/openmptcprouter-vps-admin/omr-admin-config.json ]; then
@@ -2537,6 +2544,11 @@ if [ "$LOCALFILES" = "no" ]; then
 	wget -O /usr/local/bin/omr-bypass ${VPSURL}${VPSPATH}/omr-bypass
 	wget -O /lib/systemd/system/omr-bypass.service ${VPSURL}${VPSPATH}/omr-bypass.service.in
 	wget -O /lib/systemd/system/omr-bypass.timer ${VPSURL}${VPSPATH}/omr-bypass.timer.in
+	wget -O /usr/local/bin/omr-reserved-ports ${VPSURL}${VPSPATH}/omr-reserved-ports
+	wget -O /lib/systemd/system/omr-reserved-ports.service ${VPSURL}${VPSPATH}/omr-reserved-ports.service.in
+	wget -O /lib/systemd/system/omr-reserved-ports.path ${VPSURL}${VPSPATH}/omr-reserved-ports.path.in
+	wget -O /usr/local/bin/omr-net-mem ${VPSURL}${VPSPATH}/omr-net-mem
+	wget -O /lib/systemd/system/omr-net-mem.service ${VPSURL}${VPSPATH}/omr-net-mem.service.in
 else
 	cp ${DIR}/omr-service /usr/local/bin/omr-service
 	cp ${DIR}/omr.service.in /lib/systemd/system/omr.service
@@ -2547,6 +2559,11 @@ else
 	cp ${DIR}/omr-bypass /usr/local/bin/omr-bypass
 	cp ${DIR}/omr-bypass.service.in /lib/systemd/system/omr-bypass.service
 	cp ${DIR}/omr-bypass.timer.in /lib/systemd/system/omr-bypass.timer
+	cp ${DIR}/omr-reserved-ports /usr/local/bin/omr-reserved-ports
+	cp ${DIR}/omr-reserved-ports.service.in /lib/systemd/system/omr-reserved-ports.service
+	cp ${DIR}/omr-reserved-ports.path.in /lib/systemd/system/omr-reserved-ports.path
+	cp ${DIR}/omr-net-mem /usr/local/bin/omr-net-mem
+	cp ${DIR}/omr-net-mem.service.in /lib/systemd/system/omr-net-mem.service
 
 fi
 chmod 644 /lib/systemd/system/omr.service
@@ -2558,6 +2575,11 @@ chmod 755 /usr/local/bin/omr-6in4-run
 chmod 755 /usr/local/bin/omr-vxlan-run
 chmod 644 /lib/systemd/system/omr-bypass.service
 chmod 644 /lib/systemd/system/omr-bypass.timer
+chmod 755 /usr/local/bin/omr-reserved-ports
+chmod 644 /lib/systemd/system/omr-reserved-ports.service
+chmod 644 /lib/systemd/system/omr-reserved-ports.path
+chmod 755 /usr/local/bin/omr-net-mem
+chmod 644 /lib/systemd/system/omr-net-mem.service
 systemctl daemon-reload
 if systemctl -q is-active omr-6in4.service 2>/dev/null; then
 	systemctl -q stop omr-6in4 > /dev/null 2>&1 || true
@@ -2568,6 +2590,9 @@ systemctl enable omr-vxlan@user0.service
 systemctl enable omr.service
 systemctl enable omr-bypass.timer
 systemctl enable omr-bypass.service
+systemctl enable omr-reserved-ports.service
+systemctl enable omr-reserved-ports.path
+systemctl enable omr-net-mem.service
 
 # Change SSH port to 65222
 sed -i 's:#Port 22:Port 65222:g' /etc/ssh/sshd_config
@@ -2623,7 +2648,9 @@ else
 	cp ${DIR}/nftables/omr-admin-resync.conf /etc/systemd/system/nftables.service.d/omr-admin-resync.conf
 	cp ${DIR}/systemd/20-omr-wait-online-any.conf /etc/systemd/system/systemd-networkd-wait-online.service.d/20-omr-wait-online-any.conf
 fi
-[ -n "$INTERFACE" ] && sed -i "s:eth0:$INTERFACE:g" /etc/nftables/omr-vars.nft
+[ -n "$INTERFACE" ] && sed -i "/^define NET_IFACE6 /!s:eth0:$INTERFACE:g" /etc/nftables/omr-vars.nft
+# The IPv6 WAN can be another NIC (openmptcprouter#3271); INTERFACE6 falls back to $INTERFACE.
+[ -n "$INTERFACE6" ] && sed -i "/^define NET_IFACE6 /s:eth0:$INTERFACE6:" /etc/nftables/omr-vars.nft
 # Static-IP optimization: replace the IPv4 masquerade with an explicit SNAT to
 # the WAN source IP. The src token position varies with the route's proto
 # field ("default via GW dev IF proto static src IP ..."), so walk the fields
@@ -2725,10 +2752,21 @@ if [ "$SOURCES" != "yes" ]; then
 	# debian/control that drifted, or a version never published) and apt being
 	# OOM-killed on a small VPS, which is what a kernel .deb left in the tmpfs
 	# /tmp used to cause.
-	omr_server_install="$(apt-get -y install omr-server=${OMR_VERSION} 2>&1)" || {
-		echo "WARNING: omr-server=${OMR_VERSION} was not installed, this VPS keeps no version marker:" >&2
-		printf '%s\n' "$omr_server_install" | tail -n 5 >&2
-	}
+	if apt-cache madison omr-server 2>/dev/null | awk -F'|' -v v="$OMR_VERSION" '{gsub(/ /, "", $2)} $2 == v {f = 1} END {exit !f}'; then
+		omr_server_install="$(apt-get -y install omr-server=${OMR_VERSION} 2>&1)" || {
+			echo "WARNING: omr-server=${OMR_VERSION} was not installed, this VPS keeps no version marker:" >&2
+			printf '%s\n' "$omr_server_install" | tail -n 5 >&2
+		}
+	else
+		# This release has no omr-server deb (a rolling-test not published
+		# yet): an older one left installed claims a version this VPS does not
+		# run, and its /usr/share/omr-server holds an older copy of this script.
+		echo "omr-server ${OMR_VERSION} is not in the repository, not installing it"
+		if [ "$(dpkg-query -W -f='${Status}' omr-server 2>/dev/null)" = "install ok installed" ] && [ "$(dpkg-query -W -f='${Version}' omr-server)" != "$OMR_VERSION" ]; then
+			echo "Removing omr-server $(dpkg-query -W -f='${Version}' omr-server), it is not this release"
+			dpkg -r omr-server || echo "WARNING: omr-server could not be removed" >&2
+		fi
+	fi
 	rm -f /etc/openmptcprouter-vps-admin/update-bin
 fi
 
@@ -2743,6 +2781,20 @@ fi
 # update path restarts everything at its end, a fresh install did not, which is
 # how a brand new VPS ended up with xray and mlvpn failed while both their
 # configuration files on disk were perfectly valid.
+# Reserve the ports our own services listen on (the v2ray/xray API inbounds,
+# the dokodemo-door inbounds of forwarded ports, VXLAN...) before the restarts
+# below, so no outgoing connection can be sitting on one of them when a daemon
+# binds it. The path unit keeps the list current from here on.
+# Size tcp_mem/udp_mem from this VPS's RAM now, not at the next boot: the new
+# 90-shadowsocks.conf no longer sets them, but the running kernel still has
+# whatever the previous one did.
+echo "Sizing TCP/UDP socket memory from RAM..."
+/usr/local/bin/omr-net-mem --quiet || echo "WARNING: omr-net-mem failed" >&2
+
+echo "Reserving the local ports of OpenMPTCProuter services..."
+/usr/local/bin/omr-reserved-ports --quiet || echo "WARNING: omr-reserved-ports failed" >&2
+systemctl -q restart omr-reserved-ports.path >/dev/null 2>&1 || true
+
 echo "Check services left failed by the install order..."
 for unit in shadowsocks-libev-manager@manager shadowsocks-go v2ray xray mlvpn@mlvpn0 ubond@ubond0 mqvpn dsvpn-server@dsvpn0 glorytun-tcp@tun0 glorytun-udp@tun0 omr-admin omr; do
 	systemctl is-enabled -q "$unit" 2>/dev/null || continue

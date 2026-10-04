@@ -44,11 +44,11 @@ def note(d):
     print("  note %s" % d)
 
 UNIT_FILES = sorted(f for f in os.listdir('.')
-                    if f.endswith(('.service', '.service.in', '.timer.in', '.network')))
+                    if f.endswith(('.service', '.service.in', '.timer.in', '.path.in', '.network')))
 DROPINS = ['systemd/20-omr-wait-online-any.conf',
            'nftables/omr-admin-resync.conf',
            'iperf3.override.conf']
-UNIT_SECTIONS = {'Unit', 'Service', 'Install', 'Timer', 'Socket'}
+UNIT_SECTIONS = {'Unit', 'Service', 'Install', 'Timer', 'Socket', 'Path'}
 # systemd-networkd's own vocabulary; anything outside it is a typo that
 # networkd ignores in silence.
 NETWORK_SECTIONS = {'Match', 'Link', 'Network', 'Address', 'Route', 'DHCP',

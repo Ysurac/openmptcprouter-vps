@@ -78,6 +78,20 @@ table inet omr {
 		icmp type echo-request accept
 		icmpv6 type echo-request accept
 		ip6 nexthdr icmpv6 icmpv6 type { nd-neighbor-solicit, nd-router-advert, nd-neighbor-advert } accept
+		# shorewall6.conf AllowICMPs / shorewall6/rules ACCEPT net $FW ipv6-icmp:
+		# MLD queries from the on-link router. Conntrack leaves MLD untracked,
+		# and the queries carry a hop-by-hop header (router alert), so the
+		# `ip6 nexthdr icmpv6` above never matches them -- `icmpv6 type` alone
+		# looks past extension headers. Left unanswered, an MLD-snooping switch
+		# stops forwarding neighbour solicitations for our addresses and IPv6
+		# goes away (issue #4381).
+		ip6 saddr fe80::/10 icmpv6 type mld-listener-query accept
+		# shorewall6/interfaces: `dhcp` on $NET_IFACE. The Solicit goes to
+		# ff02::1:2 but the Advertise/Reply comes back to our link-local
+		# address, so conntrack sees it as NEW: without this the VPS never
+		# gets (or renews) a DHCPv6 lease. No iifname: IPv6 is not always on
+		# $NET_IFACE (#3271), and fe80::/10 already keeps it on-link.
+		ip6 daddr fe80::/10 udp dport 546 accept
 
 		tcp dport 65000-65535 accept                            # shorewall/rules: shadowsocks/glorytun ephemeral range
 		udp dport 65000-65535 accept
@@ -102,7 +116,12 @@ table inet omr {
 		iifname $VPNCL_IFACES oifname $VPN_IFACES accept        # policy: vpncl vpn ACCEPT
 		iifname $VPN_IFACES oifname $VPNCL_IFACES accept        # policy: vpn vpncl ACCEPT
 
-		iifname $NET_IFACE oifname $VPN_IFACES accept
+		meta nfproto ipv4 iifname $NET_IFACE oifname $VPN_IFACES accept
+		# IPv6 net->vpn: only what user_dnat redirected, as with shorewall6
+		# (net all DROP, DNAT rules). A public prefix the router asks for
+		# ("IPv6 Prefix") is routed into its omr-6in4 tunnel by omr-6in4-run;
+		# that must not open the router's LAN to the internet (#4382).
+		meta nfproto ipv6 iifname $NET_IFACE6 oifname $VPN_IFACES ct status dnat accept
 
 		meta nfproto ipv6 iifname $VPN_IFACES accept            # shorewall6/policy: vpn all ACCEPT
 
@@ -159,7 +178,8 @@ table inet omr {
 
 		# shorewall6/snat: MASQUERADE fe80::/10,fd00::/8 $NET_IFACE -- NAT66
 		# for the clients' ULA (and link-local) sources egressing the WAN.
-		ip6 saddr { fe80::/10, fd00::/8 } oifname $NET_IFACE masquerade
+		# shorewall6's $NET_IFACE was the IPv6 WAN, hence $NET_IFACE6 (#3271).
+		ip6 saddr { fe80::/10, fd00::/8 } oifname $NET_IFACE6 masquerade
 
 		# shorewall4/snat's own commented-out example ("SNAT from VPN server
 		# for all VPN clients") -- disabled by default there too:

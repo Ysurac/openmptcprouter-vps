@@ -246,6 +246,10 @@ _vpn1() {
 }
 
 sysctl -p /etc/sysctl.d/90-shadowsocks.conf >/dev/null 2>&1
+# 90-shadowsocks.conf carries the configured tcp_rmem/tcp_wmem; omr-net-mem's
+# file holds what this VPS's RAM allows. Re-applying only the former would
+# undo that on every omr restart, so the generated one goes on top.
+[ -f /etc/sysctl.d/99-omr-net-mem.conf ] && sysctl -p /etc/sysctl.d/99-omr-net-mem.conf >/dev/null 2>&1
 modprobe bonding >/dev/null 2>&1
 ip link add omr-bonding type bond >/dev/null 2>&1
 #[ -n "$(uname -r | grep '6.1')" ] && {

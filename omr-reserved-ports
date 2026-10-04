@@ -1,0 +1,264 @@
+#!/bin/bash
+#
+# Copyright (C) 2026 Ycarus (Yannick Chabanois) <ycarus@zugaina.org> for OpenMPTCProuter
+#
+# omr-reserved-ports - keep the kernel's automatic port assignment away from
+# the ports this VPS's services listen on.
+#
+# WHY THIS EXISTS
+#
+# Every connection the VPS opens itself (the proxies' outgoing side, DNS,
+# apt...) and every bind(0) gets a local port picked by the kernel from
+# net.ipv4.ip_local_port_range, which 90-shadowsocks.conf sets to 9999-65000.
+# That range covers listeners of our own: the v2ray (10085) and xray (10086)
+# API inbounds, and - above all - the dokodemo-door inbounds omr-admin adds to
+# v2ray-server.json / xray-server.json for every port the router forwards
+# through a v2ray/xray proxy, on whatever port the user picked. If an outgoing
+# connection holds such a port when v2ray/xray restarts, the whole daemon fails
+# to start (it cannot bind one of its inbounds), and every proxied router with
+# it.
+#
+# This script reads those ports from the services' configs and lists them in
+# net.ipv4.ip_local_reserved_ports. Per Documentation/networking/ip-sysctl.rst
+# reserved ports are only skipped by *automatic* assignment (connect(), bind()
+# to port 0); an explicit bind() still works. So reserving a port can never
+# break the service that owns it, and reserving one outside the range is
+# harmless.
+#
+# Ports forwarded with shorewall/nftables DNAT (the shadowsocks, glorytun,
+# openvpn... modes) are not listeners on the VPS and need no reservation: a
+# NEW inbound connection is DNATed before it could meet a local socket, and
+# the replies to the VPS's own connections match their conntrack entry, not
+# the DNAT rule.
+#
+# Writing the sysctl replaces the whole list, so this is its single owner. Add
+# your own ports (one port or range per line, # comments allowed) to
+#
+#   /etc/openmptcprouter-vps-admin/reserved-ports
+#
+# rather than to a sysctl.d file of your own.
+#
+# omr-reserved-ports.path re-runs this whenever one of the files it reads
+# changes; the result is persisted to /etc/sysctl.d/99-omr-reserved-ports.conf
+# so it is in place from systemd-sysctl onwards, before any service starts.
+#
+# USAGE
+#
+#   omr-reserved-ports        compute, apply and persist (default)
+#   omr-reserved-ports -s     show the ports and where each one comes from
+#   omr-reserved-ports -n     dry run: report, change nothing
+#   omr-reserved-ports --no-persist   apply without writing /etc/sysctl.d
+#   omr-reserved-ports -q     quiet
+
+set -u
+
+# Tests only: prefix for every file read (and for the persisted sysctl file)
+ROOT="${OMR_RP_ROOT:-}"
+
+PERSIST_FILE="${ROOT}/etc/sysctl.d/99-omr-reserved-ports.conf"
+EXTRA_FILE="${ROOT}/etc/openmptcprouter-vps-admin/reserved-ports"
+OMR_CONFIG="${ROOT}/etc/openmptcprouter-vps-admin/omr-admin-config.json"
+VXLAN_DIR="${ROOT}/etc/openmptcprouter-vps-admin/omr-vxlan"
+V2RAY_CONFIG="${ROOT}/etc/v2ray/v2ray-server.json"
+XRAY_CONFIG="${ROOT}/etc/xray/xray-server.json"
+SSGO_CONFIG="${ROOT}/etc/shadowsocks-go/server.json"
+SSLIBEV_CONFIG="${ROOT}/etc/shadowsocks-libev/manager.json"
+MQVPN_CONFIG="${ROOT}/etc/mqvpn/server.json"
+
+# Refuse to reserve more than this share of the ephemeral range: past that,
+# the VPS starts running out of source ports for its own connections.
+MAX_RESERVED_PCT=50
+
+ACTION="apply"
+QUIET=0
+PERSIST=1
+
+usage() {
+	sed -n '/^# USAGE/,/^$/p' "$0" | sed -e 's/^# \{0,1\}//' -e '$d'
+	exit "${1:-0}"
+}
+
+_say() { [ "$QUIET" -eq 1 ] || echo "$@"; }
+_warn() { echo "omr-reserved-ports: $*" >&2; }
+
+while [ $# -gt 0 ]; do
+	case "$1" in
+		-s|--show)	ACTION="show" ;;
+		-n|--dry-run)	ACTION="dryrun" ;;
+		-a|--apply)	ACTION="apply" ;;
+		--no-persist)	PERSIST=0 ;;
+		-q|--quiet)	QUIET=1 ;;
+		-h|--help)	usage 0 ;;
+		*)		_warn "unknown option '$1'"; usage 1 ;;
+	esac
+	shift
+done
+
+command -v jq >/dev/null 2>&1 || { _warn "jq is required"; exit 1; }
+
+WORK=$(mktemp -d /tmp/omr-reserved-ports.XXXXXX) || exit 1
+trap 'rm -rf "$WORK"' EXIT
+FOUND="$WORK/found"		# "<value>\t<where it came from>"
+: > "$FOUND"
+
+# _jq <file> <filter> <source label>: run a filter that prints one value per
+# line and record each with its source. A missing or broken file is skipped:
+# a service that is not installed has nothing to reserve.
+_jq() {
+	[ -f "$1" ] || return 0
+	jq -r "$2" "$1" 2>/dev/null | while IFS= read -r v; do
+		[ -n "$v" ] && printf '%s\t%s\n' "$v" "$3"
+	done >> "$FOUND"
+}
+
+# v2ray / xray: every inbound listens - the API, the tunnels, and the
+# dokodemo-door inbounds added per forwarded port. "port" may be a number, a
+# "a-b" range or a "a,b" list.
+_jq "$V2RAY_CONFIG" '.inbounds[]? | "\(.port)\t\(.tag // "inbound")" ' v2ray
+_jq "$XRAY_CONFIG"  '.inbounds[]? | "\(.port)\t\(.tag // "inbound")" ' xray
+
+# shadowsocks-go: its TCP/UDP listeners and its API listener
+_jq "$SSGO_CONFIG" '.. | objects | (.tcpListeners?, .udpListeners?, .listeners?) // empty | .[]? | .address? // empty' shadowsocks-go
+
+# shadowsocks-libev (ss-manager): the server port and the per-user ports
+_jq "$SSLIBEV_CONFIG" '.server_port // empty, (.port_password // {} | keys[])' shadowsocks-libev
+
+# mqvpn: the QUIC listener and the control API
+_jq "$MQVPN_CONFIG" '.listen // empty, .control_listen // empty' mqvpn
+
+# VXLAN: per-user settings in omr-admin-config.json (omr-admin's default port
+# is 4789), and the per-user files omr-vxlan-run reads. Both, because the path
+# unit fires on the JSON before omr-admin has rewritten the user's file.
+_jq "$OMR_CONFIG" '.users[0]? // {} | to_entries[] | select(.value.vxlan.enabled? == true) | (.value.vxlan.port // 4789)' vxlan
+if [ -d "$VXLAN_DIR" ]; then
+	for f in "$VXLAN_DIR"/*; do
+		[ -f "$f" ] || continue
+		p=$(sed -n 's/^PORT=//p' "$f" | tail -1)
+		printf '%s\tvxlan (%s)\n' "${p:-4789}" "${f##*/}" >> "$FOUND"
+	done
+fi
+
+# Anything the admin asked for
+if [ -f "$EXTRA_FILE" ]; then
+	sed -e 's/#.*//' -e 's/[[:space:]]//g' -e '/^$/d' "$EXTRA_FILE" | tr ',' '\n' |
+		while IFS= read -r v; do
+			[ -n "$v" ] && printf '%s\t%s\n' "$v" "${EXTRA_FILE#$ROOT}"
+		done >> "$FOUND"
+fi
+
+# The jq filters above print "<value>\t<tag>" for v2ray/xray; fold the tag into
+# the source column, and reduce "addr:port" values to the port.
+awk -F '\t' 'BEGIN { OFS = "\t" }
+	NF >= 3 { $0 = $1 "\t" $3 " " $2 }
+	{ v = $1; sub(/.*:/, "", v); print v, $2 }' "$FOUND" > "$WORK/found2"
+mv "$WORK/found2" "$FOUND"
+
+#
+# Normalise: expand lists and ranges, keep what automatic assignment could ever
+# pick (ip_unprivileged_port_start..65535), dedupe, fold back into ranges.
+#
+
+PRIV=$(sysctl -n net.ipv4.ip_unprivileged_port_start 2>/dev/null)
+case "$PRIV" in ''|*[!0-9]*) PRIV=1024 ;; esac
+
+RANGE=$(sysctl -n net.ipv4.ip_local_port_range 2>/dev/null | tr -s ' \t' ' ')
+RANGE_LO=${RANGE%% *}
+RANGE_HI=${RANGE##* }
+case "$RANGE_LO$RANGE_HI" in ''|*[!0-9]*) RANGE_LO=32768; RANGE_HI=60999 ;; esac
+
+awk -F '\t' -v lo="$PRIV" '
+	{
+		n = split($1, parts, ",")
+		for (i = 1; i <= n; i++) {
+			v = parts[i]
+			if (v ~ /^[0-9]+-[0-9]+$/) { split(v, r, "-"); a = r[1] + 0; b = r[2] + 0 }
+			else if (v ~ /^[0-9]+$/) { a = v + 0; b = a }
+			else continue
+			if (a > b) { t = a; a = b; b = t }
+			if (a < lo) a = lo
+			if (b > 65535) b = 65535
+			for (p = a; p <= b; p++) print p
+		}
+	}' "$FOUND" | sort -n -u > "$WORK/ports"
+
+LIST=$(awk '
+	NR == 1 { s = $1; e = $1; next }
+	$1 == e + 1 { e = $1; next }
+	{ out = out sep (s == e ? s : s "-" e); sep = ","; s = $1; e = $1 }
+	END { if (NR) print out sep (s == e ? s : s "-" e) }' "$WORK/ports")
+
+IN_RANGE=$(awk -v lo="$RANGE_LO" -v hi="$RANGE_HI" '$1 >= lo && $1 <= hi' "$WORK/ports" | wc -l)
+RANGE_SIZE=$(( RANGE_HI - RANGE_LO + 1 ))
+
+#
+# Report
+#
+
+_say "ephemeral range   : ${RANGE_LO}-${RANGE_HI} (${RANGE_SIZE} ports)"
+_say "reserved (current): $(sysctl -n net.ipv4.ip_local_reserved_ports 2>/dev/null)"
+_say "reserved (new)    : ${LIST:-<none>}"
+_say "                    ${IN_RANGE} of them inside the ephemeral range"
+if [ "$QUIET" -eq 0 ] && [ -s "$FOUND" ]; then
+	_say ""
+	_say "sources:"
+	sort -n "$FOUND" | awk -F '\t' -v lo="$RANGE_LO" -v hi="$RANGE_HI" -v priv="$PRIV" '
+		{
+			split($1, r, "-"); a = r[1] + 0; b = (r[2] == "" ? a : r[2] + 0)
+			note = ""
+			if (b < priv) note = "  (privileged, never auto-assigned)"
+			else if (a <= hi && b >= lo) note = "  <- inside the ephemeral range"
+			printf "  %-12s %s%s\n", $1, $2, note
+		}'
+fi
+
+if [ "$RANGE_SIZE" -gt 0 ] && [ "$(( IN_RANGE * 100 / RANGE_SIZE ))" -gt "$MAX_RESERVED_PCT" ]; then
+	_warn "refusing: ${IN_RANGE} of ${RANGE_SIZE} ephemeral ports would be reserved (> ${MAX_RESERVED_PCT}%);"
+	_warn "the VPS would run out of source ports for its own connections"
+	exit 1
+fi
+
+[ "$ACTION" = "show" ] && exit 0
+[ "$ACTION" = "dryrun" ] && { _say ""; _say "(dry run, nothing changed)"; exit 0; }
+
+#
+# Apply. Writing replaces the whole list.
+#
+
+_say ""
+CURRENT=$(sysctl -n net.ipv4.ip_local_reserved_ports 2>/dev/null)
+if [ "$CURRENT" = "$LIST" ]; then
+	_say "net.ipv4.ip_local_reserved_ports already up to date"
+elif echo "$LIST" > /proc/sys/net/ipv4/ip_local_reserved_ports 2>/dev/null; then
+	_say "applied net.ipv4.ip_local_reserved_ports = ${LIST:-<none>}"
+else
+	_warn "failed to set net.ipv4.ip_local_reserved_ports"
+	exit 1
+fi
+
+#
+# Persist. Only a value the kernel just accepted is written; an empty list
+# removes the file rather than writing an empty value.
+#
+
+[ "$PERSIST" -eq 1 ] || exit 0
+
+if [ -z "$LIST" ]; then
+	[ -f "$PERSIST_FILE" ] && rm -f "$PERSIST_FILE" && _say "removed $PERSIST_FILE"
+	exit 0
+fi
+
+NEW_CONTENT="# Generated by omr-reserved-ports - do not edit.
+# Ports this VPS's services listen on, kept out of automatic (ephemeral) port
+# assignment. Regenerated by omr-reserved-ports.path whenever a service config
+# changes. Add your own to /etc/openmptcprouter-vps-admin/reserved-ports.
+net.ipv4.ip_local_reserved_ports = ${LIST}"
+
+if [ -f "$PERSIST_FILE" ] && [ "$(cat "$PERSIST_FILE" 2>/dev/null)" = "$NEW_CONTENT" ]; then
+	_say "$PERSIST_FILE already up to date"
+elif echo "$NEW_CONTENT" > "$PERSIST_FILE"; then
+	_say "persisted to $PERSIST_FILE"
+else
+	_warn "cannot write $PERSIST_FILE"
+	exit 1
+fi
+exit 0

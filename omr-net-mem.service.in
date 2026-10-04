@@ -1,0 +1,17 @@
+[Unit]
+Description=Size the TCP/UDP socket memory limits from the RAM present
+# Early, right after systemd-sysctl has applied /etc/sysctl.d, and before
+# anything that opens sockets: a resized VPS gets its new limits before the
+# first daemon starts. From the second boot on, systemd-sysctl already applies
+# the persisted 99-omr-net-mem.conf and this only re-checks it.
+DefaultDependencies=no
+After=systemd-sysctl.service local-fs.target
+Before=sysinit.target shutdown.target
+Conflicts=shutdown.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/bin/omr-net-mem --quiet
+
+[Install]
+WantedBy=sysinit.target

@@ -8,6 +8,10 @@
 # tunnel IPs.
 #
 define NET_IFACE = eth0
+# The IPv6 WAN: the interface of the IPv6 default route ($INTERFACE6 in the
+# installer, what shorewall6/params.net used to get). Same as NET_IFACE
+# unless the provider puts IPv6 on a separate NIC (openmptcprouter#3271).
+define NET_IFACE6 = eth0
 define VPS_IFACE  = tun0
 define VPS_ADDR   = 10.255.252.1
 define OMR_ADDR   = 10.255.252.2
@@ -17,5 +21,7 @@ define OMR_ADDR6  = fd00::a00:2
 # (the vpn/vpncl zone assignments there, e.g. `vpn tun+ nosmurfs,tcpflags`).
 # nft's iifname/oifname support a trailing "*" wildcard natively, so each
 # Shorewall `+`-suffixed interface name maps 1:1 to a `*`-suffixed one here.
-define VPN_IFACES = { "gt-tun*", "gt-udp-tun*", "mlvpn*", "tun*", "wg*", "dsvpn*", "mqvpn*", "gre-user*", "vx-user*", "omr-bonding", "tap_softether" }
+# omr-6in4-user* (shorewall6/interfaces) is the 6in4 tunnel (omr6in4@.service)
+# that carries the router's IPv6 (openmptcprouter#4382).
+define VPN_IFACES = { "gt-tun*", "gt-udp-tun*", "mlvpn*", "tun*", "wg*", "dsvpn*", "mqvpn*", "gre-user*", "vx-user*", "omr-6in4-user*", "omr-bonding", "tap_softether" }
 define VPNCL_IFACES = { "client-wg*" }

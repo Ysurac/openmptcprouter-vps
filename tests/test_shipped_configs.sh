@@ -308,6 +308,54 @@ for f in shadowsocks.6.1.conf shadowsocks.6.18.conf; do
     fi
 done
 
+# ── 8. OpenVPN socket buffers ──────────────────────────────────────────────
+# On a TCP tunnel a non-zero sndbuf/rcvbuf sets SO_SNDBUF/SO_RCVBUF, which pins
+# the socket (the kernel doubles the value) and turns TCP autotuning off. The
+# 6.1 templates had "sndbuf 262144"/"rcvbuf 262144" and pushed them to every
+# router, holding the TCP tunnel's window at 512 KB - ~200 Mbit/s at 20 ms
+# RTT, ~80 Mbit/s at 50 ms - whatever the links. UDP never autotunes, so a UDP
+# tunnel should set a real size, but one the kernel does not clamp: SO_RCVBUF
+# is silently capped at net.core.rmem_max.
+
+echo
+echo "== OpenVPN socket buffers =="
+RMEM_MAX=$(sed -e 's/#.*//' shadowsocks.6.18.conf | sed -n 's/^[[:space:]]*net\.core\.rmem_max[[:space:]]*=[[:space:]]*//p' | tail -1)
+for f in openvpn-*.conf; do
+    [ -f "$f" ] || continue
+    body=$(sed -e 's/#.*//' "$f")
+    bufs=$(echo "$body" | grep -nE '^[[:space:]]*(push[[:space:]]+"?)?(sndbuf|rcvbuf)[[:space:]]+[1-9]')
+    if echo "$body" | grep -qE '^[[:space:]]*proto[[:space:]]+tcp'; then
+        if [ -n "$bufs" ]; then
+            fail "$f (TCP) pins a socket buffer, which disables autotuning: $bufs"
+        else
+            pass "$f (TCP) leaves its socket buffers to autotuning"
+        fi
+    else
+        too_big=$(echo "$bufs" | awk -v m="${RMEM_MAX:-0}" '{ v = $NF; gsub(/"/, "", v); if (m > 0 && v + 0 > m + 0) print }')
+        if [ -n "$too_big" ]; then
+            fail "$f (UDP) asks for more than net.core.rmem_max ($RMEM_MAX), which the kernel clamps: $too_big"
+        else
+            pass "$f (UDP) buffer requests fit under net.core.rmem_max"
+        fi
+    fi
+done
+if sed -e 's/#.*//' openvpn-tun1.6.1.conf | grep -qE '^[[:space:]]*rcvbuf[[:space:]]+([1-9][0-9]{6,})'; then
+    pass "openvpn-tun1.6.1.conf (UDP) sets a receive buffer of at least 1 MB"
+else
+    fail "openvpn-tun1.6.1.conf (UDP) sets under 1 MB of receive buffer, or none (rmem_default, 208 KB): UDP does not autotune"
+fi
+
+# ── 9. tcp_mtu_probing ─────────────────────────────────────────────────────
+# 1 = blackhole detection. With 0, an MPTCP subflow over a path filtering ICMP
+# "fragmentation needed" never recovered on the bench and the connection lost
+# that WAN; 2 would start every connection at 1024-byte segments.
+echo
+echo "== tcp_mtu_probing =="
+for f in shadowsocks.conf shadowsocks.6.1.conf shadowsocks.6.18.conf; do
+    v=$(sed -e 's/#.*//' "$f" | sed -n 's/^[[:space:]]*net\.ipv4\.tcp_mtu_probing[[:space:]]*=[[:space:]]*//p' | tail -1)
+    if [ "$v" = "1" ]; then pass "$f sets tcp_mtu_probing = 1"; else fail "$f sets tcp_mtu_probing = '${v:-unset}', expected 1"; fi
+done
+
 echo
 echo "$PASS passed, $FAIL failed"
 [ "$FAIL" -eq 0 ]

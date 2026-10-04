@@ -1,0 +1,17 @@
+[Unit]
+Description=Keep ephemeral ports off the ports OpenMPTCProuter services listen on
+# Ordering only: at boot the list must be in place before the daemons whose
+# ports it protects bind them. Nothing here pulls those services in.
+Before=v2ray.service xray.service shadowsocks-go.service mqvpn.service
+# Started by omr-reserved-ports.path on every config write, and a router sync
+# writes several in a row (7 starts in 2 s seen on a test VPS). The default
+# limit of 5 starts per 10 s then fails this unit and, with it, the path unit,
+# which stops watching until the next boot. The script is a few jq calls.
+StartLimitIntervalSec=0
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/bin/omr-reserved-ports --quiet
+
+[Install]
+WantedBy=multi-user.target

@@ -99,7 +99,7 @@ fi
 # The installer rewrites these three per install; omr-vps-admin's /vpnips
 # rewrites them again at run time. Losing one leaves the ruleset pointing at
 # the shipped placeholder.
-for v in NET_IFACE VPS_IFACE VPS_ADDR OMR_ADDR OMR_ADDR6 VPN_IFACES VPNCL_IFACES; do
+for v in NET_IFACE NET_IFACE6 VPS_IFACE VPS_ADDR OMR_ADDR OMR_ADDR6 VPN_IFACES VPNCL_IFACES; do
     if printf '%s\n' "$defined" | grep -qx "$v"; then
         pass "\$$v is defined in omr-vars.nft"
     else
@@ -193,6 +193,68 @@ elif nft_body "$RULES" | grep -qE "tcp dport $SSH_PORT accept"; then
 else
     fail "the installer moves sshd to $SSH_PORT but the input chain never accepts it"
 fi
+
+# #4381: 0.1068 dropped what Shorewall6 accepted for IPv6 on the link. A DHCPv6
+# Advertise/Reply comes back to our link-local address from the server's, not
+# as the reply to the multicast Solicit, so conntrack calls it NEW: without an
+# explicit accept the VPS never gets or renews a lease. MLD is untracked, and
+# an unanswered query lets an MLD-snooping switch stop forwarding neighbour
+# solicitations to us. MLD carries a hop-by-hop header, so a rule spelled
+# `ip6 nexthdr icmpv6 ... mld-listener-query` loads fine and never matches.
+if nft_body "$RULES" | grep -qE 'udp dport 546 accept'; then
+    pass "the input chain accepts DHCPv6 replies (udp/546)"
+else
+    fail "the input chain no longer accepts udp/546; DHCPv6 replies are rejected and the lease is lost (#4381)"
+fi
+mld="$(nft_body "$RULES" | grep -E 'icmpv6 type[^#]*mld-listener-query[^#]*accept')"
+if [ -z "$mld" ]; then
+    fail "the input chain no longer accepts MLD queries; snooping switches drop our multicast groups (#4381)"
+elif printf '%s\n' "$mld" | grep -q 'nexthdr'; then
+    fail "the MLD rule matches on ip6 nexthdr, which is the hop-by-hop header for MLD: it never matches (#4381)"
+else
+    pass "the input chain accepts MLD queries without an ip6 nexthdr match"
+fi
+
+# #4382: the router's IPv6 arrives through the omr-6in4-user* sit tunnel, a
+# vpn interface in shorewall6/interfaces. Left out of VPN_IFACES, everything
+# the router routes into it hits the forward chain's trailing reject.
+if nft_body "$VARS" | grep -E '^define VPN_IFACES' | grep -q '"omr-6in4-user\*"'; then
+    pass "VPN_IFACES includes the 6in4 tunnel (omr-6in4-user*)"
+else
+    fail "VPN_IFACES lacks omr-6in4-user*; the router's IPv6 is rejected in forward (#4382)"
+fi
+# With the tunnel in VPN_IFACES, an unrestricted net->vpn accept lets any new
+# IPv6 connection from the internet reach a LAN using a public prefix.
+# shorewall6 only let DNAT'd connections through (net all DROP).
+if nft_body "$RULES" | grep -E 'iifname \$NET_IFACE6? oifname \$VPN_IFACES' | grep -v 'meta nfproto ipv4' | grep -vq 'ct status dnat'; then
+    fail "IPv6 from the internet into a tunnel is accepted without ct status dnat; a public LAN prefix is open (#4382)"
+elif nft_body "$RULES" | grep -q 'meta nfproto ipv6 iifname \$NET_IFACE6 oifname \$VPN_IFACES ct status dnat accept'; then
+    pass "IPv6 net->vpn forwarding is limited to redirected (DNAT'd) connections"
+else
+    fail "the IPv6 net->vpn rule for redirected ports is gone; IPv6 port redirects to the router are rejected (#4382)"
+fi
+if nft_body "$RULES" | grep -E 'ip6 saddr[^#]*masquerade' | grep -q 'oifname \$NET_IFACE6 '; then
+    pass "the NAT66 masquerade follows the IPv6 WAN (\$NET_IFACE6)"
+else
+    fail "the NAT66 masquerade is not on \$NET_IFACE6; with IPv6 on another NIC the LAN's ULA leaves unmasqueraded (#3271)"
+fi
+
+# The installer's own sed lines, run against the shipped omr-vars.nft. The
+# second case is the trap: an IPv6 NIC named eth0 next to an IPv4 NIC with
+# another name must not be rewritten to the IPv4 one by the first sed.
+uncommented | grep -E 'sed -i .*/etc/nftables/omr-vars\.nft' > "$TMPDIR/vars-seds.sh"
+for case in "ens3 ens3" "enx5 enx4" "enx5 eth0" "eth0 enx4"; do
+    set -- $case
+    cp "$VARS" "$TMPDIR/omr-vars.nft"
+    INTERFACE="$1" INTERFACE6="$2" bash -c "$(sed "s|/etc/nftables/omr-vars.nft|$TMPDIR/omr-vars.nft|" "$TMPDIR/vars-seds.sh")"
+    got4="$(sed -nE 's/^define NET_IFACE += *//p' "$TMPDIR/omr-vars.nft")"
+    got6="$(sed -nE 's/^define NET_IFACE6 += *//p' "$TMPDIR/omr-vars.nft")"
+    if [ "$got4" = "$1" ] && [ "$got6" = "$2" ]; then
+        pass "INTERFACE=$1 INTERFACE6=$2 gives NET_IFACE=$got4 NET_IFACE6=$got6"
+    else
+        fail "INTERFACE=$1 INTERFACE6=$2 gives NET_IFACE=$got4 NET_IFACE6=$got6"
+    fi
+done
 
 # The management rule and the dynamic chains have to be evaluated before the
 # trailing reject, or they are dead rules.

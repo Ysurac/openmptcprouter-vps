@@ -91,8 +91,8 @@ MLVPN_BINARY_VERSION="3.0.0+20211028.git.ddafba3"
 UBOND_VERSION="31af0f69ebb6d07ed9348dca2fced33b956cedee"
 OBFS_VERSION="486bebd9208539058e57e23a12f23103016e09b4"
 OBFS_BINARY_VERSION="0.0.5-1"
-OMR_ADMIN_VERSION="84b20c1e31564f46457c887b81b0758a757cca50"
-OMR_ADMIN_BINARY_VERSION="0.18+20261004"
+OMR_ADMIN_VERSION="26259b6a0adac8e5cafdd27a5e11e53f8c2ca212"
+OMR_ADMIN_BINARY_VERSION="0.18+20261005"
 DSVPN_VERSION="3b99d2ef6c02b2ef68b5784bec8adfdd55b29b1a"
 DSVPN_BINARY_VERSION="0.1.4-2"
 MQVPN_VERSION="0.16.2-1"
@@ -164,6 +164,42 @@ jq_rewrite() {
 		return 1
 	fi
 }
+
+# Self-signed certificate of the OMR API and of MQVPN
+OMR_CERT_SUBJ="/C=US/ST=Oregon/L=Portland/O=OpenMPTCProuterVPS/OU=Org/CN=www.openmptcprouter.vps"
+OMR_CERT_SAN="subjectAltName=DNS:www.openmptcprouter.vps"
+omr_self_signed_cert() {
+	_cert_key="$1"
+	_cert_crt="$2"
+	[ -L "$_cert_crt" ] && return 0
+	if [ ! -f "$_cert_key" ]; then
+		openssl req -new -newkey rsa:2048 -days 3650 -nodes -x509 -keyout "$_cert_key" -out "$_cert_crt" -subj "$OMR_CERT_SUBJ" -addext "$OMR_CERT_SAN" 2>/dev/null ||
+			openssl req -new -newkey rsa:2048 -days 3650 -nodes -x509 -keyout "$_cert_key" -out "$_cert_crt" -subj "$OMR_CERT_SUBJ"
+	elif [ ! -f "$_cert_crt" ] || ! openssl x509 -in "$_cert_crt" -noout -text 2>/dev/null | grep -q 'X509v3 Subject Alternative Name'; then
+		_cert_new="$_cert_crt.new.$$"
+		if openssl req -new -x509 -days 3650 -key "$_cert_key" -out "$_cert_new" -subj "$OMR_CERT_SUBJ" -addext "$OMR_CERT_SAN" 2>/dev/null ||
+			{ [ ! -f "$_cert_crt" ] && openssl req -new -x509 -days 3650 -key "$_cert_key" -out "$_cert_new" -subj "$OMR_CERT_SUBJ"; }; then
+			mv -f "$_cert_new" "$_cert_crt"
+		else
+			rm -f "$_cert_new"
+		fi
+	fi
+}
+
+# The pin a router keeps for this server (openmptcprouter.<server>.api_pin, curl
+# --pinnedpubkey): base64 SHA-256 of the API certificate's public key, the
+# certificate being $1 (default the API one). Nothing when there is none yet.
+omr_api_pin() {
+	_pin_crt="${1:-/etc/openmptcprouter-vps-admin/cert.pem}"
+	[ -f "$_pin_crt" ] || return 0
+	_pin_pubkey="$(openssl x509 -in "$_pin_crt" -pubkey -noout 2>/dev/null)" || return 0
+	[ -n "$_pin_pubkey" ] || return 0
+	printf '%s\n' "$_pin_pubkey" | openssl pkey -pubin -outform der | openssl dgst -sha256 -binary | openssl enc -base64
+}
+# Routers that already pinned this server must be told when that key changes
+# (acme.sh replacing the self-signed certificate, a lost key.pem).
+OMR_API_PIN_BEFORE="$(omr_api_pin)"
+
 echo "Check user..."
 if [ "$(id -u)" -ne 0 ]; then echo 'Please run as root.' >&2; exit 1; fi
 
@@ -1248,9 +1284,10 @@ if [ "$OMR_ADMIN" = "yes" ]; then
 		if [ -f /etc/openmptcprouter-vps-admin/omr-admin-config.json ]; then
 			OMR_ADMIN_PASS2=$(grep -Po '"'"pass"'"\s*:\s*"\K([^"]*)' /etc/openmptcprouter-vps-admin/omr-admin-config.json | tr -d  "\n")
 			[ -z "$OMR_ADMIN_PASS2" ] && OMR_ADMIN_PASS2=$(cat /etc/openmptcprouter-vps-admin/omr-admin-config.json | jq -r .users[0].openmptcprouter.user_password | tr -d "\n")
-			[ -n "$OMR_ADMIN_PASS2" ] && OMR_ADMIN_PASS=$OMR_ADMIN_PASS2
+			# Not the template's MySecretKey: sed would put it back in place of itself
+			[ -n "$OMR_ADMIN_PASS2" ] && [ "$OMR_ADMIN_PASS2" != "null" ] && [ "$OMR_ADMIN_PASS2" != "MySecretKey" ] && OMR_ADMIN_PASS=$OMR_ADMIN_PASS2
 			OMR_ADMIN_PASS_ADMIN2=$(cat /etc/openmptcprouter-vps-admin/omr-admin-config.json | jq -r .users[0].admin.user_password | tr -d "\n")
-			[ -n "$OMR_ADMIN_PASS_ADMIN2" ] && OMR_ADMIN_PASS_ADMIN=$OMR_ADMIN_PASS_ADMIN2
+			[ -n "$OMR_ADMIN_PASS_ADMIN2" ] && [ "$OMR_ADMIN_PASS_ADMIN2" != "null" ] && [ "$OMR_ADMIN_PASS_ADMIN2" != "AdminMySecretKey" ] && OMR_ADMIN_PASS_ADMIN=$OMR_ADMIN_PASS_ADMIN2
 		else
 			cp /tmp/openmptcprouter-vps-admin-${OMR_ADMIN_VERSION}/omr-admin.py /usr/bin/
 			cd /etc/openmptcprouter-vps-admin
@@ -1266,9 +1303,9 @@ if [ "$OMR_ADMIN" = "yes" ]; then
 		if [ -f /etc/openmptcprouter-vps-admin/omr-admin-config.json ]; then
 			OMR_ADMIN_PASS2=$(grep -Po '"'"pass"'"\s*:\s*"\K([^"]*)' /etc/openmptcprouter-vps-admin/omr-admin-config.json | tr -d  "\n")
 			[ -z "$OMR_ADMIN_PASS2" ] && OMR_ADMIN_PASS2=$(cat /etc/openmptcprouter-vps-admin/omr-admin-config.json | jq -r .users[0].openmptcprouter.user_password | tr -d "\n")
-			[ -n "$OMR_ADMIN_PASS2" ] && [ "$OMR_ADMIN_PASS2" != "MySecretKey" ] && OMR_ADMIN_PASS=$OMR_ADMIN_PASS2
+			[ -n "$OMR_ADMIN_PASS2" ] && [ "$OMR_ADMIN_PASS2" != "null" ] && [ "$OMR_ADMIN_PASS2" != "MySecretKey" ] && OMR_ADMIN_PASS=$OMR_ADMIN_PASS2
 			OMR_ADMIN_PASS_ADMIN2=$(cat /etc/openmptcprouter-vps-admin/omr-admin-config.json | jq -r .users[0].admin.user_password | tr -d "\n")
-			[ -n "$OMR_ADMIN_PASS_ADMIN2" ] && [ "$OMR_ADMIN_PASS_ADMIN2" != "AdminMySecretKey" ] && OMR_ADMIN_PASS_ADMIN=$OMR_ADMIN_PASS_ADMIN2
+			[ -n "$OMR_ADMIN_PASS_ADMIN2" ] && [ "$OMR_ADMIN_PASS_ADMIN2" != "null" ] && [ "$OMR_ADMIN_PASS_ADMIN2" != "AdminMySecretKey" ] && OMR_ADMIN_PASS_ADMIN=$OMR_ADMIN_PASS_ADMIN2
 		fi
 		if ! apt-get -o Dpkg::Options::="--force-confold" -o Dpkg::Options::="--force-confdef" -o Dpkg::Options::="--force-overwrite" -y --allow-downgrades install omr-vps-admin=${OMR_ADMIN_BINARY_VERSION}; then
 			if wget -O /tmp/omr-vps-admin_${OMR_ADMIN_BINARY_VERSION}_all.deb ${VPSURL}debian/omr-vps-admin_${OMR_ADMIN_BINARY_VERSION}_all.deb; then
@@ -1291,10 +1328,11 @@ if [ "$OMR_ADMIN" = "yes" ]; then
 		#OMR_ADMIN_PASS=$(cat /etc/openmptcprouter-vps-admin/omr-admin-config.json | jq -r .users[0].openmptcprouter.user_password | tr -d "\n")
 		#OMR_ADMIN_PASS_ADMIN=$(cat /etc/openmptcprouter-vps-admin/omr-admin-config.json | jq -r .users[0].admin.user_password | tr -d "\n")
 	fi
-	if [ ! -f /etc/openmptcprouter-vps-admin/key.pem ]; then
-		cd /etc/openmptcprouter-vps-admin
-		openssl req -new -newkey rsa:2048 -days 3650 -nodes -x509 -keyout key.pem -out cert.pem -subj "/C=US/ST=Oregon/L=Portland/O=OpenMPTCProuterVPS/OU=Org/CN=www.openmptcprouter.vps"
-	fi
+	# Owner-only before the passwords go in: a copy of the template is
+	# created 0644, and sed -i and jq_rewrite keep the mode they find
+	# (omr-admin would only tighten it at its next start).
+	chmod 600 /etc/openmptcprouter-vps-admin/omr-admin-config.json
+	omr_self_signed_cert /etc/openmptcprouter-vps-admin/key.pem /etc/openmptcprouter-vps-admin/cert.pem
 	sed -i "s:openmptcptouter:${DEFAULT_USER}:g" /etc/openmptcprouter-vps-admin/omr-admin-config.json
 	sed -i "s:AdminMySecretKey:$OMR_ADMIN_PASS_ADMIN:g" /etc/openmptcprouter-vps-admin/omr-admin-config.json
 	sed -i "s:MySecretKey:$OMR_ADMIN_PASS:g" /etc/openmptcprouter-vps-admin/omr-admin-config.json
@@ -2001,9 +2039,7 @@ if [ "$MQVPN" = "yes" ]; then
 	if [ -n "$MQVPN_USERS" ] && [ "$MQVPN_USERS" != "null" ] && [ "$MQVPN_USERS" != "[]" ]; then
 		jq --argjson users "$MQVPN_USERS" '.users = ($users + [.users[] | select(.name as $n | ($users | map(.name) | index($n)) == null)])' /etc/mqvpn/server.json > /etc/mqvpn/server.json.tmp && mv /etc/mqvpn/server.json.tmp /etc/mqvpn/server.json
 	fi
-	if [ ! -f /etc/mqvpn/server.key ]; then
-		openssl req -new -newkey rsa:2048 -days 3650 -nodes -x509 -keyout /etc/mqvpn/server.key -out /etc/mqvpn/server.crt -subj "/C=US/ST=Oregon/L=Portland/O=OpenMPTCProuterVPS/OU=Org/CN=www.openmptcprouter.vps"
-	fi
+	omr_self_signed_cert /etc/mqvpn/server.key /etc/mqvpn/server.crt
 	chmod 644 /lib/systemd/system/mqvpn.service
 	systemctl daemon-reload
 	systemctl enable mqvpn.service
@@ -2514,8 +2550,9 @@ harden_secret_files \
 	/etc/shadowsocks-libev/manager.json \
 	/etc/shadowsocks-go/server.json \
 	/etc/shadowsocks-go/upsks.json \
-	/etc/glorytun-tcp/tun0.key \
-	/etc/glorytun-udp/tun0.key
+	/etc/glorytun-tcp/tun*.key \
+	/etc/glorytun-udp/tun*.key \
+	/etc/dsvpn/dsvpn*.key
 
 # Load tun module at boot time
 if ! grep -q tun /etc/modules ; then
@@ -2861,6 +2898,11 @@ if [ "$update" = "0" ]; then
 		echo "\033[1m${OMR_ADMIN_PASS}\033[0m"
 		echo 'OpenMPTCProuter Server username: '
 		echo 'openmptcprouter'
+		OMR_API_PIN="$(omr_api_pin)"
+		if [ -n "$OMR_API_PIN" ]; then
+			echo 'OpenMPTCProuter Server API certificate pin (optional, "Server API certificate pin" in the router wizard): '
+			echo "$OMR_API_PIN"
+		fi
 	fi
 	if [ "$VPS_CERT" = "0" ]; then
 		echo 'No working domain detected, not able to generate certificate for v2ray.'
@@ -2927,6 +2969,7 @@ if [ "$update" = "0" ]; then
 		Your OpenMPTCProuter Server key: $OMR_ADMIN_PASS
 		Your OpenMPTCProuter Server username: openmptcprouter
 		EOF
+		[ -n "$OMR_API_PIN" ] && echo "Your OpenMPTCProuter Server API certificate pin: $OMR_API_PIN" >> /root/openmptcprouter_config.txt
 	fi
 	#systemctl -q restart sshd
 else
@@ -3011,6 +3054,21 @@ else
 			echo '===================================================================================='
 		else
 			echo '!!! Keys are in /root/openmptcprouter_config.txt !!!'
+		fi
+		OMR_API_PIN="$(omr_api_pin)"
+		if [ -n "$OMR_API_PIN" ]; then
+			if [ -n "$OMR_API_PIN_BEFORE" ] && [ "$OMR_API_PIN" != "$OMR_API_PIN_BEFORE" ]; then
+				echo '!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!'
+				echo 'The OpenMPTCProuter API certificate key changed: routers that pinned the previous'
+				echo 'one refuse this server. Enter the new pin as "Server API certificate pin" in the'
+				echo 'router wizard, or empty that field:'
+				echo "$OMR_API_PIN"
+				echo '!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!'
+			fi
+			if [ -f /root/openmptcprouter_config.txt ]; then
+				sed -i '/^Your OpenMPTCProuter Server API certificate pin:/d' /root/openmptcprouter_config.txt
+				echo "Your OpenMPTCProuter Server API certificate pin: $OMR_API_PIN" >> /root/openmptcprouter_config.txt
+			fi
 		fi
 	fi
 	if [ "$VPS_CERT" = "0" ]; then

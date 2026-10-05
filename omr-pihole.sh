@@ -38,10 +38,23 @@ echo "OMR Pi-hole configuration..."
 # turn off the rate limit (by default 1000 queries a minute per client).
 pihole-FTL --config dns.rateLimit.count 0 >/dev/null
 pihole-FTL --config dns.rateLimit.interval 0 >/dev/null
+# The web interface is built into FTL and listens on 80 and 443 on all
+# interfaces by default. Keep it on the tunnels' VPS addresses (Glorytun TCP,
+# Glorytun UDP, OpenVPN, MLVPN, DSVPN) and on loopback for the pihole command,
+# and leave 443 free for SoftEther and acme.sh. "o" makes each address
+# optional, so an address that is down doesn't stop the others.
+pihole-FTL --config webserver.port "127.0.0.1:80o,10.255.255.1:80o,10.255.254.1:80o,10.255.252.1:80o,10.255.253.1:80o,10.255.251.1:80o" >/dev/null
+# FTL only binds at start: start it after the tunnels, so their addresses exist.
+mkdir -p /etc/systemd/system/pihole-FTL.service.d
+cat > /etc/systemd/system/pihole-FTL.service.d/omr.conf <<-EOF
+[Unit]
+After=glorytun-tcp@tun0.service glorytun-udp@tun0.service openvpn@tun0.service mlvpn@mlvpn0.service dsvpn-server@dsvpn0.service
+EOF
+systemctl daemon-reload
 systemctl -q restart pihole-FTL
 echo "Done"
 echo "======================================================================================================================================"
 echo "To use Pi-hole in OpenMPTCProuter, you need to 'Save & Apply' the wizard again in System->OpenMPTCProuter then reboot OpenMPTCProuter."
-echo "Web interface will be available on 10.255.255.1 if you use Glorytun TCP, 10.255.254.1 if you use Glorytun UDP."
+echo "Web interface will be available on http://10.255.255.1/admin if you use Glorytun TCP, http://10.255.254.1/admin if you use Glorytun UDP."
 echo "======================================================================================================================================"
 exit 0

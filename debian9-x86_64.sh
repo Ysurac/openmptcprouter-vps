@@ -2842,6 +2842,15 @@ VPS_SRC_IP="$(ip -4 route show default 2>/dev/null | awk '{for(i=1;i<NF;i++) if 
 if [ -n "$VPS_SRC_IP" ] && [ -z "$(ip -4 route show default 2>/dev/null | grep -w dhcp)" ]; then
 	sed -i "/ip saddr/s/masquerade/snat ip to $VPS_SRC_IP/" /etc/nftables/omr.nft
 fi
+# nf_nat_ftp, the NAT half of omr.nft's FTP helper, now and at boot. Where it
+# can't be loaded (a container), drop the FTP lines: the helper object would
+# make the whole ruleset fail to load.
+if modprobe nf_nat_ftp >/dev/null 2>&1; then
+	echo nf_nat_ftp > /etc/modules-load.d/omr-ftp.conf
+else
+	rm -f /etc/modules-load.d/omr-ftp.conf
+	sed -i '/ct helper ftp \|ct helper set "ftp"/d' /etc/nftables/omr.nft
+fi
 systemctl mask --now shorewall shorewall6 >/dev/null 2>&1 || true
 # Stopping shorewall leaves its stoppedrules in place (ADMINISABSENTMINDED=Yes),
 # which drop every new WAN connection, SSH included. The nftables flush below

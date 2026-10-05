@@ -147,7 +147,7 @@ done
 # regular chain that nothing ever traverses.
 echo
 echo "== base chains declare a hook =="
-for c in input forward output nat_prerouting nat_postrouting mangle_post raw_prerouting raw_output; do
+for c in input forward output nat_prerouting nat_postrouting mangle_post helper_prerouting helper_output raw_prerouting raw_output; do
     if awk -v c="$c" '
         $1 == "chain" && $2 == c { inside = 1 }
         inside && /type .* hook .* priority .*;/ { found = 1 }

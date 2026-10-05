@@ -28,12 +28,31 @@ echo "Run Pi-hole install script..."
 curl -sSL https://install.pi-hole.net | bash
 echo "Done"
 echo "-------------------------------------------------------------------------------------------------------------------------------"
+if ! command -v pihole-FTL >/dev/null 2>&1; then
+	echo "Pi-hole is not installed, OMR Pi-hole configuration not applied."
+	exit 1
+fi
 echo "OMR Pi-hole configuration..."
+# FTL rewrites pihole.toml from the settings it runs with when it applies a
+# change, so a change written while it runs can be lost: write them while it
+# is stopped.
+systemctl -q stop pihole-FTL
+# The installer writes the upstream DNS servers chosen while FTL is starting,
+# and can lose them the same way: with none, every query is refused. Use
+# Quad9, the DNS server the tunnels already give.
+if ! pihole-FTL --config dns.upstreams | grep -q '[[:alnum:]]'; then
+	echo "No upstream DNS server set, using Quad9 (9.9.9.9, 149.112.112.112)"
+	pihole-FTL --config dns.upstreams '[ "9.9.9.9", "149.112.112.112" ]' >/dev/null
+fi
 # Pi-hole v6, what its installer sets up now, keeps all its settings in
 # /etc/pihole/pihole.toml: it no longer reads setupVars.conf or
-# /etc/dnsmasq.d, and has no lighttpd. Its default listening mode answers
-# the subnets of all the tunnels, and the VPS firewall keeps port 53 closed
-# on the WAN.
+# /etc/dnsmasq.d, and has no lighttpd.
+# Its default listening mode (LOCAL) only answers clients on a local subnet,
+# so it ignores the peer of a point-to-point tunnel such as DSVPN. Answer on
+# the tunnel interfaces (the ones the firewall accepts) and loopback instead,
+# whatever the client address, and never on the WAN.
+pihole-FTL --config dns.listeningMode NONE >/dev/null
+pihole-FTL --config misc.dnsmasq_lines '[ "interface=lo", "interface=gt-tun*", "interface=gt-udp-tun*", "interface=tun*", "interface=mlvpn*", "interface=dsvpn*", "interface=wg*", "interface=client-wg*", "interface=mqvpn*", "interface=omr-bonding", "interface=tap_softether", "interface=gre-user*", "interface=vx-user*" ]' >/dev/null
 # The router sends the queries of the whole LAN from its tunnel address, so
 # turn off the rate limit (by default 1000 queries a minute per client).
 pihole-FTL --config dns.rateLimit.count 0 >/dev/null
@@ -51,7 +70,7 @@ cat > /etc/systemd/system/pihole-FTL.service.d/omr.conf <<-EOF
 After=glorytun-tcp@tun0.service glorytun-udp@tun0.service openvpn@tun0.service mlvpn@mlvpn0.service dsvpn-server@dsvpn0.service
 EOF
 systemctl daemon-reload
-systemctl -q restart pihole-FTL
+systemctl -q start pihole-FTL
 echo "Done"
 echo "======================================================================================================================================"
 echo "To use Pi-hole in OpenMPTCProuter, you need to 'Save & Apply' the wizard again in System->OpenMPTCProuter then reboot OpenMPTCProuter."

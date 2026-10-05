@@ -26,10 +26,11 @@ assert_eq() {
     fi
 }
 
-# Extract the single-quoted jq program from the installer line matching $1
-# (the program sits between the first single quote and the closing "' /etc/xray/")
+# Extract the single-quoted jq program from the installer line matching $1.
+# The installer runs it as `jq_rewrite /etc/xray/FILE -M [--arg ...] 'PROGRAM'`:
+# the program is the single-quoted string closing the line.
 extract_jq() {
-    grep -F "$1" "$INSTALLER" | grep "jq -M" | head -n 1 | sed "s/^[^']*'//; s/' \/etc\/xray\/.*//"
+    grep -F "$1" "$INSTALLER" | grep -E "jq_rewrite /etc/xray/[^ ]+ -M" | head -n 1 | sed "s/^[^']*'//; s/'[[:space:]]*\$//"
 }
 
 # ── Fixtures ──────────────────────────────────────────────────────────────────

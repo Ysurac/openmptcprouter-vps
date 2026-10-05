@@ -143,6 +143,27 @@ harden_secret_files() {
 	done
 }
 
+# Rewrite a JSON file in place with jq: jq_rewrite FILE [jq options] FILTER
+# `jq ... FILE > FILE.tmp; mv FILE.tmp FILE` replaced FILE with an empty file
+# whenever jq failed (unparsable file, bad filter) and the script was not
+# stopped by set -e, e.g. in the SoftEther part: an empty
+# omr-admin-config.json makes omr-admin crash-loop. And the temp copy of these
+# secret-bearing files was written with the default umask, world-readable.
+# Only replace FILE when jq succeeded and produced output, write the temp copy
+# owner-only and give it FILE's mode. Returns 1 (FILE unchanged) on failure.
+jq_rewrite() {
+	_jq_file="$1"
+	shift
+	_jq_tmp="$_jq_file.tmp.$$"
+	if (umask 077 && jq "$@" "$_jq_file" > "$_jq_tmp") && [ -s "$_jq_tmp" ]; then
+		chmod --reference="$_jq_file" "$_jq_tmp" 2>/dev/null || true
+		mv -f "$_jq_tmp" "$_jq_file"
+	else
+		rm -f "$_jq_tmp"
+		echo "Error: could not update $_jq_file with jq, left unchanged" >&2
+		return 1
+	fi
+}
 echo "Check user..."
 if [ "$(id -u)" -ne 0 ]; then echo 'Please run as root.' >&2; exit 1; fi
 
@@ -1278,23 +1299,19 @@ if [ "$OMR_ADMIN" = "yes" ]; then
 	sed -i "s:AdminMySecretKey:$OMR_ADMIN_PASS_ADMIN:g" /etc/openmptcprouter-vps-admin/omr-admin-config.json
 	sed -i "s:MySecretKey:$OMR_ADMIN_PASS:g" /etc/openmptcprouter-vps-admin/omr-admin-config.json
 	[ "$NOINTERNET" = "yes" ] && {
-		jq '. + {internet: false}' /etc/openmptcprouter-vps-admin/omr-admin-config.json > /etc/openmptcprouter-vps-admin/omr-admin-config.json.tmp
-		mv /etc/openmptcprouter-vps-admin/omr-admin-config.json.tmp /etc/openmptcprouter-vps-admin/omr-admin-config.json
+		jq_rewrite /etc/openmptcprouter-vps-admin/omr-admin-config.json '. + {internet: false}'
 		#sed -i 's/"port": 65500,/"port": 65500,\n    "internet": false,/' /etc/openmptcprouter-vps-admin/omr-admin-config.json
 	}
 	[ "$GRETUNNELS" = "no" ] && {
-		jq '. + {gre_tunnels: false}' /etc/openmptcprouter-vps-admin/omr-admin-config.json > /etc/openmptcprouter-vps-admin/omr-admin-config.json.tmp
-		mv /etc/openmptcprouter-vps-admin/omr-admin-config.json.tmp /etc/openmptcprouter-vps-admin/omr-admin-config.json
+		jq_rewrite /etc/openmptcprouter-vps-admin/omr-admin-config.json '. + {gre_tunnels: false}'
 		#sed -i 's/"port": 65500,/"port": 65500,\n    "gre_tunnels": false,/' /etc/openmptcprouter-vps-admin/omr-admin-config.json
 	}
 	[ "$LANROUTES" = "no" ] && {
-		jq '. + {lan_routes: false}' /etc/openmptcprouter-vps-admin/omr-admin-config.json > /etc/openmptcprouter-vps-admin/omr-admin-config.json.tmp
-		mv /etc/openmptcprouter-vps-admin/omr-admin-config.json.tmp /etc/openmptcprouter-vps-admin/omr-admin-config.json
+		jq_rewrite /etc/openmptcprouter-vps-admin/omr-admin-config.json '. + {lan_routes: false}'
 	}
 
 	# IPv6 give an error on uvicorn
-	jq '. + {host: "0.0.0.0"}' /etc/openmptcprouter-vps-admin/omr-admin-config.json > /etc/openmptcprouter-vps-admin/omr-admin-config.json.tmp
-	mv /etc/openmptcprouter-vps-admin/omr-admin-config.json.tmp /etc/openmptcprouter-vps-admin/omr-admin-config.json
+	jq_rewrite /etc/openmptcprouter-vps-admin/omr-admin-config.json '. + {host: "0.0.0.0"}'
 
 	chmod 644 /lib/systemd/system/omr-admin.service
 	#chmod 644 /lib/systemd/system/omr-admin-ipv6.service
@@ -1529,9 +1546,8 @@ if [ "$SHADOWSOCKS_GO" = "yes" ]; then
 	fi
 	sed -i "s:\"PSK\":\"$PSK\":g" /etc/shadowsocks-go/server.json
 	sed -i "s:UPSK:$UPSK:g" /etc/shadowsocks-go/upsks.json
-	jq -M 'del(.users[0].openmptcprouter."shadowsocks-go")' /etc/openmptcprouter-vps-admin/omr-admin-config.json > /etc/openmptcprouter-vps-admin/omr-admin-config.json.new
-	mv -f /etc/openmptcprouter-vps-admin/omr-admin-config.json /etc/openmptcprouter-vps-admin/omr-admin-config.json.bak
-	mv -f /etc/openmptcprouter-vps-admin/omr-admin-config.json.new /etc/openmptcprouter-vps-admin/omr-admin-config.json
+	cp -pf /etc/openmptcprouter-vps-admin/omr-admin-config.json /etc/openmptcprouter-vps-admin/omr-admin-config.json.bak
+	jq_rewrite /etc/openmptcprouter-vps-admin/omr-admin-config.json -M 'del(.users[0].openmptcprouter."shadowsocks-go")'
 
 	chmod 644 /lib/systemd/system/shadowsocks-go.service
 	systemctl daemon-reload
@@ -1668,27 +1684,23 @@ if [ "$XRAY" = "yes" ]; then
 
 	fi
 	if [ -f /etc/openmptcprouter-vps-admin/omr-admin-config.json ]; then
-		jq -M 'del(.users[0].openmptcprouter.xray)' /etc/openmptcprouter-vps-admin/omr-admin-config.json > /etc/openmptcprouter-vps-admin/omr-admin-config.json.new
-		mv -f /etc/openmptcprouter-vps-admin/omr-admin-config.json /etc/openmptcprouter-vps-admin/omr-admin-config.json.bak
-		mv -f /etc/openmptcprouter-vps-admin/omr-admin-config.json.new /etc/openmptcprouter-vps-admin/omr-admin-config.json
+		cp -pf /etc/openmptcprouter-vps-admin/omr-admin-config.json /etc/openmptcprouter-vps-admin/omr-admin-config.json.bak
+		jq_rewrite /etc/openmptcprouter-vps-admin/omr-admin-config.json -M 'del(.users[0].openmptcprouter.xray)'
 	fi
 	if [ -f /etc/xray/xray-server.json ]; then
-		jq -M 'del(.api.listen)' /etc/xray/xray-server.json > /etc/xray/xray-server.json.new
-		mv -f /etc/xray/xray-server.json /etc/xray/xray-server.json.bak
-		mv -f /etc/xray/xray-server.json.new /etc/xray/xray-server.json
+		cp -pf /etc/xray/xray-server.json /etc/xray/xray-server.json.bak
+		jq_rewrite /etc/xray/xray-server.json -M 'del(.api.listen)'
 	fi
 	if [ -f /etc/xray/xray-server.json ] && [ "$(jq -r '.reverse != null' /etc/xray/xray-server.json)" = "true" ]; then
 		# xray 26+ removed legacy reverse: a config still carrying it prevents xray from starting
-		jq -M 'del(.reverse) | if .routing.rules then .routing.rules |= map(select(.outboundTag != "OMRLan")) else . end' /etc/xray/xray-server.json > /etc/xray/xray-server.json.new
-		mv -f /etc/xray/xray-server.json /etc/xray/xray-server.json.bak
-		mv -f /etc/xray/xray-server.json.new /etc/xray/xray-server.json
+		cp -pf /etc/xray/xray-server.json /etc/xray/xray-server.json.bak
+		jq_rewrite /etc/xray/xray-server.json -M 'del(.reverse) | if .routing.rules then .routing.rules |= map(select(.outboundTag != "OMRLan")) else . end'
 	fi
 	if [ -f /etc/xray/xray-server.json ] && [ "$(jq -r 'any(.inbounds[] | select(.tag=="omrin-tunnel") | .settings.clients[]; .reverse.tag=="OMRLan")' /etc/xray/xray-server.json)" = "false" ]; then
 		# VLESS Reverse Proxy (replaces legacy reverse on xray 26+): the VPS->LAN port
 		# forward feature needs a dedicated reverse client in the VLESS inbound
 		XRAY_REVERSE_UUID=$(/usr/bin/xray uuid | tr -d "\n")
-		jq -M --arg uuid "$XRAY_REVERSE_UUID" '(.inbounds[] | select(.tag=="omrin-tunnel") | .settings.clients) += [{"id": $uuid, "level": 0, "email": "omr-reverse", "reverse": {"tag": "OMRLan"}}]' /etc/xray/xray-server.json > /etc/xray/xray-server.json.new
-		mv -f /etc/xray/xray-server.json.new /etc/xray/xray-server.json
+		jq_rewrite /etc/xray/xray-server.json -M --arg uuid "$XRAY_REVERSE_UUID" '(.inbounds[] | select(.tag=="omrin-tunnel") | .settings.clients) += [{"id": $uuid, "level": 0, "email": "omr-reverse", "reverse": {"tag": "OMRLan"}}]'
 	fi
 	if [ -f /etc/xray/xray-vless-reality.json ]; then
 		# older installs parsed the new "xray x25519" output wrong and left an empty
@@ -1699,11 +1711,9 @@ if [ "$XRAY" = "yes" ]; then
 			XRAY_X25519_PRIVATE_KEY=$(echo "${XRAY_X25519_KEYS}" | grep Private | awk '{ print $NF }' | tr -d "\n")
 			XRAY_X25519_PUBLIC_KEY=$(echo "${XRAY_X25519_KEYS}" | grep Public | awk '{ print $NF }' | tr -d "\n")
 			if [ -n "$XRAY_X25519_PRIVATE_KEY" ] && [ -n "$XRAY_X25519_PUBLIC_KEY" ]; then
-				jq -M --arg priv "$XRAY_X25519_PRIVATE_KEY" --arg pub "$XRAY_X25519_PUBLIC_KEY" '(.inbounds[] | select(.tag=="omrin-vless-reality") | .streamSettings.realitySettings) |= (.privateKey=$priv | .publicKey=$pub)' /etc/xray/xray-vless-reality.json > /etc/xray/xray-vless-reality.json.new
-				mv -f /etc/xray/xray-vless-reality.json.new /etc/xray/xray-vless-reality.json
+				jq_rewrite /etc/xray/xray-vless-reality.json -M --arg priv "$XRAY_X25519_PRIVATE_KEY" --arg pub "$XRAY_X25519_PUBLIC_KEY" '(.inbounds[] | select(.tag=="omrin-vless-reality") | .streamSettings.realitySettings) |= (.privateKey=$priv | .publicKey=$pub)'
 				if [ -f /etc/xray/xray-server.json ] && [ "$(jq -r 'any(.inbounds[]; .tag=="omrin-vless-reality")' /etc/xray/xray-server.json)" = "true" ]; then
-					jq -M --arg priv "$XRAY_X25519_PRIVATE_KEY" --arg pub "$XRAY_X25519_PUBLIC_KEY" '(.inbounds[] | select(.tag=="omrin-vless-reality") | .streamSettings.realitySettings) |= (.privateKey=$priv | .publicKey=$pub)' /etc/xray/xray-server.json > /etc/xray/xray-server.json.new
-					mv -f /etc/xray/xray-server.json.new /etc/xray/xray-server.json
+					jq_rewrite /etc/xray/xray-server.json -M --arg priv "$XRAY_X25519_PRIVATE_KEY" --arg pub "$XRAY_X25519_PUBLIC_KEY" '(.inbounds[] | select(.tag=="omrin-vless-reality") | .streamSettings.realitySettings) |= (.privateKey=$priv | .publicKey=$pub)'
 				fi
 			fi
 		fi
@@ -1738,18 +1748,13 @@ if [ "$XRAY" = "yes" ]; then
 		for xrayuser in $(cat /etc/openmptcprouter-vps-admin/omr-admin-config.json | jq -r '.users[0][].username'); do
 			if [ "$xrayuser" != "admin" ] && [ "$xrayuser" != "openmptcprouter" ]; then
 				xrayid="$(/usr/bin/xray uuid)"
-				jq --arg xrayuser "$xrayuser" --arg xrayid "$xrayid" '(.inbounds[] | select(.tag=="omrin-tunnel") | .settings.clients) += [{"level": 0, "alterId": 0, "email": $xrayuser,"id": $xrayid}]' /etc/xray/xray-server.json > /etc/xray/xray-server.json.tmp
-				mv /etc/xray/xray-server.json.tmp /etc/xray/xray-server.json
-				jq --arg xrayuser "$xrayuser" --arg xrayid "$xrayid" '(.inbounds[] | select(.tag=="omrin-vmess-tunnel") | .settings.clients) += [{"level": 0, "alterId": 0, "email": $xrayuser,"id": $xrayid}]' /etc/xray/xray-server.json > /etc/xray/xray-server.json.tmp
-				mv /etc/xray/xray-server.json.tmp /etc/xray/xray-server.json
-				jq --arg xrayuser "$xrayuser" --arg xrayid "$xrayid" '(.inbounds[] | select(.tag=="omrin-socks-tunnel") | .settings.accounts) += [{"user": $xrayuser,"pass": $xrayid}]' /etc/xray/xray-server.json > /etc/xray/xray-server.json.tmp
-				mv /etc/xray/xray-server.json.tmp /etc/xray/xray-server.json
-				jq --arg xrayuser "$xrayuser" --arg xrayid "$xrayid" '(.inbounds[] | select(.tag=="omrin-trojan-tunnel") | .settings.clients) += [{"level": 0, "alterId": 0, "email": $xrayuser,"id": $xrayid}]' /etc/xray/xray-server.json > /etc/xray/xray-server.json.tmp
-				mv /etc/xray/xray-server.json.tmp /etc/xray/xray-server.json
+				jq_rewrite /etc/xray/xray-server.json --arg xrayuser "$xrayuser" --arg xrayid "$xrayid" '(.inbounds[] | select(.tag=="omrin-tunnel") | .settings.clients) += [{"level": 0, "alterId": 0, "email": $xrayuser,"id": $xrayid}]'
+				jq_rewrite /etc/xray/xray-server.json --arg xrayuser "$xrayuser" --arg xrayid "$xrayid" '(.inbounds[] | select(.tag=="omrin-vmess-tunnel") | .settings.clients) += [{"level": 0, "alterId": 0, "email": $xrayuser,"id": $xrayid}]'
+				jq_rewrite /etc/xray/xray-server.json --arg xrayuser "$xrayuser" --arg xrayid "$xrayid" '(.inbounds[] | select(.tag=="omrin-socks-tunnel") | .settings.accounts) += [{"user": $xrayuser,"pass": $xrayid}]'
+				jq_rewrite /etc/xray/xray-server.json --arg xrayuser "$xrayuser" --arg xrayid "$xrayid" '(.inbounds[] | select(.tag=="omrin-trojan-tunnel") | .settings.clients) += [{"level": 0, "alterId": 0, "email": $xrayuser,"id": $xrayid}]'
 				[ -e /etc/shadowsocks-go/upsks.json ] && shadowsockspass="$(jq --arg xrayuser $xrayuser -r '.[$xrayuser]' /etc/shadowsocks-go/upsks.json)"
 				[ -z "$shadowsockspass" ] && shadowsockspass=$(head -c 32 /dev/urandom | base64 -w0)
-				jq --arg xrayuser "$xrayuser" --arg shadowsockspass "$shadowsockspass" '(.inbounds[] | select(.tag=="omrin-shadowsocks-tunnel") | .settings.clients) += [{"email": $xrayuser,"password": $shadowsockspass}]' /etc/xray/xray-server.json > /etc/xray/xray-server.json.tmp
-				mv /etc/xray/xray-server.json.tmp /etc/xray/xray-server.json
+				jq_rewrite /etc/xray/xray-server.json --arg xrayuser "$xrayuser" --arg shadowsockspass "$shadowsockspass" '(.inbounds[] | select(.tag=="omrin-shadowsocks-tunnel") | .settings.clients) += [{"email": $xrayuser,"password": $shadowsockspass}]'
 			fi
 		done
 	fi
@@ -2444,8 +2449,7 @@ if [ "$SOFTETHERVPN" = "yes" ]; then
 		softether_test "$softetherrun"
 		$softetherrun ServerPasswordSet $softether_password
 		softetherdefault="vpncmd 127.0.0.1:443 /SERVER /CSV /PASSWORD:$softether_password"
-		jq --arg softether_password $softether_password '. + {softethervpn_admin_password: $softether_password}' /etc/openmptcprouter-vps-admin/omr-admin-config.json > /etc/openmptcprouter-vps-admin/omr-admin-config.json.tmp
-		mv -f /etc/openmptcprouter-vps-admin/omr-admin-config.json.tmp /etc/openmptcprouter-vps-admin/omr-admin-config.json
+		jq_rewrite /etc/openmptcprouter-vps-admin/omr-admin-config.json --arg softether_password $softether_password '. + {softethervpn_admin_password: $softether_password}'
 	else
 		softetherdefault="vpncmd 127.0.0.1:65390 /SERVER /CSV /PASSWORD:$softether_password"
 	fi
@@ -2456,8 +2460,7 @@ if [ "$SOFTETHERVPN" = "yes" ]; then
 	if [ "$softether_user_password" = "null" ]; then
 		#echo "Generate user password"
 		softether_user_password=$SOFTETHERVPN_PASS_USER
-		jq --arg softether_user_password $softether_user_password '(.users[0].openmptcprouter) += {softethervpn: $softether_user_password}' /etc/openmptcprouter-vps-admin/omr-admin-config.json > /etc/openmptcprouter-vps-admin/omr-admin-config.json.tmp
-		mv -f /etc/openmptcprouter-vps-admin/omr-admin-config.json.tmp /etc/openmptcprouter-vps-admin/omr-admin-config.json
+		jq_rewrite /etc/openmptcprouter-vps-admin/omr-admin-config.json --arg softether_user_password $softether_user_password '(.users[0].openmptcprouter) += {softethervpn: $softether_user_password}'
 	fi
 
 	softetherrun="$softetherdefault /CMD"
@@ -2505,7 +2508,9 @@ fi
 # enabled. See https://github.com/Ysurac/openmptcprouter-vps/issues/132
 harden_secret_files \
 	/etc/openmptcprouter-vps-admin/omr-admin-config.json \
+	/etc/openmptcprouter-vps-admin/omr-admin-config.json.bak \
 	/etc/xray/xray-server.json \
+	/etc/xray/xray-server.json.bak \
 	/etc/shadowsocks-libev/manager.json \
 	/etc/shadowsocks-go/server.json \
 	/etc/shadowsocks-go/upsks.json \

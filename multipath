@@ -178,8 +178,10 @@ else
         # `multipath <dev> off` therefore could not turn a device off, and the
         # other branches relied on `endpoint add` refusing duplicates to stay
         # correct. IFF only reports the flags for display, so it still reads one.
-        ID=$(ip mptcp endpoint show | grep "dev $DEVICE" | awk '{print $3}')
-        IFF=$(ip mptcp endpoint show | grep -m 1 "dev $DEVICE" | awk '{print $4}')
+        # The dev field is compared whole: grep "dev eth0" also matched eth0.100.
+        ENDPOINTS=$(ip mptcp endpoint show | awk -v dev="$DEVICE" '{for (i = 1; i < NF; i++) if ($i == "dev" && $(i+1) == dev) {print; next}}')
+        ID=$(echo "$ENDPOINTS" | awk '{print $3}')
+        IFF=$(echo "$ENDPOINTS" | awk 'NR == 1 {print $4}')
         #IP=$(ip a show $DEVICE | sed -En 's/127.0.0.1//;s/.*inet (addr:)?(([0-9]*\.){3}[0-9]*).*/\2/p')
 	[ -f /usr/bin/jsonfilter ] && IP=$(ip -j a show $DEVICE | jsonfilter -e '@[0].addr_info[@.scope="global"].local')
         [ -f /usr/bin/jq ] && IP=$(ip -j a show $DEVICE | jq -r '.[0].addr_info[] | select(.scope=="global") | .local')

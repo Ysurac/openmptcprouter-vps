@@ -17,7 +17,18 @@ echo "!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 echo "You can select any interface and set any IPs during Pi-hole configuration, this will be modified for OpenMPTCProuter at the end."
 echo "Don't apply Pi-hole firewall rules."
 echo "!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!"
-[ "`tty`" != "not a tty" ] && read -n 1 -s -r -p "Press any key to continue" || sleep 5
+# read -n/-s/-p are bash only (dash rejects them, and this runs under sh):
+# take one key with the terminal in non-canonical mode instead.
+if [ -t 0 ]; then
+	printf 'Press any key to continue'
+	stty_saved="$(stty -g)"
+	stty -icanon -echo min 1 time 0
+	dd bs=1 count=1 >/dev/null 2>&1
+	stty "$stty_saved"
+	echo
+else
+	sleep 5
+fi
 
 # A setupVars.conf next to pihole.toml can only come from an earlier run of
 # this script on Pi-hole v6. The installer would take it for a v5 install to

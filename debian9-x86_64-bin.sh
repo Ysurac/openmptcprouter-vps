@@ -46,8 +46,8 @@ DEBIAN_FRONTEND=noninteractive apt-get -y -o Dpkg::Options::="--force-overwrite"
 
 
 # Change SSH port to 65222
-sed -i 's:#Port 22:Port 65222:g' /etc/ssh/sshd_config
-sed -i 's:Port 22:Port 65222:g' /etc/ssh/sshd_config
+# Whole "Port 22" line only: 's:Port 22:...:g' made "Port 2222" "Port 6522222"
+sed -i -E 's/^#?[[:space:]]*Port[[:space:]]+22[[:space:]]*$/Port 65222/' /etc/ssh/sshd_config
 
 echo "OpenMPTCProuter VPS is now installed !"
 cat /root/openmptcprouter_config.txt

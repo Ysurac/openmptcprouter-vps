@@ -205,8 +205,11 @@ else:
 # dead weight, and the feature it carries never runs.
 print("\n== every installed unit is enabled or started ==")
 postinst = open('debian/postinst').read()
+# An `rm -f /lib/systemd/system/X` is the cleanup of a removed feature
+# (UBOND), not an install.
+installing = "\n".join(l for l in live_text.splitlines() if not re.match(r'\s*rm\b', l))
 dests = sorted(set(re.findall(r'/lib/systemd/system/([A-Za-z0-9@._-]+\.(?:service|timer))',
-                              live_text)))
+                              installing)))
 for unit in dests:
     name = unit.rsplit('.', 1)[0]           # omr-bypass.timer -> omr-bypass
     stem = name[:-1] if name.endswith('@') else name

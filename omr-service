@@ -42,7 +42,7 @@ _glorytun_udp() {
 			}
 			if [ -z "$(pgrep post.sh)" ]; then
 				for intf in /etc/glorytun-udp/tun*; do
-					[ "$(echo $intf | grep key)" = "" ] && /etc/glorytun-udp/post.sh ${intf} &
+					[ "$(echo $intf | grep key)" = "" ] && timeout 70 /etc/glorytun-udp/post.sh ${intf} &
 				done
 				#ip link set mtu 9000 dev gt-udp-tun0 >/dev/null 2>&1
 			fi
@@ -157,6 +157,38 @@ _omr_api() {
 	}
 }
 
+# True if $1 (a network as ipcalc prints it, a.b.c.d/prefix) is a router LAN
+# that may be routed to it: inside 10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16
+# or 100.64.0.0/10, and clear of the VPS's own tunnel networks in
+# 10.255.0.0/16. Same rule as omradmin.py's _lan_network(): the API only
+# checks this with client2client, so a stored config can still hold
+# 0.0.0.0/0 or a 10.255.x subnet. Overlap between users is fine here.
+_lan_routable() {
+	local addr prefix a b c d octet value allowed net len mask
+	addr="${1%/*}"
+	prefix="${1#*/}"
+	[ "$prefix" = "$1" ] && prefix=32
+	[[ "$prefix" =~ ^[0-9]{1,2}$ ]] && [ "$(( 10#$prefix ))" -le 32 ] || return 1
+	IFS=. read -r a b c d <<< "$addr"
+	for octet in "$a" "$b" "$c" "$d"; do
+		[[ "$octet" =~ ^[0-9]{1,3}$ ]] && [ "$(( 10#$octet ))" -le 255 ] || return 1
+	done
+	value=$(( (10#$a << 24) | (10#$b << 16) | (10#$c << 8) | 10#$d ))
+	prefix=$(( 10#$prefix ))
+	# Overlaps 10.255.0.0/16: equal on the shorter of the two prefixes.
+	len=$(( prefix < 16 ? prefix : 16 ))
+	mask=$(( len ? (0xffffffff << (32 - len)) & 0xffffffff : 0 ))
+	[ $(( value & mask )) -eq $(( (10 << 24 | 255 << 16) & mask )) ] && return 1
+	for allowed in 10.0.0.0/8 172.16.0.0/12 192.168.0.0/16 100.64.0.0/10; do
+		len="${allowed#*/}"
+		IFS=. read -r a b c d <<< "${allowed%/*}"
+		net=$(( (a << 24) | (b << 16) | (c << 8) | d ))
+		mask=$(( (0xffffffff << (32 - len)) & 0xffffffff ))
+		[ "$prefix" -ge "$len" ] && [ $(( value & mask )) -eq "$net" ] && return 0
+	done
+	return 1
+}
+
 _lan_route() {
 	jq -c '.users[0][]?' /etc/openmptcprouter-vps-admin/omr-admin-config.json |
 	while IFS=$"\n" read -r c; do
@@ -170,8 +202,9 @@ _lan_route() {
 						network=$(ipcalc -n $d | grep Network | awk '{print $2}')
 						networkonly=$(ipcalc -n $d | grep Network | awk '{print $2}' | cut -d/ -f1)
 						netmask=$(ipcalc -n $d | grep Netmask | awk '{print $2}')
+						_lan_routable "$network" || continue
 						[ -n "$network" ] && [ -z "$(ip r show $network via $vpnremoteip)" ] && ip r replace $network via $vpnremoteip >/dev/null 2>&1
-						[ -n "$networkonly" ] && [ -n "$netmask" ] && ([ ! -f /etc/openvpn/ccd/${username} ] || [ -z "$(grep $networkonly /etc/openvpn/ccd/${username})" ]) && echo "iroute $networkonly $netmask" >> /etc/openvpn/ccd/${username}
+						[ -n "$networkonly" ] && [ -n "$netmask" ] && ([ ! -f /etc/openvpn/ccd/${username} ] || ! grep -Fqx -- "iroute $networkonly $netmask" /etc/openvpn/ccd/${username}) && echo "iroute $networkonly $netmask" >> /etc/openvpn/ccd/${username}
 					fi
 				done
 			fi
@@ -182,23 +215,27 @@ _lan_route() {
 _gre_tunnels() {
 	# OMR_ADDR used to come from Shorewall's params.vpn; read directly from
 	# the same omr-admin-config.json field omradmin.py's nft engine now
-	# treats as the source of truth (see _render_fw_ports there).
-	OMR_ADDR="$(jq -r '.users[0].openmptcprouter.vpnremoteip // empty' /etc/openmptcprouter-vps-admin/omr-admin-config.json)"
-	if [ -n "$OMR_ADDR" ]; then
-		for intf in /etc/openmptcprouter-vps-admin/intf/*; do
-			if [ -f "$intf" ]; then
-				. "$(readlink -f "$intf")"
-				iface="$(basename $intf)"
-				if [ "$(ip tunnel show $iface 2>/dev/null | awk '{print $4}')" != "$OMR_ADDR" ]; then
-					[ -n "$(ip tunnel show $iface 2>/dev/null)" ] && ip tunnel del $iface >/dev/null 2>&1
-					ip tunnel add $iface mode gre local $INTFADDR remote $OMR_ADDR >/dev/null 2>&1
-					ip link set $iface up >/dev/null 2>&1
-					ip addr add $LOCALIP dev $iface >/dev/null 2>&1
-					ip route add $NETWORK dev $iface >/dev/null 2>&1
-				fi
+	# treats as the source of truth (see _render_fw_ports there). It is the
+	# vpnremoteip of the user each intf file belongs to: add_gre_tunnels()
+	# writes files for other users too and records the owner as USERNAME.
+	# Files written before USERNAME existed belong to openmptcprouter.
+	for intf in /etc/openmptcprouter-vps-admin/intf/*; do
+		if [ -f "$intf" ]; then
+			# A file that lacks a key must not inherit the previous file's.
+			INTF="" INTFADDR="" INTFNETMASK="" NETWORK="" LOCALIP="" REMOTEIP="" NETMASK="" BROADCASTIP="" USERNAME="" USERID=""
+			. "$(readlink -f "$intf")"
+			OMR_ADDR="$(jq -r --arg user "${USERNAME:-openmptcprouter}" '.users[0][$user].vpnremoteip // empty' /etc/openmptcprouter-vps-admin/omr-admin-config.json)"
+			[ -n "$OMR_ADDR" ] || continue
+			iface="$(basename $intf)"
+			if [ "$(ip tunnel show $iface 2>/dev/null | awk '{print $4}')" != "$OMR_ADDR" ]; then
+				[ -n "$(ip tunnel show $iface 2>/dev/null)" ] && ip tunnel del $iface >/dev/null 2>&1
+				ip tunnel add $iface mode gre local $INTFADDR remote $OMR_ADDR >/dev/null 2>&1
+				ip link set $iface up >/dev/null 2>&1
+				ip addr add $LOCALIP dev $iface >/dev/null 2>&1
+				ip route add $NETWORK dev $iface >/dev/null 2>&1
 			fi
-		done
-	fi
+		fi
+	done
 }
 
 _openvpn_bonding() {
@@ -235,13 +272,16 @@ _vpn1() {
 		# splits a route into words and produces commands such as "ip route add
 		# via table 991337". Install the policy-table copies before removing the
 		# main-table default so a failed copy cannot cut connectivity.
+		# "ip route show dev vpn1" leaves the dev field out of its output
+		# (it is the filter), so it is put back on each copy and on the del:
+		# without it the connected route fails with "No such device".
 		while IFS= read -r route; do
 			[ -n "$route" ] || continue
 			read -r -a route_args <<< "$route"
-			ip -4 route replace table 991337 "${route_args[@]}" || return
+			ip -4 route replace table 991337 "${route_args[@]}" dev vpn1 || return
 		done < <(ip -4 route show dev vpn1 2>/dev/null)
 		read -r -a default_args <<< "$vpn1route"
-		ip -4 route del "${default_args[@]}"
+		ip -4 route del "${default_args[@]}" dev vpn1
 	fi
 }
 

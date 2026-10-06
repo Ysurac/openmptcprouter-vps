@@ -8,8 +8,13 @@ Restart=no
 ExecStart=/usr/bin/omr-update
 #ExecStart=/usr/share/omr-server/debian9-x86_64.sh
 AmbientCapabilities=
-StandardOutput=file:/var/log/omr-update.log
-StandardError=file:/var/log/omr-update.log
+# The installer prints the keys it generates: the log is root's only. And
+# truncate:, not file:, which writes over the previous run's log from its
+# start without cutting it, leaving the end of the old one after the new.
+UMask=0077
+StandardOutput=truncate:/var/log/omr-update.log
+# stdout's descriptor: two opens of the file would write over each other
+StandardError=inherit
 
 [Install]
 WantedBy=multi-user.target

@@ -59,7 +59,8 @@ installed_filters="$(printf '%s\n' $installed_filters | sort -u | tr '\n' ' ')"
 
 for f in fail2ban-filter-*.conf; do
     name="${f#fail2ban-filter-}"; name="${name%.conf}"
-    wget_count=$(uncommented | grep -cE "wget -O /etc/fail2ban/filter\.d/$name\.conf .*$f\$")
+    # wget -O DEST URL, or the installer's fetch_file URL DEST wrapper.
+    wget_count=$(uncommented | grep -cE "(wget -O /etc/fail2ban/filter\.d/$name\.conf .*$f|fetch_file .*/$f /etc/fail2ban/filter\.d/$name\.conf)\$")
     cp_count=$(uncommented | grep -cE "cp \\\$\{DIR\}/$f /etc/fail2ban/filter\.d/$name\.conf\$")
     if [ "$wget_count" -ge 1 ] && [ "$cp_count" -ge 1 ]; then
         pass "$f is installed as filter.d/$name.conf by both branches"
@@ -125,10 +126,31 @@ else
     fail "[omradmin] is enabled again; see debian/changelog 0.1081 for why it was not"
 fi
 
+# The installer moves sshd off 22. fail2ban's stock [sshd] has port = ssh, so
+# with no port here every ban was an nft reject on tcp/22, where nothing
+# listens, and the address kept hammering the real sshd on 65222.
+SSH_PORT="$(uncommented | grep -F 'sshd_config' | sed -nE 's|.*Port[^0-9]+22[^/]*/Port ([0-9]+)/.*|\1|p' | head -n 1)"
+sshd_ports=",$(jail_get sshd port | tr -d '[:space:]'),"
+if [ -z "$SSH_PORT" ]; then
+    fail "cannot tell which port the installer moves sshd to"
+elif printf '%s' "$sshd_ports" | grep -q ",$SSH_PORT,"; then
+    pass "[sshd] bans on tcp/$SSH_PORT, where the installer puts sshd"
+else
+    fail "[sshd] bans on '$(jail_get sshd port)', not on tcp/$SSH_PORT where the installer puts sshd (fail2ban's default is 22)"
+fi
+# ... and on 22 too: the installer leaves sshd there when sshd -t rejects the
+# edited config.
+if printf '%s' "$sshd_ports" | grep -qE ',(22|ssh),'; then
+    pass "[sshd] still bans on tcp/22, for a VPS where sshd could not be moved"
+else
+    fail "[sshd] no longer bans on tcp/22, where sshd stays when the installer cannot move it"
+fi
+
 for jail in $(jail_sections); do
     missing=""
     [ -z "$(jail_get "$jail" enabled)" ] && missing="$missing enabled"
-    # sshd takes fail2ban's own port/filter/journalmatch/maxretry defaults.
+    # sshd takes fail2ban's own filter/journalmatch/maxretry defaults (its
+    # port is checked above).
     if [ "$jail" != "sshd" ]; then
         for key in port protocol journalmatch maxretry; do
             [ -z "$(jail_get "$jail" "$key")" ] && missing="$missing $key"

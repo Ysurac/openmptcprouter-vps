@@ -38,8 +38,6 @@ OMR_METRICS=${OMR_METRICS:-no}
 OMR_AI=${OMR_AI:-no}
 MLVPN=${MLVPN:-yes}
 MLVPN_PASS=${MLVPN_PASS:-$(head -c 32 /dev/urandom | base64 -w0)}
-UBOND=${UBOND:-no}
-UBOND_PASS=${UBOND_PASS:-$(head -c 32 /dev/urandom | base64 -w0)}
 MQVPN=${MQVPN:-yes}
 OPENVPN=${OPENVPN:-yes}
 OPENVPN_BONDING=${OPENVPN_BONDING:-yes}
@@ -88,11 +86,10 @@ GLORYTUN_TCP_BINARY_VERSION="0.0.35-6"
 #MLVPN_VERSION="8f9720978b28c1954f9f229525333547283316d2"
 MLVPN_VERSION="8aa1b16d843ea68734e2520e39a34cb7f3d61b2b"
 MLVPN_BINARY_VERSION="3.0.0+20211028.git.ddafba3"
-UBOND_VERSION="31af0f69ebb6d07ed9348dca2fced33b956cedee"
 OBFS_VERSION="486bebd9208539058e57e23a12f23103016e09b4"
 OBFS_BINARY_VERSION="0.0.5-1"
-OMR_ADMIN_VERSION="26259b6a0adac8e5cafdd27a5e11e53f8c2ca212"
-OMR_ADMIN_BINARY_VERSION="0.18+20261005"
+OMR_ADMIN_VERSION="2fc09ff3911e908840552a0f7b4082a6eed4e06e"
+OMR_ADMIN_BINARY_VERSION="0.18+20261006"
 DSVPN_VERSION="3b99d2ef6c02b2ef68b5784bec8adfdd55b29b1a"
 DSVPN_BINARY_VERSION="0.1.4-2"
 MQVPN_VERSION="0.16.3-1"
@@ -111,11 +108,15 @@ DEFAULT_USER="openmptcprouter"
 VPS_DOMAIN=${VPS_DOMAIN:-$(wget -4 -qO- -T 2 http://hostname.openmptcprouter.com)}
 VPSPATH="server-test"
 VPS_PUBLIC_IP=${VPS_PUBLIC_IP:-$(wget -4 -qO- -T 2 http://ip.openmptcprouter.com)}
+# Both come over plain HTTP and end up in acme.sh's arguments and in the
+# WireGuard client config: only a host name and an IPv4 address are kept
+printf '%s' "$VPS_DOMAIN" | grep -Eqx '[A-Za-z0-9]([A-Za-z0-9-]{0,62}[A-Za-z0-9])?(\.[A-Za-z0-9]([A-Za-z0-9-]{0,62}[A-Za-z0-9])?)+' || VPS_DOMAIN=""
+printf '%s' "$VPS_PUBLIC_IP" | grep -Eqx '([0-9]{1,3}\.){3}[0-9]{1,3}' || VPS_PUBLIC_IP=""
 VPSURL="https://www.openmptcprouter.com/"
 REPO="repo.openmptcprouter.com"
 CHINA=${CHINA:-no}
 
-OMR_VERSION="0.1086-rolling-test"
+OMR_VERSION="0.1087-rolling-test"
 
 DIR=$( pwd )
 #"
@@ -163,6 +164,52 @@ jq_rewrite() {
 		echo "Error: could not update $_jq_file with jq, left unchanged" >&2
 		return 1
 	fi
+}
+
+# Download a file of this repository into place: fetch_file URL DEST
+# wget -O empties DEST before the download, so a failed one left it empty --
+# an empty nftables.conf or omr.nft is a VPS with no firewall at the next boot.
+# DEST is only replaced by a complete, non-empty download; returns 1 otherwise.
+fetch_file() {
+	_fetch_tmp="$2.tmp.$$"
+	if wget -O "$_fetch_tmp" "$1" && [ -s "$_fetch_tmp" ]; then
+		mv -f "$_fetch_tmp" "$2"
+	else
+		rm -f "$_fetch_tmp"
+		echo "Error: could not download $1, $2 left unchanged" >&2
+		return 1
+	fi
+}
+
+# Install what the omr-vps-admin deb ships (omradmin.py, the config template,
+# the unit) from the OMR_ADMIN_VERSION commit on GitHub: the deb pinned by
+# OMR_ADMIN_BINARY_VERSION is not published yet when the pin is bumped here
+# before the upload. Its dependencies are installed above it in the script.
+# Called as an `if` condition, so set -e is off: every step is chained.
+# Returns 1 when the archive could not be fetched or is incomplete.
+omr_admin_from_github() {
+	_admin_tmp=$(mktemp -d) || return 1
+	_admin_src="$_admin_tmp/openmptcprouter-vps-admin-${OMR_ADMIN_VERSION}"
+	if wget -O "$_admin_tmp/admin.zip" "https://github.com/Ysurac/openmptcprouter-vps-admin/archive/${OMR_ADMIN_VERSION}.zip" &&
+		unzip -q -o "$_admin_tmp/admin.zip" -d "$_admin_tmp" &&
+		[ -s "$_admin_src/omradmin.py" ] && [ -s "$_admin_src/omr-admin-config.json" ] && [ -s "$_admin_src/debian/omr-admin.service" ] &&
+		mkdir -p /usr/share/omr-admin &&
+		install -m 0755 "$_admin_src/omradmin.py" /usr/bin/omradmin.py &&
+		install -m 0644 "$_admin_src/omr-admin-config.json" /usr/share/omr-admin/omr-admin-config.json &&
+		install -m 0644 "$_admin_src/debian/omr-admin.service" /lib/systemd/system/omr-admin.service; then
+		rm -rf "$_admin_tmp"
+		return 0
+	fi
+	rm -rf "$_admin_tmp"
+	echo "Error: could not install omr-admin ${OMR_ADMIN_VERSION} from GitHub" >&2
+	return 1
+}
+
+# Restart units at the end of an update. One that fails to restart is
+# reported, not fatal: under set -e it ended the script there, before the
+# nftables ruleset rewritten above was loaded and omr-admin resynced its chains.
+restart_or_warn() {
+	systemctl -q restart "$@" || echo "WARNING: restarting $* failed, see journalctl -u $1" >&2
 }
 
 # Self-signed certificate of the OMR API and of MQVPN
@@ -441,7 +488,9 @@ if [ "$CHINA" = "yes" ]; then
 #		git checkout main
 #	fi
 	echo "deb [arch=amd64] file:/var/lib/openmptcprouter-vps-debian ./" > /etc/apt/sources.list.d/openmptcprouter.list
-	cat /var/lib/openmptcprouter-vps-debian/openmptcprouter.gpg.key | apt-key add -
+	# apt-key is gone from Debian 13; the key is a binary keyring, as is the one
+	# the non-China branch puts in trusted.gpg.d
+	cp /var/lib/openmptcprouter-vps-debian/openmptcprouter.gpg.key /etc/apt/trusted.gpg.d/openmptcprouter.gpg
 	rm -rf /usr/share/omr-server-git
 	if [ ! -d /usr/share/omr-server-git ]; then
 		#git clone https://gitee.com/ysurac/openmptcprouter-vps.git /usr/share/omr-server-git
@@ -620,7 +669,9 @@ set_grub_default_kernel() {
 	fi
 	# The kernel package postinst already ran update-grub, but regenerate
 	# anyway: an interrupted or skipped hook would leave the new kernel out.
-	[ -n "$(which grub-mkconfig)" ] && grub-mkconfig -o "$grub_cfg" >/dev/null 2>&1
+	if [ -n "$(which grub-mkconfig)" ] && ! grub-mkconfig -o "$grub_cfg" >/dev/null 2>&1; then
+		echo "WARNING: grub-mkconfig failed, ${grub_cfg} may not list kernel ${version} ${name}" >&2
+	fi
 	entry="$(grub_menu_entry_path "$grub_cfg" "${version}.*${name}")"
 	if [ -z "$entry" ]; then
 		echo "WARNING: kernel ${version} ${name} not found in ${grub_cfg}, GRUB default left untouched" >&2
@@ -632,7 +683,10 @@ set_grub_default_kernel() {
 	else
 		echo "GRUB_DEFAULT=\"${entry}\"" >> "$grub_deflt"
 	fi
-	[ -n "$(which grub-mkconfig)" ] && grub-mkconfig -o "$grub_cfg" >/dev/null 2>&1
+	if [ -n "$(which grub-mkconfig)" ] && ! grub-mkconfig -o "$grub_cfg" >/dev/null 2>&1; then
+		echo "WARNING: grub-mkconfig failed, GRUB_DEFAULT=\"${entry}\" is not applied yet: run update-grub" >&2
+		return 1
+	fi
 	echo "GRUB default boot entry is now ${entry}"
 }
 
@@ -711,7 +765,7 @@ if [ "$KERNEL" = "5.4" ] || [ "$KERNEL" = "5.15" ]; then
 	# Check if mptcp kernel is grub default kernel
 	echo "Set MPTCP kernel as grub default..."
 	if [ "$LOCALFILES" = "no" ]; then
-		wget -O /tmp/update-grub.sh ${VPSURL}${VPSPATH}/update-grub.sh
+		fetch_file ${VPSURL}${VPSPATH}/update-grub.sh /tmp/update-grub.sh
 		cd /tmp
 	else
 		cd ${DIR}
@@ -740,17 +794,16 @@ elif [ "$KERNEL" = "6.6" ] && [ "$ARCH" = "amd64" ]; then
 #	echo 'deb [signed-by=/usr/share/keyrings/xanmod-archive-keyring.gpg] http://deb.xanmod.org releases main' | tee /etc/apt/sources.list.d/xanmod-release.list
 #	apt-get update
 #	apt-get -y install linux-xanmod-lts-x64v3
-	[ -f /etc/default/grub ] && {
-		sed -i "s@^\(GRUB_DEFAULT=\).*@\1\"0\"@" /etc/default/grub >/dev/null 2>&1
-		[ -f /boot/grub/grub.cfg ] && grub-mkconfig -o /boot/grub/grub.cfg >/dev/null 2>&1
-	}
+	# By entry, not GRUB_DEFAULT="0": that is the newest kernel, Debian 13's
+	# own 6.12 rather than this one
+	set_grub_default_kernel "${KERNEL_VERSION}" "${PSABI}-xanmod" || true
 elif [ "$KERNEL" = "6.10" ] && [ "$ARCH" = "amd64" ]; then
 	# awk command from xanmod website
 	PSABI=$(awk 'BEGIN { while (!/flags/) if (getline < "/proc/cpuinfo" != 1) exit 1; if (/lm/&&/cmov/&&/cx8/&&/fpu/&&/fxsr/&&/mmx/&&/syscall/&&/sse2/) level = 1; if (level == 1 && /cx16/&&/lahf/&&/popcnt/&&/sse4_1/&&/sse4_2/&&/ssse3/) level = 2; if (level == 2 && /avx/&&/avx2/&&/bmi1/&&/bmi2/&&/f16c/&&/fma/&&/abm/&&/movbe/&&/xsave/) level = 3; if (level == 3 && /avx512f/&&/avx512bw/&&/avx512cd/&&/avx512dq/&&/avx512vl/) level = 4; if (level > 0) { print "x64v" level; exit level + 1 }; exit 1;}' | tr -d "\n")
 	#'
 	if [ "$PSABI" = "x64v1" ]; then
 		echo "psABI x86-64-v1 not supported by Xanmod kernel 6.10, use an older kernel"
-		exit 0
+		exit 1
 	fi
 	KERNEL_VERSION="6.10.2"
 	KERNEL_REV="0~20240728.gae7b555"
@@ -766,17 +819,16 @@ elif [ "$KERNEL" = "6.10" ] && [ "$ARCH" = "amd64" ]; then
 #	echo 'deb [signed-by=/usr/share/keyrings/xanmod-archive-keyring.gpg] http://deb.xanmod.org releases main' | tee /etc/apt/sources.list.d/xanmod-release.list
 #	apt-get update
 #	apt-get -y install linux-xanmod-lts-x64v3
-	[ -f /etc/default/grub ] && {
-		sed -i "s@^\(GRUB_DEFAULT=\).*@\1\"0\"@" /etc/default/grub >/dev/null 2>&1
-		[ -f /boot/grub/grub.cfg ] && grub-mkconfig -o /boot/grub/grub.cfg >/dev/null 2>&1
-	}
+	# By entry, not GRUB_DEFAULT="0": that is the newest kernel, Debian 13's
+	# own 6.12 rather than this one
+	set_grub_default_kernel "${KERNEL_VERSION}" "${PSABI}-xanmod" || true
 elif [ "$KERNEL" = "6.11" ] && [ "$ARCH" = "amd64" ]; then
 	# awk command from xanmod website
 	PSABI=$(awk 'BEGIN { while (!/flags/) if (getline < "/proc/cpuinfo" != 1) exit 1; if (/lm/&&/cmov/&&/cx8/&&/fpu/&&/fxsr/&&/mmx/&&/syscall/&&/sse2/) level = 1; if (level == 1 && /cx16/&&/lahf/&&/popcnt/&&/sse4_1/&&/sse4_2/&&/ssse3/) level = 2; if (level == 2 && /avx/&&/avx2/&&/bmi1/&&/bmi2/&&/f16c/&&/fma/&&/abm/&&/movbe/&&/xsave/) level = 3; if (level == 3 && /avx512f/&&/avx512bw/&&/avx512cd/&&/avx512dq/&&/avx512vl/) level = 4; if (level > 0) { print "x64v" level; exit level + 1 }; exit 1;}' | tr -d "\n")
 	#'
 	if [ "$PSABI" = "x64v1" ]; then
 		echo "psABI x86-64-v1 not supported by Xanmod kernel 6.11, use an older kernel"
-		exit 0
+		exit 1
 	fi
 	KERNEL_VERSION="6.11.0"
 	KERNEL_REV="0~20240916.g9c60408"
@@ -792,10 +844,9 @@ elif [ "$KERNEL" = "6.11" ] && [ "$ARCH" = "amd64" ]; then
 #	echo 'deb [signed-by=/usr/share/keyrings/xanmod-archive-keyring.gpg] http://deb.xanmod.org releases main' | tee /etc/apt/sources.list.d/xanmod-release.list
 #	apt-get update
 #	apt-get -y install linux-xanmod-lts-x64v3
-	[ -f /etc/default/grub ] && {
-		sed -i "s@^\(GRUB_DEFAULT=\).*@\1\"0\"@" /etc/default/grub >/dev/null 2>&1
-		[ -f /boot/grub/grub.cfg ] && grub-mkconfig -o /boot/grub/grub.cfg >/dev/null 2>&1
-	}
+	# By entry, not GRUB_DEFAULT="0": that is the newest kernel, Debian 13's
+	# own 6.12 rather than this one
+	set_grub_default_kernel "${KERNEL_VERSION}" "${PSABI}-xanmod" || true
 elif [ "$KERNEL" = "6.12" ] && [ "$ARCH" = "amd64" ]; then
 	# awk command from xanmod website
 	PSABI=$(awk 'BEGIN { while (!/flags/) if (getline < "/proc/cpuinfo" != 1) exit 1; if (/lm/&&/cmov/&&/cx8/&&/fpu/&&/fxsr/&&/mmx/&&/syscall/&&/sse2/) level = 1; if (level == 1 && /cx16/&&/lahf/&&/popcnt/&&/sse4_1/&&/sse4_2/&&/ssse3/) level = 2; if (level == 2 && /avx/&&/avx2/&&/bmi1/&&/bmi2/&&/f16c/&&/fma/&&/abm/&&/movbe/&&/xsave/) level = 3; if (level == 3 && /avx512f/&&/avx512bw/&&/avx512cd/&&/avx512dq/&&/avx512vl/) level = 4; if (level > 0) { print "x64v" level; exit level + 1 }; exit 1;}' | tr -d "\n")
@@ -830,7 +881,10 @@ elif [ "$KERNEL" = "6.12" ] && [ "$ARCH" = "amd64" ]; then
 #			grub-mkconfig -o /boot/grub/grub.cfg >/dev/null 2>&1
 #		fi
 #	}
-	set_grub_default_kernel "${KERNEL_VERSION}" "${PSABI}-xanmod"
+	# Not fatal: the function printed how to set the default kernel by hand,
+	# and a VPS that boots without GRUB (direct kernel, extlinux) has nothing
+	# to set. Under set -e a bare call would end the install here.
+	set_grub_default_kernel "${KERNEL_VERSION}" "${PSABI}-xanmod" || true
 #elif [ "$KERNEL" = "6.18" ] && [ "$ARCH" = "amd64" ]; then
 elif [ "$KERNEL" = "6.18" ]; then
 	if [ "$ARCH" = "amd64" ]; then
@@ -874,7 +928,7 @@ elif [ "$KERNEL" = "6.18" ]; then
 	dpkg --force-all -i -B /tmp/linux-image-${KERNEL_VERSION}-${KERNEL_REV}.${PSABI}-omr_${KERNEL_VERSION}-${KERNEL_REV}.${PSABI}-omr_${ARCH}.deb
 	# tmpfs /tmp: keeping these costs their size in RAM until a reboot
 	rm -f /tmp/linux-headers-${KERNEL_VERSION}-${KERNEL_REV}.${PSABI}-omr_${KERNEL_VERSION}-${KERNEL_REV}.${PSABI}-omr_${ARCH}.deb /tmp/linux-image-${KERNEL_VERSION}-${KERNEL_REV}.${PSABI}-omr_${KERNEL_VERSION}-${KERNEL_REV}.${PSABI}-omr_${ARCH}.deb
-	set_grub_default_kernel "${KERNEL_VERSION}" "${PSABI}-omr"
+	set_grub_default_kernel "${KERNEL_VERSION}" "${PSABI}-omr" || true
 elif [ "$KERNEL" = "6.6" ] && [ "$ID" = "debian" ]; then
 	echo 'deb http://deb.debian.org/debian bookworm-backports main' > /etc/apt/sources.list.d/bookworm-backports.list
 	apt-get update
@@ -963,7 +1017,7 @@ if [ "$IPERF" = "yes" ] && [ "$CHINA" != "yes" ]; then
 	systemctl enable iperf3.service || true
 	mkdir -p /etc/systemd/system/iperf3.service.d
 	if [ "$LOCALFILES" = "no" ]; then
-		wget -O /etc/systemd/system/iperf3.service.d/override.conf ${VPSURL}${VPSPATH}/iperf3.override.conf
+		fetch_file ${VPSURL}${VPSPATH}/iperf3.override.conf /etc/systemd/system/iperf3.service.d/override.conf
 	else
 		cp ${DIR}/iperf3.override.conf /etc/systemd/system/iperf3.service.d/override.conf
 	fi
@@ -981,6 +1035,9 @@ if [ "$KERNEL" != "5.4" ]; then
 		apt-get -y install --no-install-recommends build-essential
 		cd /tmp
 		apt-get -y install git
+		# A run that died between clone and cleanup leaves the directory, and
+		# git clone refuses to clone into it on every later run
+		rm -rf /tmp/mptcpize
 		git clone https://github.com/Ysurac/mptcpize.git
 		cd mptcpize
 		make
@@ -996,6 +1053,7 @@ if [ "$KERNEL" != "5.4" ]; then
 		#wget https://mirrors.edge.kernel.org/pub/linux/utils/net/iproute2/iproute2-5.16.0.tar.gz
 		#tar xzf iproute2-5.16.0.tar.gz
 		#cd iproute2-5.16.0
+		rm -rf /tmp/iproute2
 		git clone git://git.kernel.org/pub/scm/network/iproute2/iproute2.git 
 		cd iproute2
 		git checkout "$IPROUTE2_VERSION"
@@ -1097,6 +1155,9 @@ if [ "$SHADOWSOCKS" = "yes" ]; then
 		fi
 		rm -f /var/lib/dpkg/lock
 		rm -f /var/lib/dpkg/lock-frontend
+		# dpkg-buildpackage leaves the debs in /tmp: drop the ones of an earlier
+		# build, else a failed build installs that stale package below
+		rm -f /tmp/omr-shadowsocks-libev_*.deb
 		if ! dpkg-buildpackage -b -us -uc; then
 			echo "Unable to build Shadowsocks-libev package."
 		fi
@@ -1267,7 +1328,7 @@ if [ "$OMR_ADMIN" = "yes" ]; then
 	mkdir -p /var/opt/openmptcprouter
 	if [ "$SOURCES" = "yes" ]; then
 		if [ "$LOCALFILES" = "no" ]; then
-			wget -O /lib/systemd/system/omr-admin.service ${VPSURL}${VPSPATH}/omr-admin.service.in
+			fetch_file ${VPSURL}${VPSPATH}/omr-admin.service.in /lib/systemd/system/omr-admin.service
 			#wget -O /lib/systemd/system/omr-admin-ipv6.service ${VPSURL}${VPSPATH}/omr-admin-ipv6.service.in
 		else
 			cp ${DIR}/omr-admin.service.in /lib/systemd/system/omr-admin.service
@@ -1276,11 +1337,9 @@ if [ "$OMR_ADMIN" = "yes" ]; then
 		cd /tmp
 		unzip -q -o openmptcprouter-vps-admin.zip
 		rm -f /tmp/openmptcprouter-vps-admin.zip
-		if [ -f /tmp/openmptcprouter-vps-admin-${OMR_ADMIN_VERSION}/omr-admin.py ]; then
-			cp /tmp/openmptcprouter-vps-admin-${OMR_ADMIN_VERSION}/omr-admin.py /usr/bin/
-		else
-			cp /tmp/openmptcprouter-vps-admin-${OMR_ADMIN_VERSION}/omradmin.py /usr/bin/
-		fi
+		# Installed where the omr-vps-admin deb puts it, which is where
+		# omr-admin.service runs it from
+		cp /tmp/openmptcprouter-vps-admin-${OMR_ADMIN_VERSION}/omradmin.py /usr/bin/omradmin.py
 		if [ -f /etc/openmptcprouter-vps-admin/omr-admin-config.json ]; then
 			OMR_ADMIN_PASS2=$(grep -Po '"'"pass"'"\s*:\s*"\K([^"]*)' /etc/openmptcprouter-vps-admin/omr-admin-config.json | tr -d  "\n")
 			[ -z "$OMR_ADMIN_PASS2" ] && OMR_ADMIN_PASS2=$(cat /etc/openmptcprouter-vps-admin/omr-admin-config.json | jq -r .users[0].openmptcprouter.user_password | tr -d "\n")
@@ -1288,17 +1347,12 @@ if [ "$OMR_ADMIN" = "yes" ]; then
 			[ -n "$OMR_ADMIN_PASS2" ] && [ "$OMR_ADMIN_PASS2" != "null" ] && [ "$OMR_ADMIN_PASS2" != "MySecretKey" ] && OMR_ADMIN_PASS=$OMR_ADMIN_PASS2
 			OMR_ADMIN_PASS_ADMIN2=$(cat /etc/openmptcprouter-vps-admin/omr-admin-config.json | jq -r .users[0].admin.user_password | tr -d "\n")
 			[ -n "$OMR_ADMIN_PASS_ADMIN2" ] && [ "$OMR_ADMIN_PASS_ADMIN2" != "null" ] && [ "$OMR_ADMIN_PASS_ADMIN2" != "AdminMySecretKey" ] && OMR_ADMIN_PASS_ADMIN=$OMR_ADMIN_PASS_ADMIN2
-		else
-			cp /tmp/openmptcprouter-vps-admin-${OMR_ADMIN_VERSION}/omr-admin.py /usr/bin/
-			cd /etc/openmptcprouter-vps-admin
 		fi
-		if [ "$(grep user_password /etc/openmptcprouter-vps-admin/omr-admin-config.json)" = "" ]; then
+		if [ ! -f /etc/openmptcprouter-vps-admin/omr-admin-config.json ] || [ "$(grep user_password /etc/openmptcprouter-vps-admin/omr-admin-config.json)" = "" ]; then
 			cp /tmp/openmptcprouter-vps-admin-${OMR_ADMIN_VERSION}/omr-admin-config.json /etc/openmptcprouter-vps-admin/
-			cp /tmp/openmptcprouter-vps-admin-${OMR_ADMIN_VERSION}/omr-admin.py /usr/bin/
-			cd /etc/openmptcprouter-vps-admin
 		fi
-		rm -rf /tmp/tmp/openmptcprouter-vps-admin-${OMR_ADMIN_VERSION}
-		chmod u+x /usr/bin/omr-admin.py
+		rm -rf /tmp/openmptcprouter-vps-admin-${OMR_ADMIN_VERSION}
+		chmod u+x /usr/bin/omradmin.py
 	else
 		if [ -f /etc/openmptcprouter-vps-admin/omr-admin-config.json ]; then
 			OMR_ADMIN_PASS2=$(grep -Po '"'"pass"'"\s*:\s*"\K([^"]*)' /etc/openmptcprouter-vps-admin/omr-admin-config.json | tr -d  "\n")
@@ -1315,10 +1369,18 @@ if [ "$OMR_ADMIN" = "yes" ]; then
 				dpkg --force-confold --force-confdef --force-overwrite -i /tmp/omr-vps-admin_${OMR_ADMIN_BINARY_VERSION}_all.deb || apt-get -y --fix-broken install
 			else
 				# The pinned deb is not published yet (the version is bumped
-				# here before it is uploaded): keep going with the newest one
-				# the repository has rather than abort the whole install.
-				echo "WARNING: omr-vps-admin ${OMR_ADMIN_BINARY_VERSION} is not available, installing the repository's version instead" >&2
-				apt-get -o Dpkg::Options::="--force-confold" -o Dpkg::Options::="--force-confdef" -o Dpkg::Options::="--force-overwrite" -y install omr-vps-admin || echo "WARNING: omr-vps-admin could not be installed" >&2
+				# here before it is uploaded): install the same commit from
+				# GitHub. Never another version: the rest of this script is
+				# written against OMR_ADMIN_VERSION.
+				echo "WARNING: omr-vps-admin ${OMR_ADMIN_BINARY_VERSION} is not available, installing omr-admin ${OMR_ADMIN_VERSION} from GitHub instead" >&2
+				if ! omr_admin_from_github; then
+					if [ -f /usr/bin/omradmin.py ] && [ -f /usr/share/omr-admin/omr-admin-config.json ]; then
+						echo "WARNING: omr-admin ${OMR_ADMIN_VERSION} could not be installed, keeping the installed one" >&2
+					else
+						echo "ERROR: omr-admin ${OMR_ADMIN_VERSION} could not be installed, neither as omr-vps-admin ${OMR_ADMIN_BINARY_VERSION} nor from GitHub" >&2
+						exit 1
+					fi
+				fi
 			fi
 			rm -f /tmp/omr-vps-admin_${OMR_ADMIN_BINARY_VERSION}_all.deb
 		fi
@@ -1378,11 +1440,11 @@ if [ "$OMR_ADMIN" = "yes" ]; then
 	fi
 	if [ "$OMR_METRICS" = "yes" ]; then
 		mkdir -p /usr/share/omr-admin
-		wget -O /usr/share/omr-admin/omr_metrics.py https://raw.githubusercontent.com/Ysurac/openmptcprouter-vps-admin/refs/heads/develop/omr_metrics.py
+		wget -O /usr/share/omr-admin/omr_metrics.py https://raw.githubusercontent.com/Ysurac/openmptcprouter-vps-admin/${OMR_ADMIN_VERSION}/omr_metrics.py
 	fi
 	if [ "$OMR_AI" = "yes" ]; then
-		wget -O /tmp/install_omr-ai.sh https://raw.githubusercontent.com/Ysurac/openmptcprouter-vps-admin/refs/heads/develop/install_omr-ai.sh
-		bash /tmp/install_omr-ai.sh
+		wget -O /tmp/install_omr-ai.sh https://raw.githubusercontent.com/Ysurac/openmptcprouter-vps-admin/${OMR_ADMIN_VERSION}/install_omr-ai.sh
+		OMR_ADMIN_VERSION="${OMR_ADMIN_VERSION}" bash /tmp/install_omr-ai.sh
 		rm -f /tmp/install_omr-ai.sh
 	fi
 fi
@@ -1391,12 +1453,12 @@ fi
 if [ "$LOCALFILES" = "no" ]; then
 	if [ "$KERNEL" != "5.4" ]; then
 		if [ "$KERNEL" != "6.12" ] && [ "$KERNEL" != "6.6" ]; then
-			wget -O /etc/sysctl.d/90-shadowsocks.conf ${VPSURL}${VPSPATH}/shadowsocks.6.18.conf
+			fetch_file ${VPSURL}${VPSPATH}/shadowsocks.6.18.conf /etc/sysctl.d/90-shadowsocks.conf
 		else
-			wget -O /etc/sysctl.d/90-shadowsocks.conf ${VPSURL}${VPSPATH}/shadowsocks.6.1.conf
+			fetch_file ${VPSURL}${VPSPATH}/shadowsocks.6.1.conf /etc/sysctl.d/90-shadowsocks.conf
 		fi
 	else
-		wget -O /etc/sysctl.d/90-shadowsocks.conf ${VPSURL}${VPSPATH}/shadowsocks.conf
+		fetch_file ${VPSURL}${VPSPATH}/shadowsocks.conf /etc/sysctl.d/90-shadowsocks.conf
 	fi
 else
 	# Same kernel split as the download branch above -- without the 6.18 case
@@ -1415,17 +1477,22 @@ fi
 
 if [ "$SHADOWSOCKS" = "yes" ]; then
 	if [ "$update" != 0 ]; then
+		# Keep the generated key unless the old config really has one: with
+		# neither file (Shadowsocks was off) or no key in it, this read
+		# nothing and manager.json got an empty key
+		SHADOWSOCKS_PASS_OLD=""
 		if [ ! -f /etc/shadowsocks-libev/manager.json ]; then
-			SHADOWSOCKS_PASS=$(grep -Po '"'"key"'"\s*:\s*"\K([^"]*)' /etc/shadowsocks-libev/config.json | tr -d  "\n" | sed 's/-/+/g; s/_/\//g;')
+			[ -f /etc/shadowsocks-libev/config.json ] && SHADOWSOCKS_PASS_OLD=$(grep -Po '"'"key"'"\s*:\s*"\K([^"]*)' /etc/shadowsocks-libev/config.json | tr -d  "\n" | sed 's/-/+/g; s/_/\//g;')
 		elif [ -f /etc/shadowsocks-libev/manager.json ]; then
-			SHADOWSOCKS_PASS=$(grep -Po '"'"65101"'":\s*"\K([^"]*)' /etc/shadowsocks-libev/manager.json | tr -d  "\n" | sed 's/-/+/g; s/_/\//g;')
+			SHADOWSOCKS_PASS_OLD=$(grep -Po '"'"65101"'":\s*"\K([^"]*)' /etc/shadowsocks-libev/manager.json | tr -d  "\n" | sed 's/-/+/g; s/_/\//g;')
 		fi
+		[ -n "$SHADOWSOCKS_PASS_OLD" ] && SHADOWSOCKS_PASS="$SHADOWSOCKS_PASS_OLD"
 	fi
 	# Install shadowsocks config and add a shadowsocks by CPU
 	if [ "$update" = "0" ] || [ ! -f /etc/shadowsocks-libev/manager.json ]; then
 		mkdir -p /etc/shadowsocks-libev
 		if [ "$LOCALFILES" = "no" ]; then
-			wget -O /etc/shadowsocks-libev/manager.json ${VPSURL}${VPSPATH}/manager.json
+			fetch_file ${VPSURL}${VPSPATH}/manager.json /etc/shadowsocks-libev/manager.json
 		else
 			cp ${DIR}/manager.json /etc/shadowsocks-libev/manager.json
 		fi
@@ -1440,18 +1507,18 @@ if [ "$SHADOWSOCKS" = "yes" ]; then
 	#sed -i 's:aes-256-cfb:chacha20:g' /etc/shadowsocks-libev/config.json
 	#sed -i 's:json:json --no-delay:g' /lib/systemd/system/shadowsocks-libev-server@.service
 	if [ "$LOCALFILES" = "no" ]; then
-		wget -O /lib/systemd/system/shadowsocks-libev-manager@.service ${VPSURL}${VPSPATH}/shadowsocks-libev-manager@.service.in
+		fetch_file ${VPSURL}${VPSPATH}/shadowsocks-libev-manager@.service.in /lib/systemd/system/shadowsocks-libev-manager@.service
 	else
 		cp ${DIR}/shadowsocks-libev-manager@.service.in /lib/systemd/system/shadowsocks-libev-manager@.service
 	fi
 	if systemctl -q is-enabled shadowsocks-libev 2>/dev/null; then
 		systemctl -q disable --now shadowsocks-libev || true
 	fi
-	[ -f /etc/shadowsocks-libev/config.json ] && systemctl disable shadowsocks-libev-server@config.service
+	[ -f /etc/shadowsocks-libev/config.json ] && { systemctl disable shadowsocks-libev-server@config.service || true; }
 	systemctl enable shadowsocks-libev-manager@manager.service
 	if [ $NBCPU -gt 1 ]; then
 		for i in $(seq 1 $NBCPU); do
-			[ -f /etc/shadowsocks-libev/config$i.json ] && systemctl is-enabled shadowsocks-libev && systemctl disable shadowsocks-libev-server@config$i.service
+			[ -f /etc/shadowsocks-libev/config$i.json ] && systemctl is-enabled shadowsocks-libev && { systemctl disable shadowsocks-libev-server@config$i.service || true; }
 		done
 	fi
 	if systemctl -q is-active shadowsocks-libev-manager@manager 2>/dev/null; then
@@ -1463,8 +1530,8 @@ if ! grep -q 'DefaultLimitNOFILE=65536' /etc/systemd/system.conf ; then
 fi
 
 if [ "$LOCALFILES" = "no" ]; then
-	wget -O /lib/systemd/system/omr-update.service ${VPSURL}${VPSPATH}/omr-update.service.in
-	wget -O /usr/bin/omr-update ${VPSURL}${VPSPATH}/omr-update
+	fetch_file ${VPSURL}${VPSPATH}/omr-update.service.in /lib/systemd/system/omr-update.service
+	fetch_file ${VPSURL}${VPSPATH}/omr-update /usr/bin/omr-update
 	chmod 755 /usr/bin/omr-update
 else
 	cp ${DIR}/omr-update.service.in /lib/systemd/system/omr-update.service
@@ -1578,14 +1645,17 @@ if [ "$SHADOWSOCKS_GO" = "yes" ]; then
 		[ -n "$UPSK2" ] && [ "$UPSK2" != "UPSK" ] && [ "$UPSK2" != "null" ] && UPSK="$UPSK2"
 	fi
 	if [ "$LOCALFILES" = "no" ]; then
-		wget -O /etc/shadowsocks-go/server.json ${VPSURL}${VPSPATH}/shadowsocks-go.server.json
+		fetch_file ${VPSURL}${VPSPATH}/shadowsocks-go.server.json /etc/shadowsocks-go/server.json
 	else
 		cp ${DIR}/shadowsocks-go.server.json /etc/shadowsocks-go/server.json
 	fi
 	sed -i "s:\"PSK\":\"$PSK\":g" /etc/shadowsocks-go/server.json
 	sed -i "s:UPSK:$UPSK:g" /etc/shadowsocks-go/upsks.json
-	cp -pf /etc/openmptcprouter-vps-admin/omr-admin-config.json /etc/openmptcprouter-vps-admin/omr-admin-config.json.bak
-	jq_rewrite /etc/openmptcprouter-vps-admin/omr-admin-config.json -M 'del(.users[0].openmptcprouter."shadowsocks-go")'
+	# Not there with OMR_ADMIN=no
+	if [ -f /etc/openmptcprouter-vps-admin/omr-admin-config.json ]; then
+		cp -pf /etc/openmptcprouter-vps-admin/omr-admin-config.json /etc/openmptcprouter-vps-admin/omr-admin-config.json.bak
+		jq_rewrite /etc/openmptcprouter-vps-admin/omr-admin-config.json -M 'del(.users[0].openmptcprouter."shadowsocks-go")'
+	fi
 
 	chmod 644 /lib/systemd/system/shadowsocks-go.service
 	systemctl daemon-reload
@@ -1646,14 +1716,24 @@ if [ "$V2RAY" = "yes" ]; then
 		V2RAY_UUID2=$(grep -Po '"'"id"'"\s*:\s*"\K([^"]*)' /etc/v2ray/v2ray-server.json | head -n 1 | tr -d "\n")
 		[ -n "$V2RAY_UUID2" ] && V2RAY_UUID="$V2RAY_UUID2"
 	fi
-	#if [ ! -f /etc/v2ray/v2ray-server.json ]; then
-		if [ "$LOCALFILES" = "no" ]; then
-			wget -O /etc/v2ray/v2ray-server.json ${VPSURL}${VPSPATH}/v2ray-server.json
-		else
-			cp ${DIR}/v2ray-server.json /etc/v2ray/v2ray-server.json
-		fi
-		sed -i "s:V2RAY_UUID:$V2RAY_UUID:g" /etc/v2ray/v2ray-server.json
-	#fi
+	# Copied from the template only when there is none: an existing config
+	# holds what omr-admin added since (users of /add_user, port redirects,
+	# reverse tunnels), which a copy on every run threw away. It only gets the
+	# template inbounds and outbounds it lacks, and the rules that keep proxy
+	# users off the VPS's loopback services when it has none.
+	V2RAY_TEMPLATE="$(mktemp)"
+	if [ "$LOCALFILES" = "no" ]; then
+		wget -O "$V2RAY_TEMPLATE" ${VPSURL}${VPSPATH}/v2ray-server.json
+	else
+		cp ${DIR}/v2ray-server.json "$V2RAY_TEMPLATE"
+	fi
+	sed -i "s:V2RAY_UUID:$V2RAY_UUID:g" "$V2RAY_TEMPLATE"
+	if [ ! -f /etc/v2ray/v2ray-server.json ]; then
+		cp "$V2RAY_TEMPLATE" /etc/v2ray/v2ray-server.json
+	else
+		jq_rewrite /etc/v2ray/v2ray-server.json -M --slurpfile tmpl "$V2RAY_TEMPLATE" '[.inbounds[].tag] as $have | .inbounds += [$tmpl[0].inbounds[] | select(.tag as $t | $have | any(.[]; . == $t) | not)] | [.outbounds[]?.tag] as $haveout | .outbounds += [$tmpl[0].outbounds[] | select(.tag as $t | $haveout | any(.[]; . == $t) | not)] | if any(.routing.rules[]?; .outboundTag == "blocked") then . else .routing.rules += [$tmpl[0].routing.rules[] | select(.outboundTag == "blocked")] end'
+	fi
+	rm -f "$V2RAY_TEMPLATE"
 	if [ "$KERNEL" != "5.4" ] && [ -z "$(grep mptcp /etc/v2ray/v2ray-server.json | grep true)" ]; then
 		sed -i 's/"sockopt": {/&\n                    "mptcp": true,/' /etc/v2ray/v2ray-server.json
 	fi
@@ -1663,7 +1743,7 @@ if [ "$V2RAY" = "yes" ]; then
 	#	mv -f /etc/systemd/system/v2ray.service.dpkg-dist /etc/systemd/system/v2ray.service
 	#fi
 	if [ "$LOCALFILES" = "no" ]; then
-		wget -O /lib/systemd/system/v2ray.service ${VPSURL}${VPSPATH}/v2ray.service
+		fetch_file ${VPSURL}${VPSPATH}/v2ray.service /lib/systemd/system/v2ray.service
 	else
 		cp ${DIR}/v2ray.service /lib/systemd/system/v2ray.service
 	fi
@@ -1756,9 +1836,22 @@ if [ "$XRAY" = "yes" ]; then
 			fi
 		fi
 	fi
-	if [ ! -f /etc/xray/xray-server.json ] || [ -z "$(grep -i mptcp /etc/xray/xray-server.json | grep true)" ] || [ -z "$(grep -i transport /etc/xray/xray-server.json)" ]; then
+	# Rebuilt from the template only when there is none, or it predates the
+	# MPTCP one or still has the top-level "transport" xray 26 refuses. The
+	# test used to be "no transport", true for every config since the template
+	# lost it, so each run threw away what omr-admin added since: users'
+	# settings of /xray, port redirects, reverse tunnels, GRE outbounds, and
+	# the other users' uuids, the ones their routers have. Kept, a config only
+	# gets the template inbounds and outbounds it lacks, and the loopback
+	# blocking rules when it has none.
+	if [ ! -f /etc/xray/xray-server.json ] || [ -z "$(grep -i mptcp /etc/xray/xray-server.json | grep true)" ] || [ "$(jq -r 'has("transport")' /etc/xray/xray-server.json 2>/dev/null)" = "true" ]; then
+		XRAY_OLD_CONFIG=""
+		if [ -f /etc/xray/xray-server.json ]; then
+			XRAY_OLD_CONFIG=/etc/xray/xray-server.json.old
+			cp -pf /etc/xray/xray-server.json "$XRAY_OLD_CONFIG"
+		fi
 		if [ "$LOCALFILES" = "no" ]; then
-			wget -O /etc/xray/xray-server.json ${VPSURL}${VPSPATH}/xray-server.json
+			fetch_file ${VPSURL}${VPSPATH}/xray-server.json /etc/xray/xray-server.json
 		else
 			cp ${DIR}/xray-server.json /etc/xray/xray-server.json
 		fi
@@ -1768,7 +1861,7 @@ if [ "$XRAY" = "yes" ]; then
 		[ -z "$XRAY_REVERSE_UUID" ] && XRAY_REVERSE_UUID=$(/usr/bin/xray uuid | tr -d "\n")
 		sed -i "s:XRAY_REVERSE_UUID:$XRAY_REVERSE_UUID:g" /etc/xray/xray-server.json
 		if [ "$LOCALFILES" = "no" ]; then
-			wget -O /etc/xray/xray-vless-reality.json ${VPSURL}${VPSPATH}/xray-vless-reality.json
+			fetch_file ${VPSURL}${VPSPATH}/xray-vless-reality.json /etc/xray/xray-vless-reality.json
 		else
 			cp ${DIR}/xray-vless-reality.json /etc/xray/xray-vless-reality.json
 		fi
@@ -1785,15 +1878,52 @@ if [ "$XRAY" = "yes" ]; then
 		sed -i "s:XRAY_X25519_PUBLIC_KEY:$XRAY_X25519_PUBLIC_KEY:g" /etc/xray/xray-vless-reality.json
 		for xrayuser in $(cat /etc/openmptcprouter-vps-admin/omr-admin-config.json | jq -r '.users[0][].username'); do
 			if [ "$xrayuser" != "admin" ] && [ "$xrayuser" != "openmptcprouter" ]; then
-				xrayid="$(/usr/bin/xray uuid)"
+				# The uuid and Shadowsocks 2022 key the old config gave this
+				# user, so that its router keeps working
+				xrayid=""
+				shadowsockspass=""
+				[ -n "$XRAY_OLD_CONFIG" ] && xrayid="$(jq -r --arg u "$xrayuser" 'first(.inbounds[]? | select(.tag=="omrin-tunnel") | .settings.clients[]? | select(.email==$u) | .id // empty)' "$XRAY_OLD_CONFIG" 2>/dev/null || true)"
+				[ -z "$xrayid" ] && xrayid="$(/usr/bin/xray uuid)"
 				jq_rewrite /etc/xray/xray-server.json --arg xrayuser "$xrayuser" --arg xrayid "$xrayid" '(.inbounds[] | select(.tag=="omrin-tunnel") | .settings.clients) += [{"level": 0, "alterId": 0, "email": $xrayuser,"id": $xrayid}]'
 				jq_rewrite /etc/xray/xray-server.json --arg xrayuser "$xrayuser" --arg xrayid "$xrayid" '(.inbounds[] | select(.tag=="omrin-vmess-tunnel") | .settings.clients) += [{"level": 0, "alterId": 0, "email": $xrayuser,"id": $xrayid}]'
 				jq_rewrite /etc/xray/xray-server.json --arg xrayuser "$xrayuser" --arg xrayid "$xrayid" '(.inbounds[] | select(.tag=="omrin-socks-tunnel") | .settings.accounts) += [{"user": $xrayuser,"pass": $xrayid}]'
-				jq_rewrite /etc/xray/xray-server.json --arg xrayuser "$xrayuser" --arg xrayid "$xrayid" '(.inbounds[] | select(.tag=="omrin-trojan-tunnel") | .settings.clients) += [{"level": 0, "alterId": 0, "email": $xrayuser,"id": $xrayid}]'
-				[ -e /etc/shadowsocks-go/upsks.json ] && shadowsockspass="$(jq --arg xrayuser $xrayuser -r '.[$xrayuser]' /etc/shadowsocks-go/upsks.json)"
+				# Trojan authenticates by "password": with an "id" instead the
+				# user had an empty one, which xray accepts from anyone
+				jq_rewrite /etc/xray/xray-server.json --arg xrayuser "$xrayuser" --arg xrayid "$xrayid" '(.inbounds[] | select(.tag=="omrin-trojan-tunnel") | .settings.clients) += [{"level": 0, "email": $xrayuser,"password": $xrayid}]'
+				[ -n "$XRAY_OLD_CONFIG" ] && shadowsockspass="$(jq -r --arg u "$xrayuser" 'first(.inbounds[]? | select(.tag=="omrin-shadowsocks-tunnel") | .settings.clients[]? | select(.email==$u) | .password // empty | select(. != "null"))' "$XRAY_OLD_CONFIG" 2>/dev/null || true)"
+				[ -z "$shadowsockspass" ] && [ -e /etc/shadowsocks-go/upsks.json ] && shadowsockspass="$(jq --arg xrayuser "$xrayuser" -r '.[$xrayuser] // empty' /etc/shadowsocks-go/upsks.json)"
 				[ -z "$shadowsockspass" ] && shadowsockspass=$(head -c 32 /dev/urandom | base64 -w0)
 				jq_rewrite /etc/xray/xray-server.json --arg xrayuser "$xrayuser" --arg shadowsockspass "$shadowsockspass" '(.inbounds[] | select(.tag=="omrin-shadowsocks-tunnel") | .settings.clients) += [{"email": $xrayuser,"password": $shadowsockspass}]'
 			fi
+		done
+		[ -n "$XRAY_OLD_CONFIG" ] && rm -f "$XRAY_OLD_CONFIG"
+	else
+		XRAY_TEMPLATE="$(mktemp)"
+		if [ "$LOCALFILES" = "no" ]; then
+			wget -O "$XRAY_TEMPLATE" ${VPSURL}${VPSPATH}/xray-server.json
+		else
+			cp ${DIR}/xray-server.json "$XRAY_TEMPLATE"
+		fi
+		sed -i "s:V2RAY_UUID:$XRAY_UUID:g; s:XRAY_PSK:$PSK:g; s:XRAY_UPSK:$UPSK:g" "$XRAY_TEMPLATE"
+		[ -z "$XRAY_REVERSE_UUID" ] && XRAY_REVERSE_UUID=$(/usr/bin/xray uuid | tr -d "\n")
+		sed -i "s:XRAY_REVERSE_UUID:$XRAY_REVERSE_UUID:g" "$XRAY_TEMPLATE"
+		jq_rewrite /etc/xray/xray-server.json -M --slurpfile tmpl "$XRAY_TEMPLATE" '[.inbounds[].tag] as $have | .inbounds += [$tmpl[0].inbounds[] | select(.tag as $t | $have | any(.[]; . == $t) | not)] | [.outbounds[]?.tag] as $haveout | .outbounds += [$tmpl[0].outbounds[] | select(.tag as $t | $haveout | any(.[]; . == $t) | not)] | if any(.routing.rules[]?; .outboundTag == "blocked") then . else .routing.rules += [$tmpl[0].routing.rules[] | select(.outboundTag == "blocked")] end'
+		rm -f "$XRAY_TEMPLATE"
+	fi
+	if [ -f /etc/xray/xray-server.json ] && [ "$(jq -r 'any(.inbounds[]? | select(.tag=="omrin-trojan-tunnel") | .settings.clients[]?; (.password // "") == "")' /etc/xray/xray-server.json)" = "true" ]; then
+		# Trojan users this script added with an "id" and no "password": xray
+		# took them as users of an empty password, anyone could connect
+		jq_rewrite /etc/xray/xray-server.json -M '(.inbounds[] | select(.tag=="omrin-trojan-tunnel") | .settings.clients) |= map(if (.password // "") != "" then . elif (.id // "") != "" then (del(.id, .alterId) + {"password": .id}) else empty end)'
+	fi
+	if [ -f /etc/xray/xray-server.json ]; then
+		# A user missing from upsks.json got the key "null", which xray refuses
+		for ssuser in $(jq -r '.inbounds[]? | select(.tag=="omrin-shadowsocks-tunnel") | .settings.clients[]? | select((.password // "") == "" or .password == "null") | .email // empty' /etc/xray/xray-server.json); do
+			ssfix=""
+			[ -e /etc/shadowsocks-go/upsks.json ] && ssfix="$(jq -r --arg u "$ssuser" '.[$u] // empty' /etc/shadowsocks-go/upsks.json 2>/dev/null || true)"
+			if [ -z "$ssfix" ] || [ "$ssfix" = "null" ]; then
+				ssfix=$(head -c 32 /dev/urandom | base64 -w0)
+			fi
+			jq_rewrite /etc/xray/xray-server.json -M --arg u "$ssuser" --arg pass "$ssfix" '(.inbounds[] | select(.tag=="omrin-shadowsocks-tunnel") | .settings.clients[] | select(.email==$u)) |= (.password=$pass)'
 		done
 	fi
 	#if ([ "$UPSTREAM" = "yes" ] || [ "$UPSTREAM6" = "yes" ]) && [ -z "$(grep mptcp /etc/xray/xray-server.json | grep true)" ]; then
@@ -1805,7 +1935,7 @@ if [ "$XRAY" = "yes" ]; then
 	#	mv -f /etc/systemd/system/xray.service.dpkg-dist /etc/systemd/system/xray.service
 	#fi
 	if [ "$LOCALFILES" = "no" ]; then
-		wget -O /lib/systemd/system/xray.service ${VPSURL}${VPSPATH}/xray.service
+		fetch_file ${VPSURL}${VPSPATH}/xray.service /lib/systemd/system/xray.service
 	else
 		cp ${DIR}/xray.service /lib/systemd/system/xray.service
 	fi
@@ -1814,8 +1944,12 @@ if [ "$XRAY" = "yes" ]; then
 	systemctl enable xray.service
 fi
 
+# mlvpn exits 1 on SIGTERM, so even this deliberate stop
+# leaves the unit "failed" and the failed-services check at the end of the
+# script would report it as broken by the install order
 if systemctl -q is-active mlvpn@mlvpn0.service 2>/dev/null; then
 	systemctl -q stop mlvpn@mlvpn0 > /dev/null 2>&1 || true
+	systemctl reset-failed mlvpn@mlvpn0 > /dev/null 2>&1 || true
 	systemctl -q disable mlvpn@mlvpn0 > /dev/null 2>&1 || true
 fi
 echo "install mlvpn"
@@ -1846,15 +1980,15 @@ if [ "$MLVPN" = "yes" ]; then
 		cd /tmp
 		rm -rf /tmp/mlvpn
 		if [ "$LOCALFILES" = "no" ]; then
-			wget -O /lib/systemd/network/mlvpn.network ${VPSURL}${VPSPATH}/mlvpn.network
-			wget -O /lib/systemd/system/mlvpn@.service ${VPSURL}${VPSPATH}/mlvpn@.service.in
+			fetch_file ${VPSURL}${VPSPATH}/mlvpn.network /lib/systemd/network/mlvpn.network
+			fetch_file ${VPSURL}${VPSPATH}/mlvpn@.service.in /lib/systemd/system/mlvpn@.service
 		else
 			cp ${DIR}/mlvpn.network /lib/systemd/network/mlvpn.network
 			cp ${DIR}/mlvpn@.service.in /lib/systemd/system/mlvpn@.service
 		fi
 		if [ "$mlvpnupdate" = "0" ]; then
 			if [ "$LOCALFILES" = "no" ]; then
-				wget -O /etc/mlvpn/mlvpn0.conf ${VPSURL}${VPSPATH}/mlvpn0.conf
+				fetch_file ${VPSURL}${VPSPATH}/mlvpn0.conf /etc/mlvpn/mlvpn0.conf
 			else
 				cp ${DIR}/mlvpn0.conf /etc/mlvpn/mlvpn0.conf
 			fi
@@ -1884,60 +2018,19 @@ if [ "$MLVPN" = "yes" ]; then
 	systemctl enable systemd-networkd.service
 	echo "install mlvpn done"
 fi
-if systemctl -q is-active ubond@ubond0.service 2>/dev/null; then
-	systemctl -q stop ubond@ubond0 > /dev/null 2>&1 || true
-	systemctl -q disable ubond@ubond0 > /dev/null 2>&1 || true
-fi
-echo "install ubond"
-# Install UBOND
-if [ "$UBOND" = "yes" ]; then
-	echo 'Install UBOND'
-	ubondupdate="0"
-	if [ -f /etc/ubond/ubond0.conf ]; then
-		ubondupdate="1"
-	fi
-#	if [ "$SOURCES" = "yes" ]; then
-		rm -f /var/lib/dpkg/lock
-		rm -f /var/lib/dpkg/lock-frontend
-		apt-get -y install build-essential pkg-config autoconf automake libpcap-dev unzip git
-		rm -rf /tmp/ubond
-		cd /tmp
-		git clone https://github.com/markfoodyburton/ubond.git /tmp/ubond
-		cd /tmp/ubond
-		git checkout ${UBOND_VERSION}
-		./autogen.sh
-		./configure --sysconfdir=/etc
-		make
-		make install
-		cd /tmp
-		rm -rf /tmp/ubond
-#	else
-#		apt-get -y -o Dpkg::Options::="--force-overwrite" install ubond
-#	fi
-	if [ "$LOCALFILES" = "no" ]; then
-		wget -O /lib/systemd/network/ubond.network ${VPSURL}${VPSPATH}/ubond.network
-		wget -O /lib/systemd/system/ubond@.service ${VPSURL}${VPSPATH}/ubond@.service.in
-	else
-		cp ${DIR}/ubond.network /lib/systemd/network/ubond.network
-		cp ${DIR}/ubond@.service.in /lib/systemd/system/ubond@.service
-	fi
-	mkdir -p /etc/ubond
-	if [ "$ubondupdate" = "0" ]; then
-		if [ "$LOCALFILES" = "no" ]; then
-			wget -O /etc/ubond/ubond0.conf ${VPSURL}${VPSPATH}/ubond0.conf
-		else
-			cp ${DIR}/ubond0.conf /etc/ubond/ubond0.conf
-		fi
-		sed -i "s:UBOND_PASS:$UBOND_PASS:" /etc/ubond/ubond0.conf
-	fi
-	chmod 0600 /etc/ubond/ubond0.conf
-	adduser --quiet --system --home /var/opt/ubond --shell /usr/sbin/nologin ubond
-	mkdir -p /var/opt/ubond
-	usermod -d /var/opt/ubond ubond
-	chown ubond /var/opt/ubond
-	systemctl enable ubond@ubond0.service
-	systemctl enable systemd-networkd.service
-	echo "install ubond done"
+# UBOND is gone: no OpenMPTCProuter router image has shipped it since it was
+# disabled there for segfaulting (openmptcprouter-feeds e0b85427), and its
+# UDP 65252 was also xray's Shadowsocks 2022 port. Remove what an earlier
+# UBOND=yes run installed.
+if [ -e /etc/ubond ] || [ -f /usr/local/sbin/ubond ]; then
+	echo "Remove UBOND"
+	systemctl -q disable --now ubond@ubond0 > /dev/null 2>&1 || true
+	systemctl reset-failed ubond@ubond0 > /dev/null 2>&1 || true
+	rm -f /lib/systemd/system/ubond@.service /lib/systemd/network/ubond.network
+	rm -f /usr/local/sbin/ubond /usr/local/share/man/man1/ubond.1 /usr/local/share/man/man5/ubond.conf.5
+	rm -rf /etc/ubond /var/opt/ubond
+	deluser --quiet --system ubond > /dev/null 2>&1 || true
+	systemctl daemon-reload
 fi
 
 if systemctl -q is-active wg-quick@wg0.service 2>/dev/null; then
@@ -1950,9 +2043,13 @@ if [ "$WIREGUARD" = "yes" ]; then
 	rm -f /var/lib/dpkg/lock
 	rm -f /var/lib/dpkg/lock-frontend
 	apt-get -y install wireguard-tools --no-install-recommends
+	# Keys and the configs holding them private, and only in this block: a
+	# bare umask 077 here used to stay for the rest of the script, so a fresh
+	# install made everything after it 0600/0700 (/etc/motd, speedtest...)
+	umask 077
 	if [ ! -f /etc/wireguard/wg0.conf ]; then
 		cd /etc/wireguard
-		umask 077; wg genkey | tee vpn-server-private.key | wg pubkey > vpn-server-public.key
+		wg genkey | tee vpn-server-private.key | wg pubkey > vpn-server-public.key
 		cat > /etc/wireguard/wg0.conf <<-EOF
 		[Interface]
 		PrivateKey = $(cat /etc/wireguard/vpn-server-private.key | tr -d "\n")
@@ -1964,7 +2061,7 @@ if [ "$WIREGUARD" = "yes" ]; then
 	systemctl enable wg-quick@wg0
 	if [ ! -f /etc/wireguard/client-wg0.conf ]; then
 		cd /etc/wireguard
-		umask 077; wg genkey | tee vpn-client-private.key | wg pubkey > vpn-client-public.key
+		wg genkey | tee vpn-client-private.key | wg pubkey > vpn-client-public.key
 		cat > /etc/wireguard/client-wg0.conf <<-EOF
 		[Interface]
 		PrivateKey = $(cat /etc/wireguard/vpn-server-private.key | tr -d "\n")
@@ -1989,6 +2086,7 @@ if [ "$WIREGUARD" = "yes" ]; then
 		AllowedIPs = 0.0.0.0/0, ::/0, 192.168.100.0/24
 		EOF
 	fi
+	umask 0022
 	systemctl enable wg-quick@client-wg0
 	echo "Install wireguard done"
 fi
@@ -2029,15 +2127,15 @@ if [ "$MQVPN" = "yes" ]; then
 		MQVPN_USERS=$(jq -c '.users // empty' /etc/mqvpn/server.json 2>/dev/null)
 	fi
 	if [ "$LOCALFILES" = "no" ]; then
-		wget -O /etc/mqvpn/server.json ${VPSURL}${VPSPATH}/mqvpn-server.json
-		wget -O /lib/systemd/system/mqvpn.service ${VPSURL}${VPSPATH}/mqvpn-server.service
+		fetch_file ${VPSURL}${VPSPATH}/mqvpn-server.json /etc/mqvpn/server.json
+		fetch_file ${VPSURL}${VPSPATH}/mqvpn-server.service /lib/systemd/system/mqvpn.service
 	else
 		cp ${DIR}/mqvpn-server.json /etc/mqvpn/server.json
 		cp ${DIR}/mqvpn-server.service /lib/systemd/system/mqvpn.service
 	fi
 	sed -i "s:PSK:$MQVPN_KEY:g" /etc/mqvpn/server.json
 	if [ -n "$MQVPN_USERS" ] && [ "$MQVPN_USERS" != "null" ] && [ "$MQVPN_USERS" != "[]" ]; then
-		jq --argjson users "$MQVPN_USERS" '.users = ($users + [.users[] | select(.name as $n | ($users | map(.name) | index($n)) == null)])' /etc/mqvpn/server.json > /etc/mqvpn/server.json.tmp && mv /etc/mqvpn/server.json.tmp /etc/mqvpn/server.json
+		jq_rewrite /etc/mqvpn/server.json --argjson users "$MQVPN_USERS" '.users = ($users + [.users[] | select(.name as $n | ($users | map(.name) | index($n)) == null)])' || true
 	fi
 	omr_self_signed_cert /etc/mqvpn/server.key /etc/mqvpn/server.crt
 	chmod 644 /lib/systemd/system/mqvpn.service
@@ -2057,12 +2155,12 @@ if [ "$FAIL2BAN" = "yes" ]; then
 	apt-get -y install fail2ban python3-systemd
 	systemctl enable fail2ban
 	if [ "$LOCALFILES" = "no" ]; then
-		wget -O /etc/fail2ban/jail.d/openmptcprouter.conf ${VPSURL}${VPSPATH}/fail2ban-jail-openmptcprouter.conf
-		wget -O /etc/fail2ban/filter.d/openvpn.conf ${VPSURL}${VPSPATH}/fail2ban-filter-openvpn.conf
-		wget -O /etc/fail2ban/filter.d/omradmin.conf ${VPSURL}${VPSPATH}/fail2ban-filter-omradmin.conf
-		wget -O /etc/fail2ban/filter.d/xray.conf ${VPSURL}${VPSPATH}/fail2ban-filter-xray.conf
-		wget -O /etc/fail2ban/filter.d/v2ray.conf ${VPSURL}${VPSPATH}/fail2ban-filter-v2ray.conf
-		wget -O /etc/fail2ban/filter.d/shadowsocks-go.conf ${VPSURL}${VPSPATH}/fail2ban-filter-shadowsocks-go.conf
+		fetch_file ${VPSURL}${VPSPATH}/fail2ban-jail-openmptcprouter.conf /etc/fail2ban/jail.d/openmptcprouter.conf
+		fetch_file ${VPSURL}${VPSPATH}/fail2ban-filter-openvpn.conf /etc/fail2ban/filter.d/openvpn.conf
+		fetch_file ${VPSURL}${VPSPATH}/fail2ban-filter-omradmin.conf /etc/fail2ban/filter.d/omradmin.conf
+		fetch_file ${VPSURL}${VPSPATH}/fail2ban-filter-xray.conf /etc/fail2ban/filter.d/xray.conf
+		fetch_file ${VPSURL}${VPSPATH}/fail2ban-filter-v2ray.conf /etc/fail2ban/filter.d/v2ray.conf
+		fetch_file ${VPSURL}${VPSPATH}/fail2ban-filter-shadowsocks-go.conf /etc/fail2ban/filter.d/shadowsocks-go.conf
 	else
 		cp ${DIR}/fail2ban-jail-openmptcprouter.conf /etc/fail2ban/jail.d/openmptcprouter.conf
 		cp ${DIR}/fail2ban-filter-openvpn.conf /etc/fail2ban/filter.d/openvpn.conf
@@ -2085,7 +2183,9 @@ if [ "$OPENVPN" = "yes" ]; then
 	if [ "$VERSION_ID" = "13" ] && [ "$ID" = "debian" ]; then
 		apt-get -y --allow-downgrades install openvpn easy-rsa
 	else
-		apt-get -y --default-release install openvpn easy-rsa
+		# Not --default-release: it takes a value, "install" became the
+		# release and apt failed on "Invalid operation openvpn"
+		apt-get -y install openvpn easy-rsa
 	fi
 	#wget -O /lib/systemd/network/openvpn.network ${VPSURL}${VPSPATH}/openvpn.network
 	rm -f /lib/systemd/network/openvpn.network
@@ -2146,6 +2246,11 @@ if [ "$OPENVPN" = "yes" ]; then
 		EASYRSA_CRL_DAYS=3650 ./easyrsa --batch gen-crl
 	fi
 	chmod 644 /etc/openvpn/ca/pki/crl.pem >/dev/null 2>&1 || true
+	# openvpn runs as nobody once started and re-reads the CRL when omr-admin
+	# revokes a user: make-cadir creates /etc/openvpn/ca 0700, and then
+	# openvpn can't reach crl.pem and keeps letting the revoked one in. Only
+	# traversal, no listing; pki/private stays 0700.
+	chmod 711 /etc/openvpn/ca /etc/openvpn/ca/pki >/dev/null 2>&1 || true
 	if [ ! -f "/etc/openvpn/ca/pki/issued/openmptcprouter.crt" ]; then
 		mv /etc/openvpn/ca/pki/issued/client.crt /etc/openvpn/ca/pki/issued/openmptcprouter.crt
 		mv /etc/openvpn/ca/pki/private/client.key /etc/openvpn/ca/pki/private/openmptcprouter.key
@@ -2165,20 +2270,20 @@ if [ "$OPENVPN" = "yes" ]; then
 	if [ "$LOCALFILES" = "no" ]; then
 		if [ "$KERNEL" != "5.4" ]; then
 			wget -O /etc/openvpn/.tun0.conf.new ${VPSURL}${VPSPATH}/openvpn-tun0.6.1.conf && mv -f /etc/openvpn/.tun0.conf.new /etc/openvpn/tun0.conf
-			wget -O /etc/openvpn/tun1.conf ${VPSURL}${VPSPATH}/openvpn-tun1.6.1.conf
+			fetch_file ${VPSURL}${VPSPATH}/openvpn-tun1.6.1.conf /etc/openvpn/tun1.conf
 		else
 			wget -O /etc/openvpn/.tun0.conf.new ${VPSURL}${VPSPATH}/openvpn-tun0.conf && mv -f /etc/openvpn/.tun0.conf.new /etc/openvpn/tun0.conf
-			wget -O /etc/openvpn/tun1.conf ${VPSURL}${VPSPATH}/openvpn-tun1.conf
+			fetch_file ${VPSURL}${VPSPATH}/openvpn-tun1.conf /etc/openvpn/tun1.conf
 		fi
 		if [ "$OPENVPN_BONDING" = "yes" ]; then
-			wget -O /etc/openvpn/bonding1.conf ${VPSURL}${VPSPATH}/openvpn-bonding1.conf
-			wget -O /etc/openvpn/bonding2.conf ${VPSURL}${VPSPATH}/openvpn-bonding2.conf
-			wget -O /etc/openvpn/bonding3.conf ${VPSURL}${VPSPATH}/openvpn-bonding3.conf
-			wget -O /etc/openvpn/bonding4.conf ${VPSURL}${VPSPATH}/openvpn-bonding4.conf
-			wget -O /etc/openvpn/bonding5.conf ${VPSURL}${VPSPATH}/openvpn-bonding5.conf
-			wget -O /etc/openvpn/bonding6.conf ${VPSURL}${VPSPATH}/openvpn-bonding6.conf
-			wget -O /etc/openvpn/bonding7.conf ${VPSURL}${VPSPATH}/openvpn-bonding7.conf
-			wget -O /etc/openvpn/bonding8.conf ${VPSURL}${VPSPATH}/openvpn-bonding8.conf
+			fetch_file ${VPSURL}${VPSPATH}/openvpn-bonding1.conf /etc/openvpn/bonding1.conf
+			fetch_file ${VPSURL}${VPSPATH}/openvpn-bonding2.conf /etc/openvpn/bonding2.conf
+			fetch_file ${VPSURL}${VPSPATH}/openvpn-bonding3.conf /etc/openvpn/bonding3.conf
+			fetch_file ${VPSURL}${VPSPATH}/openvpn-bonding4.conf /etc/openvpn/bonding4.conf
+			fetch_file ${VPSURL}${VPSPATH}/openvpn-bonding5.conf /etc/openvpn/bonding5.conf
+			fetch_file ${VPSURL}${VPSPATH}/openvpn-bonding6.conf /etc/openvpn/bonding6.conf
+			fetch_file ${VPSURL}${VPSPATH}/openvpn-bonding7.conf /etc/openvpn/bonding7.conf
+			fetch_file ${VPSURL}${VPSPATH}/openvpn-bonding8.conf /etc/openvpn/bonding8.conf
 		fi
 	else
 		if [ "$KERNEL" != "5.4" ]; then
@@ -2230,8 +2335,9 @@ if [ "$OPENVPN" = "yes" ]; then
 	systemctl enable openvpn@tun0.service
 	systemctl enable openvpn@tun1.service
 	if [ "$KERNEL" != "5.4" ]; then
-		if [ "$VERSION_ID" != "13" ] && [ "$ID" != "debian" ]; then
-			mptcpize enable openvpn@tun0 >/dev/null 2>&1
+		# Everywhere but Debian 13, whose OpenMPTCProuter openvpn package has MPTCP
+		if [ "$VERSION_ID" != "13" ] || [ "$ID" != "debian" ]; then
+			mptcpize enable openvpn@tun0 >/dev/null 2>&1 || true
 		fi
 	fi
 	if [ "$OPENVPN_BONDING" = "yes" ]; then
@@ -2269,13 +2375,13 @@ if [ "$GLORYTUN_UDP" = "yes" ]; then
 		rm -f /lib/systemd/system/glorytun*
 		rm -f /lib/systemd/network/glorytun*
 		if [ "$LOCALFILES" = "no" ]; then
-			wget -O /usr/local/bin/glorytun-udp-run ${VPSURL}${VPSPATH}/glorytun-udp-run
+			fetch_file ${VPSURL}${VPSPATH}/glorytun-udp-run /usr/local/bin/glorytun-udp-run
 		else
 			cp ${DIR}/glorytun-udp-run /usr/local/bin/glorytun-udp-run
 		fi
 		chmod 755 /usr/local/bin/glorytun-udp-run
 		if [ "$LOCALFILES" = "no" ]; then
-			wget -O /lib/systemd/system/glorytun-udp@.service ${VPSURL}${VPSPATH}/glorytun-udp%40.service.in
+			fetch_file ${VPSURL}${VPSPATH}/glorytun-udp%40.service.in /lib/systemd/system/glorytun-udp@.service
 		else
 			cp ${DIR}/glorytun-udp@.service.in /lib/systemd/system/glorytun-udp@.service
 		fi
@@ -2284,17 +2390,19 @@ if [ "$GLORYTUN_UDP" = "yes" ]; then
 		rm -f /lib/systemd/network/glorytun-udp.network
 		mkdir -p /etc/glorytun-udp
 		if [ "$LOCALFILES" = "no" ]; then
-			wget -O /etc/glorytun-udp/post.sh ${VPSURL}${VPSPATH}/glorytun-udp-post.sh
-			wget -O /etc/glorytun-udp/tun0 ${VPSURL}${VPSPATH}/tun0.glorytun-udp
+			fetch_file ${VPSURL}${VPSPATH}/glorytun-udp-post.sh /etc/glorytun-udp/post.sh
+			fetch_file ${VPSURL}${VPSPATH}/tun0.glorytun-udp /etc/glorytun-udp/tun0
 		else
 			cp ${DIR}/glorytun-udp-post.sh /etc/glorytun-udp/post.sh
 			cp ${DIR}/tun0.glorytun-udp /etc/glorytun-udp/tun0
 		fi
 		chmod 755 /etc/glorytun-udp/post.sh
-		if [ "$update" = "0" ] || [ ! -f /etc/glorytun-udp/tun0.key ]; then
-			echo "$GLORYTUN_PASS" > /etc/glorytun-udp/tun0.key
-		elif [ ! -f /etc/glorytun-udp/tun0.key ] && [ -f /etc/glorytun-tcp/tun0.key ]; then
+		# On an update that enables UDP, the key the router has is the TCP one:
+		# test that first, the "no UDP key" case caught it before
+		if [ "$update" != "0" ] && [ ! -f /etc/glorytun-udp/tun0.key ] && [ -f /etc/glorytun-tcp/tun0.key ]; then
 			cp /etc/glorytun-tcp/tun0.key /etc/glorytun-udp/tun0.key
+		elif [ "$update" = "0" ] || [ ! -f /etc/glorytun-udp/tun0.key ]; then
+			echo "$GLORYTUN_PASS" > /etc/glorytun-udp/tun0.key
 		fi
 		harden_secret_files /etc/glorytun-udp/tun0.key
 		systemctl enable glorytun-udp@tun0.service
@@ -2340,9 +2448,9 @@ if [ "$DSVPN" = "yes" ]; then
 		rm -f /lib/systemd/system/dsvpn/*
 		mkdir -p /etc/dsvpn
 		if [ "$LOCALFILES" = "no" ]; then
-			wget -O /usr/local/bin/dsvpn-run ${VPSURL}${VPSPATH}/dsvpn-run
-			wget -O /lib/systemd/system/dsvpn-server@.service ${VPSURL}${VPSPATH}/dsvpn-server%40.service.in
-			wget -O /etc/dsvpn/dsvpn0 ${VPSURL}${VPSPATH}/dsvpn0-config
+			fetch_file ${VPSURL}${VPSPATH}/dsvpn-run /usr/local/bin/dsvpn-run
+			fetch_file ${VPSURL}${VPSPATH}/dsvpn-server%40.service.in /lib/systemd/system/dsvpn-server@.service
+			fetch_file ${VPSURL}${VPSPATH}/dsvpn0-config /etc/dsvpn/dsvpn0
 		else
 			cp ${DIR}/dsvpn-run /usr/local/bin/dsvpn-run
 			cp ${DIR}/dsvpn-server@.service.in /lib/systemd/system/dsvpn-server@.service
@@ -2429,10 +2537,10 @@ if [ "$GLORYTUN_TCP" = "yes" ]; then
 		cp glorytun /usr/local/bin/glorytun-tcp
 		mkdir -p /etc/glorytun-tcp
 		if [ "$LOCALFILES" = "no" ]; then
-			wget -O /usr/local/bin/glorytun-tcp-run ${VPSURL}${VPSPATH}/glorytun-tcp-run
-			wget -O /lib/systemd/system/glorytun-tcp@.service ${VPSURL}${VPSPATH}/glorytun-tcp%40.service.in
-			wget -O /etc/glorytun-tcp/post.sh ${VPSURL}${VPSPATH}/glorytun-tcp-post.sh
-			wget -O /etc/glorytun-tcp/tun0 ${VPSURL}${VPSPATH}/tun0.glorytun
+			fetch_file ${VPSURL}${VPSPATH}/glorytun-tcp-run /usr/local/bin/glorytun-tcp-run
+			fetch_file ${VPSURL}${VPSPATH}/glorytun-tcp%40.service.in /lib/systemd/system/glorytun-tcp@.service
+			fetch_file ${VPSURL}${VPSPATH}/glorytun-tcp-post.sh /etc/glorytun-tcp/post.sh
+			fetch_file ${VPSURL}${VPSPATH}/tun0.glorytun /etc/glorytun-tcp/tun0
 		else
 			cp ${DIR}/glorytun-tcp-run /usr/local/bin/glorytun-tcp-run
 			cp ${DIR}/glorytun-tcp@.service.in /lib/systemd/system/glorytun-tcp@.service
@@ -2443,7 +2551,11 @@ if [ "$GLORYTUN_TCP" = "yes" ]; then
 		chmod 644 /lib/systemd/system/glorytun-tcp@.service
 		rm -f /lib/systemd/network/glorytun-tcp.network
 		chmod 755 /etc/glorytun-tcp/post.sh
-		if [ "$update" = "0" ]; then
+		# Also on an update that enables TCP: glorytun-tcp can't start without
+		# it. Same key as UDP when there is one, the router has a single key.
+		if [ "$update" != "0" ] && [ ! -f /etc/glorytun-tcp/tun0.key ] && [ -f /etc/glorytun-udp/tun0.key ]; then
+			cp /etc/glorytun-udp/tun0.key /etc/glorytun-tcp/tun0.key
+		elif [ "$update" = "0" ] || [ ! -f /etc/glorytun-tcp/tun0.key ]; then
 			echo "$GLORYTUN_PASS" > /etc/glorytun-tcp/tun0.key
 		fi
 		harden_secret_files /etc/glorytun-tcp/tun0.key
@@ -2469,8 +2581,17 @@ if [ "$SOFTETHERVPN" = "yes" ]; then
 	fi
 	set +e
 	softether_test() {
-		# Check if SoftEther VPN is available...
-		while ! "$@" About >/dev/null 2>&1; do
+		# Check if SoftEther VPN is available... The command line comes as
+		# one string, like $softetherrun is used everywhere: split it. As
+		# "$@" it was one word, never a command, and this waited forever.
+		_softether_wait=0
+		# shellcheck disable=SC2086
+		while ! $1 About >/dev/null 2>&1; do
+			_softether_wait=$((_softether_wait+1))
+			if [ "$_softether_wait" -ge 120 ]; then
+				echo "WARNING: SoftEther VPN server not answering after 2 minutes" >&2
+				return 1
+			fi
 			sleep 1
 			printf '.'
 		done
@@ -2547,6 +2668,13 @@ harden_secret_files \
 	/etc/openmptcprouter-vps-admin/omr-admin-config.json.bak \
 	/etc/xray/xray-server.json \
 	/etc/xray/xray-server.json.bak \
+	/etc/xray/xray-vless-reality.json \
+	/etc/v2ray/v2ray-server.json \
+	/etc/mqvpn/server.json \
+	/etc/mqvpn/server.key \
+	/root/wireguard-client.conf \
+	/root/openmptcprouter_config.txt \
+	/var/log/omr-update.log \
 	/etc/shadowsocks-libev/manager.json \
 	/etc/shadowsocks-go/server.json \
 	/etc/shadowsocks-go/upsks.json \
@@ -2561,7 +2689,7 @@ fi
 
 # Add multipath utility
 if [ "$LOCALFILES" = "no" ]; then
-	wget -O /usr/local/bin/multipath ${VPSURL}${VPSPATH}/multipath
+	fetch_file ${VPSURL}${VPSPATH}/multipath /usr/local/bin/multipath
 else
 	cp ${DIR}/multipath /usr/local/bin/multipath
 fi
@@ -2569,7 +2697,7 @@ chmod 755 /usr/local/bin/multipath
 
 # Add omr-test-speed utility
 if [ "$LOCALFILES" = "no" ]; then
-	wget -O /usr/local/bin/omr-test-speed ${VPSURL}${VPSPATH}/omr-test-speed
+	fetch_file ${VPSURL}${VPSPATH}/omr-test-speed /usr/local/bin/omr-test-speed
 else
 	cp ${DIR}/omr-test-speed /usr/local/bin/omr-test-speed
 fi
@@ -2577,20 +2705,20 @@ chmod 755 /usr/local/bin/omr-test-speed
 
 # Add OpenMPTCProuter service
 if [ "$LOCALFILES" = "no" ]; then
-	wget -O /usr/local/bin/omr-service ${VPSURL}${VPSPATH}/omr-service
-	wget -O /lib/systemd/system/omr.service ${VPSURL}${VPSPATH}/omr.service.in
-	wget -O /usr/local/bin/omr-6in4-run ${VPSURL}${VPSPATH}/omr-6in4-run
-	wget -O /lib/systemd/system/omr6in4@.service ${VPSURL}${VPSPATH}/omr6in4%40.service.in
-	wget -O /usr/local/bin/omr-vxlan-run ${VPSURL}${VPSPATH}/omr-vxlan-run
-	wget -O /lib/systemd/system/omr-vxlan@.service ${VPSURL}${VPSPATH}/omr-vxlan%40.service.in
-	wget -O /usr/local/bin/omr-bypass ${VPSURL}${VPSPATH}/omr-bypass
-	wget -O /lib/systemd/system/omr-bypass.service ${VPSURL}${VPSPATH}/omr-bypass.service.in
-	wget -O /lib/systemd/system/omr-bypass.timer ${VPSURL}${VPSPATH}/omr-bypass.timer.in
-	wget -O /usr/local/bin/omr-reserved-ports ${VPSURL}${VPSPATH}/omr-reserved-ports
-	wget -O /lib/systemd/system/omr-reserved-ports.service ${VPSURL}${VPSPATH}/omr-reserved-ports.service.in
-	wget -O /lib/systemd/system/omr-reserved-ports.path ${VPSURL}${VPSPATH}/omr-reserved-ports.path.in
-	wget -O /usr/local/bin/omr-net-mem ${VPSURL}${VPSPATH}/omr-net-mem
-	wget -O /lib/systemd/system/omr-net-mem.service ${VPSURL}${VPSPATH}/omr-net-mem.service.in
+	fetch_file ${VPSURL}${VPSPATH}/omr-service /usr/local/bin/omr-service
+	fetch_file ${VPSURL}${VPSPATH}/omr.service.in /lib/systemd/system/omr.service
+	fetch_file ${VPSURL}${VPSPATH}/omr-6in4-run /usr/local/bin/omr-6in4-run
+	fetch_file ${VPSURL}${VPSPATH}/omr6in4%40.service.in /lib/systemd/system/omr6in4@.service
+	fetch_file ${VPSURL}${VPSPATH}/omr-vxlan-run /usr/local/bin/omr-vxlan-run
+	fetch_file ${VPSURL}${VPSPATH}/omr-vxlan%40.service.in /lib/systemd/system/omr-vxlan@.service
+	fetch_file ${VPSURL}${VPSPATH}/omr-bypass /usr/local/bin/omr-bypass
+	fetch_file ${VPSURL}${VPSPATH}/omr-bypass.service.in /lib/systemd/system/omr-bypass.service
+	fetch_file ${VPSURL}${VPSPATH}/omr-bypass.timer.in /lib/systemd/system/omr-bypass.timer
+	fetch_file ${VPSURL}${VPSPATH}/omr-reserved-ports /usr/local/bin/omr-reserved-ports
+	fetch_file ${VPSURL}${VPSPATH}/omr-reserved-ports.service.in /lib/systemd/system/omr-reserved-ports.service
+	fetch_file ${VPSURL}${VPSPATH}/omr-reserved-ports.path.in /lib/systemd/system/omr-reserved-ports.path
+	fetch_file ${VPSURL}${VPSPATH}/omr-net-mem /usr/local/bin/omr-net-mem
+	fetch_file ${VPSURL}${VPSPATH}/omr-net-mem.service.in /lib/systemd/system/omr-net-mem.service
 else
 	cp ${DIR}/omr-service /usr/local/bin/omr-service
 	cp ${DIR}/omr.service.in /lib/systemd/system/omr.service
@@ -2636,9 +2764,14 @@ systemctl enable omr-reserved-ports.service
 systemctl enable omr-reserved-ports.path
 systemctl enable omr-net-mem.service
 
-# Change SSH port to 65222
-sed -i 's:#Port 22:Port 65222:g' /etc/ssh/sshd_config
-sed -i 's:Port 22:Port 65222:g' /etc/ssh/sshd_config
+# Change SSH port to 65222. Only a "Port 22" line, commented or not, is
+# changed, matched whole: 's:Port 22:...:g' also turned "Port 2222" into
+# "Port 6522222", a config sshd refuses at the next boot. With no Port line at
+# all sshd listens on 22, so one is added, at the top: after a Match block
+# sshd would reject it.
+cp -pf /etc/ssh/sshd_config /etc/ssh/sshd_config.omr-bak
+sed -i -E 's/^#?[[:space:]]*Port[[:space:]]+22[[:space:]]*$/Port 65222/' /etc/ssh/sshd_config
+grep -qE '^[[:space:]]*Port[[:space:]]' /etc/ssh/sshd_config || sed -i '1i Port 65222' /etc/ssh/sshd_config
 # ...and make it effective now. The nftables ruleset loaded further down opens
 # 65222 and rejects 22, so a running sshd left on port 22 until the next reboot
 # means no new SSH connection can reach this VPS at all, while the summary
@@ -2651,6 +2784,11 @@ if sshd -t >/dev/null 2>&1; then
 	systemctl restart ssh >/dev/null 2>&1 || systemctl restart sshd >/dev/null 2>&1 || echo "WARNING: could not restart sshd, SSH stays on port 22 until this VPS reboots" >&2
 else
 	echo "WARNING: sshd -t rejects /etc/ssh/sshd_config, not restarting sshd" >&2
+	# Don't leave sshd a config it refuses to start with at the next boot
+	if sshd -t -f /etc/ssh/sshd_config.omr-bak >/dev/null 2>&1; then
+		cp -pf /etc/ssh/sshd_config.omr-bak /etc/ssh/sshd_config
+		echo "WARNING: /etc/ssh/sshd_config restored as it was before this script" >&2
+	fi
 	echo "WARNING: SSH stays on its current port, and the firewall below only opens 65222" >&2
 fi
 
@@ -2678,11 +2816,11 @@ mkdir -p /etc/systemd/system/nftables.service.d
 # systemd/20-omr-wait-online-any.conf).
 mkdir -p /etc/systemd/system/systemd-networkd-wait-online.service.d
 if [ "$LOCALFILES" = "no" ]; then
-	wget -O /etc/nftables.conf ${VPSURL}${VPSPATH}/nftables.conf
-	wget -O /etc/nftables/omr-vars.nft ${VPSURL}${VPSPATH}/nftables/omr-vars.nft
-	wget -O /etc/nftables/omr.nft ${VPSURL}${VPSPATH}/nftables/omr.nft
-	wget -O /etc/systemd/system/nftables.service.d/omr-admin-resync.conf ${VPSURL}${VPSPATH}/nftables/omr-admin-resync.conf
-	wget -O /etc/systemd/system/systemd-networkd-wait-online.service.d/20-omr-wait-online-any.conf ${VPSURL}${VPSPATH}/systemd/20-omr-wait-online-any.conf
+	fetch_file ${VPSURL}${VPSPATH}/nftables.conf /etc/nftables.conf
+	fetch_file ${VPSURL}${VPSPATH}/nftables/omr-vars.nft /etc/nftables/omr-vars.nft
+	fetch_file ${VPSURL}${VPSPATH}/nftables/omr.nft /etc/nftables/omr.nft
+	fetch_file ${VPSURL}${VPSPATH}/nftables/omr-admin-resync.conf /etc/systemd/system/nftables.service.d/omr-admin-resync.conf
+	fetch_file ${VPSURL}${VPSPATH}/systemd/20-omr-wait-online-any.conf /etc/systemd/system/systemd-networkd-wait-online.service.d/20-omr-wait-online-any.conf
 else
 	cp ${DIR}/nftables.conf /etc/nftables.conf
 	cp ${DIR}/nftables/omr-vars.nft /etc/nftables/omr-vars.nft
@@ -2705,6 +2843,12 @@ if [ -n "$VPS_SRC_IP" ] && [ -z "$(ip -4 route show default 2>/dev/null | grep -
 	sed -i "/ip saddr/s/masquerade/snat ip to $VPS_SRC_IP/" /etc/nftables/omr.nft
 fi
 systemctl mask --now shorewall shorewall6 >/dev/null 2>&1 || true
+# Stopping shorewall leaves its stoppedrules in place (ADMINISABSENTMINDED=Yes),
+# which drop every new WAN connection, SSH included. The nftables flush below
+# only removes them when shorewall used the nft backend of iptables, not with
+# iptables-legacy: clear them.
+command -v shorewall >/dev/null 2>&1 && { shorewall clear >/dev/null 2>&1 || true; }
+command -v shorewall6 >/dev/null 2>&1 && { shorewall6 clear >/dev/null 2>&1 || true; }
 command -v ufw >/dev/null 2>&1 && ufw --force disable >/dev/null 2>&1 || true
 systemctl mask --now ufw firewalld >/dev/null 2>&1 || true
 systemctl daemon-reload
@@ -2732,22 +2876,44 @@ fi
 if [ "$TLS" = "yes" ]; then
 	VPS_CERT=0
 	apt-get -y install socat cron
-	if [ "$VPS_DOMAIN" != "" ] && [ "$(getent hosts $VPS_DOMAIN | awk '{ print $1; exit }')" != "" ] && [ "$(ping -c 1 -w 1 $VPS_DOMAIN)" ]; then
-		if [ ! -f "/root/.acme.sh/$VPS_DOMAIN/$VPS_DOMAIN.cer" ]; then
+	# ping prints to stdout even when nothing answers: test its exit status
+	if [ "$VPS_DOMAIN" != "" ] && [ "$(getent hosts "$VPS_DOMAIN" | awk '{ print $1; exit }')" != "" ] && ping -q -c 1 -w 1 "$VPS_DOMAIN" >/dev/null 2>&1; then
+		# acme.sh issues ECC certificates by default since 3.0.6, in
+		# <domain>_ecc/: looking only in <domain>/ never found one, so the API
+		# kept its self-signed certificate and every run issued a new one with
+		# --force, into Let's Encrypt's duplicate certificate rate limit
+		acme_dir() {
+			for _acme_d in "/root/.acme.sh/${VPS_DOMAIN}_ecc" "/root/.acme.sh/${VPS_DOMAIN}"; do
+				[ -f "$_acme_d/$VPS_DOMAIN.cer" ] && { echo "$_acme_d"; return 0; }
+			done
+			return 0
+		}
+		ACME_DIR="$(acme_dir)"
+		# omr-admin reads its certificate once, at start: restart it on renewal
+		ACME_RELOAD='systemctl try-restart omr-admin'
+		if [ -z "$ACME_DIR" ]; then
 			echo "Generate certificate for V2Ray"
 			set +e
 			curl https://get.acme.sh | sh
-			~/.acme.sh/acme.sh --force --alpn --issue -d $VPS_DOMAIN --pre-hook 'nft add rule inet omr install_tmp tcp dport 443 accept >/dev/null 2>&1' --post-hook 'nft flush chain inet omr install_tmp >/dev/null 2>&1' >/dev/null 2>&1
+			~/.acme.sh/acme.sh --force --alpn --issue -d "$VPS_DOMAIN" --reloadcmd "$ACME_RELOAD" --pre-hook 'nft add rule inet omr install_tmp tcp dport 443 accept >/dev/null 2>&1' --post-hook 'nft flush chain inet omr install_tmp >/dev/null 2>&1' >/dev/null 2>&1
 			set -e
-			if [ -f /root/.acme.sh/$VPS_DOMAIN/$VPS_DOMAIN.cer ]; then
+			ACME_DIR="$(acme_dir)"
+			if [ -n "$ACME_DIR" ]; then
 				rm -f /etc/openmptcprouter-vps-admin/cert.pem
-				ln -s /root/.acme.sh/$VPS_DOMAIN/$VPS_DOMAIN.cer /etc/openmptcprouter-vps-admin/cert.pem
+				ln -s "$ACME_DIR/fullchain.cer" /etc/openmptcprouter-vps-admin/cert.pem
 				rm -f /etc/openmptcprouter-vps-admin/key.pem
-				ln -s /root/.acme.sh/$VPS_DOMAIN/$VPS_DOMAIN.key /etc/openmptcprouter-vps-admin/key.pem
+				ln -s "$ACME_DIR/$VPS_DOMAIN.key" /etc/openmptcprouter-vps-admin/key.pem
 			fi
 #			mkdir -p /etc/ssl/v2ray
 #			ln -f -s /root/.acme.sh/$reverse/$reverse.key /etc/ssl/v2ray/omr.key
 #			ln -f -s /root/.acme.sh/$reverse/fullchain.cer /etc/ssl/v2ray/omr.cer
+		elif [ "$(readlink /etc/openmptcprouter-vps-admin/cert.pem)" = "$ACME_DIR/$VPS_DOMAIN.cer" ]; then
+			# Linked by an earlier run to the certificate alone: clients that
+			# verify it need the intermediate too. Same key, so same pin.
+			[ -f "$ACME_DIR/fullchain.cer" ] && ln -sfn "$ACME_DIR/fullchain.cer" /etc/openmptcprouter-vps-admin/cert.pem
+			ACME_ECC=""
+			[ "$ACME_DIR" = "/root/.acme.sh/${VPS_DOMAIN}_ecc" ] && ACME_ECC="--ecc"
+			~/.acme.sh/acme.sh --install-cert -d "$VPS_DOMAIN" $ACME_ECC --reloadcmd "$ACME_RELOAD" >/dev/null 2>&1 || true
 		fi
 		VPS_CERT=1
 	else
@@ -2838,7 +3004,7 @@ echo "Reserving the local ports of OpenMPTCProuter services..."
 systemctl -q restart omr-reserved-ports.path >/dev/null 2>&1 || true
 
 echo "Check services left failed by the install order..."
-for unit in shadowsocks-libev-manager@manager shadowsocks-go v2ray xray mlvpn@mlvpn0 ubond@ubond0 mqvpn dsvpn-server@dsvpn0 glorytun-tcp@tun0 glorytun-udp@tun0 omr-admin omr; do
+for unit in shadowsocks-libev-manager@manager shadowsocks-go v2ray xray mlvpn@mlvpn0 mqvpn dsvpn-server@dsvpn0 glorytun-tcp@tun0 glorytun-udp@tun0 omr-admin omr; do
 	systemctl is-enabled -q "$unit" 2>/dev/null || continue
 	systemctl is-failed -q "$unit" 2>/dev/null || continue
 	echo " ${unit} is failed, resetting its start counter and starting it again"
@@ -2881,11 +3047,6 @@ if [ "$update" = "0" ]; then
 		echo 'Your MLVPN password: '
 		echo $MLVPN_PASS
 	fi
-	if [ "$UBOND" = "yes" ]; then
-		echo 'UBOND first port: 65251'
-		echo 'Your UBOND password: '
-		echo $UBOND_PASS
-	fi
 	if [ "$MQVPN" = "yes" ]; then
 		echo 'MQVPN port: 65443'
 		echo 'Your MQVPN key: '
@@ -2916,7 +3077,8 @@ if [ "$update" = "0" ]; then
 	check_running_kernel || true
 	echo '===================================================================================='
 
-	# Save info in file
+	# Save info in file, readable by root only: it holds every key
+	install -m 600 /dev/null /root/openmptcprouter_config.txt
 	cat > /root/openmptcprouter_config.txt <<-EOF
 	SSH port: 65222 (instead of port 22)
 	EOF
@@ -2951,12 +3113,6 @@ if [ "$update" = "0" ]; then
 		Your MLVPN password: $MLVPN_PASS
 		EOF
 	fi
-	if [ "$UBOND" = "yes" ]; then
-		cat >> /root/openmptcprouter_config.txt <<-EOF
-		UBOND first port: 65251
-		Your UBOND password: $UBOND_PASS
-		EOF
-	fi
 	if [ "$MQVPN" = "yes" ]; then
 		cat >> /root/openmptcprouter_config.txt <<-EOF
 		MQVPN port: 65443
@@ -2982,26 +3138,21 @@ else
 	systemctl -q daemon-reload
 	echo 'done'
 	echo 'Restarting systemd network...'
-	systemctl -q restart systemd-networkd
+	restart_or_warn systemd-networkd
 	echo 'done'
 	if [ "$MLVPN" = "yes" ]; then
 		echo 'Restarting mlvpn...'
-		systemctl -q restart mlvpn@mlvpn0
-		echo 'done'
-	fi
-	if [ "$UBOND" = "yes" ]; then
-		echo 'Restarting ubond...'
-		systemctl -q restart ubond@ubond0
+		restart_or_warn mlvpn@mlvpn0
 		echo 'done'
 	fi
 	if [ "$V2RAY" = "yes" ]; then
 		echo 'Restarting v2ray...'
-		systemctl -q restart v2ray
+		restart_or_warn v2ray
 		echo 'done'
 	fi
 	if [ "$XRAY" = "yes" ]; then
 		echo 'Restarting xray...'
-		systemctl -q restart xray
+		restart_or_warn xray
 		echo 'done'
 	fi
 	if [ "$DSVPN" = "yes" ]; then
@@ -3026,20 +3177,22 @@ else
 	echo 'done'
 	if [ "$OPENVPN" = "yes" ]; then
 		echo 'Restarting OpenVPN'
-		systemctl -q restart openvpn@tun0
-		systemctl -q restart openvpn@tun1
+		restart_or_warn openvpn@tun0
+		restart_or_warn openvpn@tun1
 		echo 'done'
 	fi
 	if [ "$WIREGUARD" = "yes" ]; then
 		echo 'Restarting WireGuard'
-		systemctl -q restart wg-quick@wg0
+		restart_or_warn wg-quick@wg0
 		echo 'done'
 	fi
 	if [ "$OMR_ADMIN" = "yes" ]; then
 		echo 'Restarting OpenMPTCProuter VPS admin'
-		systemctl -q restart omr-admin
+		restart_or_warn omr-admin
 		echo 'done'
-		if ! grep -q 'Server key' /root/openmptcprouter_config.txt ; then
+		# Not when the file is gone: the summary says it can be removed, and
+		# printing the key again would only put it in /var/log/omr-update.log
+		if [ -f /root/openmptcprouter_config.txt ] && ! grep -q 'Server key' /root/openmptcprouter_config.txt ; then
 			cat >> /root/openmptcprouter_config.txt <<-EOF
 			Your OpenMPTCProuter Server key: $OMR_ADMIN_PASS
 			Your OpenMPTCProuter Server username: openmptcprouter
@@ -3052,7 +3205,7 @@ else
 			echo 'openmptcprouter'
 			echo '!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!'
 			echo '===================================================================================='
-		else
+		elif [ -f /root/openmptcprouter_config.txt ]; then
 			echo '!!! Keys are in /root/openmptcprouter_config.txt !!!'
 		fi
 		OMR_API_PIN="$(omr_api_pin)"
@@ -3079,15 +3232,15 @@ else
 	sysctl -p /etc/sysctl.d/90-shadowsocks.conf > /dev/null 2>&1 || true
 	echo 'done'
 	echo 'Restarting omr...'
-	systemctl -q restart omr
+	restart_or_warn omr
 	echo 'done'
 	if [ "$SHADOWSOCKS" = "yes" ]; then
 		echo 'Restarting shadowsocks...'
-		systemctl -q restart shadowsocks-libev-manager@manager
+		restart_or_warn shadowsocks-libev-manager@manager
 	fi
 	if [ "$SHADOWSOCKS_GO" = "yes" ]; then
 		echo 'Restarting shadowsocks-go...'
-		systemctl -q restart shadowsocks-go
+		restart_or_warn shadowsocks-go
 	fi
 #	if [ $NBCPU -gt 1 ]; then
 #		for i in $NBCPU; do
@@ -3108,7 +3261,7 @@ else
 	echo 'done'
 	if [ "$FAIL2BAN" = "yes" ]; then
 		echo 'Restarting fail2ban...'
-		systemctl -q restart fail2ban
+		restart_or_warn fail2ban
 		echo 'done'
 	fi
 	echo '===================================================================================='

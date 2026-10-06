@@ -188,6 +188,78 @@ assert_eq "template keeps a default direct outbound (required so the reverse tag
 assert_eq "installer substitutes XRAY_REVERSE_UUID" "0" \
     "$(grep -q 's:XRAY_REVERSE_UUID:\$XRAY_REVERSE_UUID:g' "$INSTALLER"; echo $?)"
 
+# ── 6. existing configs are kept, not rebuilt ─────────────────────────────────
+
+echo "== existing config kept =="
+
+# The rebuild test used to be `-z "$(grep -i transport ...)"`, true for every
+# config since the template lost "transport": each run threw away the users,
+# redirects and outbounds omr-admin had added.
+assert_eq "no rebuild on a config merely lacking \"transport\"" "0" \
+    "$(grep -c 'grep -i transport /etc/xray/xray-server.json' "$INSTALLER")"
+assert_eq "rebuild only on a legacy top-level transport" "1" \
+    "$(grep -c "jq -r 'has(\"transport\")' /etc/xray/xray-server.json" "$INSTALLER")"
+assert_eq "v2ray config no longer copied over on every run" "0" \
+    "$(grep -c '^	#if \[ ! -f /etc/v2ray/v2ray-server.json \]; then' "$INSTALLER")"
+
+MERGE_PROG="$(grep -F 'jq_rewrite /etc/xray/xray-server.json -M --slurpfile tmpl' "$INSTALLER" | head -n 1 | sed "s/^[^']*'//; s/'[[:space:]]*\$//")"
+KEPT="$TMPDIR/kept.json"
+cat > "$KEPT" <<'EOF'
+{
+  "inbounds": [
+    {"tag": "omrin-tunnel", "settings": {"clients": [{"id": "main", "email": "openmptcprouter"}, {"id": "u2-uuid", "email": "u2"}]}},
+    {"tag": "user_redir_tcp_8080_u2", "port": 8080, "protocol": "dokodemo-door"}
+  ],
+  "outbounds": [{"protocol": "freedom", "tag": "direct"}, {"protocol": "freedom", "tag": "output-192.0.2.10"}],
+  "routing": {"rules": [{"type": "field", "inboundTag": ["omrin-tunnel"], "user": ["u2"], "outboundTag": "output-192.0.2.10"}]}
+}
+EOF
+MERGED="$(jq -M --slurpfile tmpl "$TEMPLATE" "$MERGE_PROG" "$KEPT")"
+assert_eq "merge exits cleanly" "0" "$?"
+assert_eq "other user's uuid kept" "u2-uuid" \
+    "$(echo "$MERGED" | jq -r '.inbounds[] | select(.tag=="omrin-tunnel") | .settings.clients[] | select(.email=="u2") | .id')"
+assert_eq "port redirect inbound kept" "1" \
+    "$(echo "$MERGED" | jq '[.inbounds[] | select(.tag=="user_redir_tcp_8080_u2")] | length')"
+assert_eq "GRE outbound and rule kept, rule still first" "output-192.0.2.10" \
+    "$(echo "$MERGED" | jq -r '.routing.rules[0].outboundTag')"
+assert_eq "missing template inbounds added once" "1" \
+    "$(echo "$MERGED" | jq '[.inbounds[] | select(.tag=="omrin-trojan-tunnel")] | length')"
+assert_eq "omrin-tunnel not duplicated" "1" \
+    "$(echo "$MERGED" | jq '[.inbounds[] | select(.tag=="omrin-tunnel")] | length')"
+assert_eq "blackhole outbound added" "blackhole" \
+    "$(echo "$MERGED" | jq -r '.outbounds[] | select(.tag=="blocked") | .protocol')"
+assert_eq "outbounds[0] still freedom" "freedom" "$(echo "$MERGED" | jq -r '.outbounds[0].protocol')"
+assert_eq "loopback blocking rules added" "$(jq '[.routing.rules[] | select(.outboundTag=="blocked")] | length' "$TEMPLATE")" \
+    "$(echo "$MERGED" | jq '[.routing.rules[] | select(.outboundTag=="blocked")] | length')"
+assert_eq "merge is idempotent" "$(echo "$MERGED" | jq -cS .)" \
+    "$(echo "$MERGED" | jq -M --slurpfile tmpl "$TEMPLATE" "$MERGE_PROG" | jq -cS .)"
+
+# ── 7. trojan users without a password ───────────────────────────────────────
+
+echo "== trojan password repair =="
+
+assert_eq "extra users are added to trojan with a password" "0" \
+    "$(grep -F 'omrin-trojan-tunnel") | .settings.clients) +=' "$INSTALLER" | grep -c '"id": \$xrayid')"
+TROJAN_PROG="$(extract_jq 'omrin-trojan-tunnel") | .settings.clients) |= map')"
+TROJAN="$TMPDIR/trojan.json"
+cat > "$TROJAN" <<'EOF'
+{"inbounds": [{"tag": "omrin-trojan-tunnel", "settings": {"clients": [
+  {"password": "main", "email": "openmptcprouter", "level": 0},
+  {"level": 0, "alterId": 0, "email": "u2", "id": "u2-uuid"},
+  {"email": "nothing"}
+]}}]}
+EOF
+FIXED="$(jq -M "$TROJAN_PROG" "$TROJAN")"
+assert_eq "trojan repair exits cleanly" "0" "$?"
+assert_eq "id moved to password" "u2-uuid" \
+    "$(echo "$FIXED" | jq -r '.inbounds[0].settings.clients[] | select(.email=="u2") | .password')"
+assert_eq "no id/alterId left" "0" \
+    "$(echo "$FIXED" | jq '[.inbounds[0].settings.clients[] | select(has("id") or has("alterId"))] | length')"
+assert_eq "client with no credential dropped" "0" \
+    "$(echo "$FIXED" | jq '[.inbounds[0].settings.clients[] | select(.email=="nothing")] | length')"
+assert_eq "valid client untouched" "main" \
+    "$(echo "$FIXED" | jq -r '.inbounds[0].settings.clients[] | select(.email=="openmptcprouter") | .password')"
+
 echo
 echo "$PASS passed, $FAIL failed"
 [ "$FAIL" -eq 0 ]

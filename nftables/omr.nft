@@ -121,17 +121,33 @@ table inet omr {
 		# hits the trailing reject. Masqueraded in nat_postrouting.
 		iifname $VPN_IFACES meta mark 0x539 accept
 
-		meta nfproto ipv4 iifname $NET_IFACE oifname $VPN_IFACES accept
-		# IPv6 net->vpn: only what user_dnat redirected, as with shorewall6
-		# (net all DROP, DNAT rules). A public prefix the router asks for
-		# ("IPv6 Prefix") is routed into its omr-6in4 tunnel by omr-6in4-run;
-		# that must not open the router's LAN to the internet (#4382).
+		# net->vpn: only what user_dnat redirected (the per-user port
+		# redirects, the bulk 1-64999 toggle, a GRE public IP's redirects),
+		# as with shorewall4/6 (net all DROP, DNAT rules). Everything else a
+		# WAN host could route at us is still headed somewhere the internet
+		# has no business reaching: omr-service routes each router's LAN
+		# subnets into its tunnel, and the tunnel addresses themselves are
+		# one hop away, so a neighbour on the provider's segment (or anyone
+		# upstream willing to route 10.255.0.0/16 or 192.168.0.0/16 at this
+		# box) reached them directly. Return traffic of what the routers
+		# open is established and accepted above.
+		meta nfproto ipv4 iifname $NET_IFACE oifname $VPN_IFACES ct status dnat accept
+		# Same for IPv6. A public prefix the router asks for ("IPv6 Prefix")
+		# is routed into its omr-6in4 tunnel by omr-6in4-run; that must not
+		# open the router's LAN to the internet (#4382).
 		meta nfproto ipv6 iifname $NET_IFACE6 oifname $VPN_IFACES ct status dnat accept
-
-		meta nfproto ipv6 iifname $VPN_IFACES accept            # shorewall6/policy: vpn all ACCEPT
 
 		jump client2client                                      # policy: vpn vpn DROP, unless /client2client enabled
 		iifname $VPN_IFACES oifname $VPN_IFACES drop
+
+		# shorewall6/policy: vpn all ACCEPT -- vpn->net (the router's IPv6
+		# out of its omr-6in4 tunnel, on $NET_IFACE6 or any other NIC) and
+		# vpn->vpncl. Only after the vpn->vpn drop above: accepted ahead of
+		# it, IPv6 from one user's tunnel into another's (the 6in4 tunnels,
+		# their routed ULA/public prefixes, the fd00:: tunnel addresses)
+		# skipped the client isolation IPv4 gets. vpn->fw IPv6 is the input
+		# chain's, not this one.
+		meta nfproto ipv6 iifname $VPN_IFACES accept
 
 		reject with icmpx type port-unreachable
 	}

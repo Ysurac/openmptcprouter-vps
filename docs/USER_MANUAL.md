@@ -11,7 +11,7 @@ A single install script sets up, on a fresh Debian/Ubuntu box:
 
 - An MPTCP-enabled kernel
 - One or more tunnel/proxy endpoints your router can connect through: Shadowsocks(-libev and Go),
-  V2Ray, Xray (incl. VLESS Reality), Glorytun (TCP and UDP), MLVPN, UBOND, DSVPN, WireGuard, MQVPN,
+  V2Ray, Xray (incl. VLESS Reality), Glorytun (TCP and UDP), MLVPN, DSVPN, WireGuard, MQVPN,
   OpenVPN (with up to 8 "bonding" instances), SoftEther, VXLAN, and 6in4 (IPv6-in-IPv4)
 - `omr-admin`, the REST API the router's web UI talks to for provisioning and monitoring
 - A native nftables firewall ruleset (replaces the older Shorewall/Shorewall6 setup)
@@ -56,7 +56,6 @@ MQVPN=no WIREGUARD=no SOFTETHERVPN=yes wget -O - https://www.openmptcprouter.com
 | `V2RAY` | `yes` | Enable V2Ray |
 | `XRAY` | `yes` | Enable Xray (incl. VLESS Reality) |
 | `MLVPN` | `yes` | Enable MLVPN |
-| `UBOND` | `no` | Enable UBOND |
 | `MQVPN` | `yes` | Enable MQVPN |
 | `OPENVPN` / `OPENVPN_BONDING` | `yes` / `yes` | Enable OpenVPN, and its 8-way bonding tunnels |
 | `SOFTETHERVPN` | `no` | Enable SoftEther VPN |
@@ -100,7 +99,6 @@ shown in `/etc/motd`):
 | Glorytun | 65001 |
 | DSVPN | 65401 |
 | MLVPN | 65201+ |
-| UBOND | 65251+ |
 | MQVPN | 65443 |
 | WireGuard (server / client) | 65311 / 65312 |
 | OpenVPN | 65301 |

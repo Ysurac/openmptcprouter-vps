@@ -185,7 +185,7 @@ fi
 # 0.1080 again: sshd is moved to 65222 during the install and the ruleset is
 # loaded a few lines later. If the two disagree, the VPS is unreachable from
 # the next reboot and the only survivor is the session running the installer.
-SSH_PORT="$(uncommented | sed -nE 's|.*sed -i .s:#?Port 22:Port ([0-9]+):g.*|\1|p' | head -n 1)"
+SSH_PORT="$(uncommented | grep -F 'sshd_config' | sed -nE 's|.*Port[^0-9]+22[^/]*/Port ([0-9]+)/.*|\1|p' | head -n 1)"
 if [ -z "$SSH_PORT" ]; then
     fail "cannot tell which port the installer moves sshd to"
 elif nft_body "$RULES" | grep -qE "tcp dport $SSH_PORT accept"; then
@@ -226,13 +226,42 @@ fi
 # With the tunnel in VPN_IFACES, an unrestricted net->vpn accept lets any new
 # IPv6 connection from the internet reach a LAN using a public prefix.
 # shorewall6 only let DNAT'd connections through (net all DROP).
-if nft_body "$RULES" | grep -E 'iifname \$NET_IFACE6? oifname \$VPN_IFACES' | grep -v 'meta nfproto ipv4' | grep -vq 'ct status dnat'; then
-    fail "IPv6 from the internet into a tunnel is accepted without ct status dnat; a public LAN prefix is open (#4382)"
-elif nft_body "$RULES" | grep -q 'meta nfproto ipv6 iifname \$NET_IFACE6 oifname \$VPN_IFACES ct status dnat accept'; then
+if nft_body "$RULES" | grep -E 'iifname \$NET_IFACE6? oifname \$VPN_IFACES' | grep -vq 'ct status dnat'; then
+    fail "something from the internet into a tunnel is accepted without ct status dnat; a router LAN or a public LAN prefix is open (#4382)"
+else
+    pass "nothing from the internet is forwarded into a tunnel unless it was redirected (ct status dnat)"
+fi
+if nft_body "$RULES" | grep -q 'meta nfproto ipv6 iifname \$NET_IFACE6 oifname \$VPN_IFACES ct status dnat accept'; then
     pass "IPv6 net->vpn forwarding is limited to redirected (DNAT'd) connections"
 else
     fail "the IPv6 net->vpn rule for redirected ports is gone; IPv6 port redirects to the router are rejected (#4382)"
 fi
+# omr-service routes every router's LAN subnets into its tunnel, so an
+# unrestricted IPv4 net->vpn accept let any host able to route those subnets
+# (or 10.255.0.0/16) at the VPS -- a neighbour on the provider's segment --
+# reach the router LANs and tunnel addresses. Shorewall4 only let DNAT'd
+# connections through (net all DROP), and the port redirects are DNAT.
+if nft_body "$RULES" | grep -q 'meta nfproto ipv4 iifname \$NET_IFACE oifname \$VPN_IFACES ct status dnat accept'; then
+    pass "IPv4 net->vpn forwarding is limited to redirected (DNAT'd) connections"
+else
+    fail "the IPv4 net->vpn rule for redirected ports is gone; port redirects to the router are rejected"
+fi
+
+# Client isolation for IPv6: shorewall6's "vpn all ACCEPT" accepted ahead of
+# the vpn->vpn drop let IPv6 from one user's tunnel into another's (the 6in4
+# tunnels and the prefixes routed into them) skip /client2client. The vpn
+# accept has to come after the client2client jump and the vpn->vpn drop, and
+# the drop itself must not be limited to one family.
+awk '
+    $1 == "chain" && $2 == "forward" { inside = 1; n = 0; next }
+    inside && /^\t\}/ { inside = 0 }
+    inside { n++; sub(/#.*/, "");
+             if ($0 ~ /jump client2client/) c2c = n
+             if ($0 ~ /iifname \$VPN_IFACES oifname \$VPN_IFACES drop/ && $0 !~ /nfproto/) drop = n
+             if ($0 ~ /iifname \$VPN_IFACES/ && $0 ~ /accept/ && $0 !~ /oifname/ && $0 !~ /meta mark/) { if (!acc || n < acc) acc = n } }
+    END { exit !(c2c && drop && acc && c2c < drop && drop < acc) }' "$RULES" \
+    && pass "forward's vpn->all accept comes after the client2client jump and the vpn->vpn drop" \
+    || fail "forward accepts traffic from the tunnels ahead of the vpn->vpn drop: IPv6 between two users skips /client2client"
 if nft_body "$RULES" | grep -E 'ip6 saddr[^#]*masquerade' | grep -q 'oifname \$NET_IFACE6 '; then
     pass "the NAT66 masquerade follows the IPv6 WAN (\$NET_IFACE6)"
 else

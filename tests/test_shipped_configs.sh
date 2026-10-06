@@ -174,6 +174,60 @@ for tag in $(uncommented | grep -oE '\.tag=="[^"]+"' | sed 's/.*=="//; s/"//' | 
     fi
 done
 
+# ── 4b. proxy users and the VPS's loopback ────────────────────────────────
+# A proxy user's freedom outbound dials from the VPS itself, so 127.0.0.1 is
+# the VPS: the xray/v2ray gRPC API (10086/10085), OpenVPN's management socket
+# (65302, no password), ss-manager (8839/udp), the MQVPN control API (9090),
+# shadowsocks-go's API (65279) and the omr-admin API seen from loopback
+# (exempt from fail2ban). Routers never send loopback through the proxy (their
+# transparent proxy bypasses it), and the VPS->LAN port forwards are
+# dokodemo-door inbounds of their own, so the block is scoped to the inbounds
+# the users connect to. omr-admin's xray_del_routing/v2ray_del_routing read
+# rule['outboundTag'] on every rule, so none may lack one.
+
+echo
+echo "== proxy users can't reach the VPS's loopback =="
+REALITY_TAGS="$(jq -r '.inbounds[]?.tag' xray-vless-reality.json 2>/dev/null)"
+for f in xray-server.json v2ray-server.json; do
+    [ -f "$f" ] || continue
+    extra=""
+    [ "$f" = xray-server.json ] && extra="$REALITY_TAGS"
+    if [ "$(jq -r '.outbounds[0].protocol' "$f")" = freedom ]; then
+        pass "$f: the first (default) outbound is still freedom"
+    else
+        fail "$f: the first outbound is no longer freedom, it is what every unmatched connection takes"
+    fi
+    if jq -e '[.routing.rules[] | select(has("outboundTag") | not)] | length == 0' "$f" >/dev/null; then
+        pass "$f: every routing rule has an outboundTag (omr-admin's *_del_routing index it)"
+    else
+        fail "$f: a routing rule has no outboundTag; omr-admin's *_del_routing raise KeyError on it"
+    fi
+    out=$(jq -r --arg extra "$extra" '
+        ([.outbounds[] | select(.protocol == "blackhole") | .tag]) as $bh |
+        ([.outbounds[] | select(.protocol == "freedom") | .tag]) as $free |
+        ([.inbounds[] | select(.protocol != "dokodemo-door") | .tag] + ($extra | split("\n") | map(select(. != "")))) as $users |
+        (.routing.rules | to_entries) as $r |
+        ([$r[] | select((.value.outboundTag as $o | $bh | index($o)) and ((.value.ip // []) | index("127.0.0.0/8")) and ((.value.ip // []) | index("::1/128")))]) as $ipr |
+        ([$r[] | select((.value.outboundTag as $o | $bh | index($o)) and ((.value.domain // []) | index("domain:localhost")))]) as $dnr |
+        if ($bh | length) == 0 then "no blackhole outbound"
+        elif ($ipr | length) == 0 then "no rule sends 127.0.0.0/8 and ::1/128 to a blackhole outbound"
+        elif ($dnr | length) == 0 then "no rule sends domain:localhost to a blackhole outbound"
+        elif ([$users[] | select(. as $u | ($ipr[0].value.inboundTag | index($u)) == null)] | length) > 0 then
+            "the loopback ip rule misses inbound(s) " + ([$users[] | select(. as $u | ($ipr[0].value.inboundTag | index($u)) == null)] | join(","))
+        elif ([$users[] | select(. as $u | ($dnr[0].value.inboundTag | index($u)) == null)] | length) > 0 then
+            "the localhost domain rule misses inbound(s) " + ([$users[] | select(. as $u | ($dnr[0].value.inboundTag | index($u)) == null)] | join(","))
+        elif ($ipr[0].value.inboundTag + $dnr[0].value.inboundTag | index("api")) != null then
+            "the loopback block applies to the api inbound, which is how omr-admin reaches the proxy"
+        elif ([$r[] | select(.key < ([$ipr[0].key, $dnr[0].key] | max)) | select(.value.outboundTag as $o | $free | index($o)) | select((.value.inboundTag // []) as $i | [$users[] | select(. as $u | $i | index($u))] | length > 0)] | length) > 0 then
+            "a rule ahead of the loopback block already sends user traffic to freedom"
+        else "ok" end' "$f")
+    if [ "$out" = ok ]; then
+        pass "$f: loopback (127.0.0.0/8, ::1, localhost) from every user inbound goes to a blackhole outbound"
+    else
+        fail "$f: $out"
+    fi
+done
+
 # ── 5. files the runtime appends to ────────────────────────────────────────
 # omr-admin rewrites /etc/sysctl.d/90-shadowsocks.conf (POST /settings, the
 # MPTCP block) and /etc/openvpn/tun0.conf (the client2client sync) by reading

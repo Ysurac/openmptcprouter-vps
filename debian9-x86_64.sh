@@ -2844,8 +2844,9 @@ if [ -n "$VPS_SRC_IP" ] && [ -z "$(ip -4 route show default 2>/dev/null | grep -
 fi
 # nf_nat_ftp, the NAT half of omr.nft's FTP helper, now and at boot. Where it
 # can't be loaded (a container), drop the FTP lines: the helper object would
-# make the whole ruleset fail to load.
-if modprobe nf_nat_ftp >/dev/null 2>&1; then
+# make the whole ruleset fail to load. A container can't modprobe, but can use
+# the module when its host has already loaded it.
+if modprobe nf_nat_ftp >/dev/null 2>&1 || [ -d /sys/module/nf_nat_ftp ]; then
 	echo nf_nat_ftp > /etc/modules-load.d/omr-ftp.conf
 else
 	rm -f /etc/modules-load.d/omr-ftp.conf

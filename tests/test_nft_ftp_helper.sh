@@ -80,6 +80,9 @@ else
     pass "the installer loads nf_nat_ftp"
     grep -qE "echo nf_nat_ftp > /etc/modules-load\.d/[a-z0-9-]+\.conf" "$INSTALLER" \
         && pass "and at every boot (modules-load.d)" || fail "but not at boot"
+    grep -qF 'modprobe nf_nat_ftp >/dev/null 2>&1 || [ -d /sys/module/nf_nat_ftp ]' "$INSTALLER" \
+        && pass "and keeps the FTP helper in a container whose host has nf_nat_ftp loaded" \
+        || fail "and drops the FTP helper in a container even when its host has nf_nat_ftp loaded"
     # The sed it runs where modprobe fails, against the shipped omr.nft: what is
     # left must hold no FTP helper and still declare everything else.
     sedline="$(grep -E "sed -i '/ct helper ftp " "$INSTALLER" | head -n 1 | sed 's/^[[:space:]]*//')"

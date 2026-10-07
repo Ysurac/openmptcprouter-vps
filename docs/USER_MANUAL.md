@@ -3,7 +3,7 @@
 This is the server side ("VPS") of [OpenMPTCProuter](https://www.openmptcprouter.com/): a piece of
 software that runs on a cheap VPS and terminates the tunnels your OpenMPTCProuter router aggregates
 its internet connections through. This manual covers installing, configuring, and operating that
-VPS. For internal architecture and contributor notes, see [TECHNICAL.md](TECHNICAL.md).
+VPS.
 
 ## 1. What gets installed
 
@@ -175,7 +175,6 @@ rule` into any chain, including two the installer sets aside just for this:
 Without that second rule, a DNAT redirect covering the same port (per-user, or the bulk toggle)
 would still steal the traffic before it ever reaches `custom_accept` — previously the only fix was
 editing `omr-admin-config.json` by hand to remove/narrow the conflicting redirect (see
-[TECHNICAL.md §7](TECHNICAL.md#7-firewall-nftablesconf-nftables--migrated-off-shorewall) and
 [issue #4356](https://github.com/Ysurac/openmptcprouter/issues/4356)). A single file covering both
 chains is now enough — no `omr-admin-config.json` edits needed. After adding or changing a file
 there, apply it with `systemctl reload nftables` (or `restart`; no need to touch `omr-admin`, since
@@ -213,7 +212,7 @@ repeated connection attempts.
 - **Router can't reach the admin API**: confirm `omr-admin` is listening on 65500
   (`curl -k https://127.0.0.1:65500/`) and that port isn't blocked by the nftables firewall
   (`nft list ruleset` to inspect it; port 65500 should be reachable via the `user_accept`/base
-  `input` chain rules — see [TECHNICAL.md §7](TECHNICAL.md#7-firewall-nftablesconf-nftables--migrated-off-shorewall)).
+  `input` chain rules).
 - **Re-running the installer does nothing**: you likely have `REINSTALL=no` and are already on the
   current version — set `REINSTALL=yes` to force it.
 - **Wrong network interface detected**: set `INTERFACE`/`INTERFACE6` explicitly and re-run.

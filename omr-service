@@ -1,24 +1,69 @@
 #!/bin/bash
 # OpenMPTCProuter VPS service script
 
+# Unit files are installed and removed by the install script, which restarts
+# this service at the end: once a unit is found, don't ask systemd again on
+# every loop. A unit not found (or a failed lookup) is looked up again.
 _unit_exists() {
-	systemctl list-unit-files --no-legend "$1" 2>/dev/null | grep -q '[^[:space:]]'
+	declare -gA _unit_found
+	[ -n "${_unit_found[$1]}" ] && return 0
+	systemctl list-unit-files --no-legend "$1" 2>/dev/null | grep -q '[^[:space:]]' || return 1
+	_unit_found[$1]=1
+}
+
+# Flags of the first MPTCP endpoint on a device, found the way multipath
+# finds them (dev field compared whole, flags in the 4th field), in the
+# endpoint list _multipath read: empty when the device has no endpoint.
+# A substring match on "dev <device>" would give eth0 the flags of eth0.100.
+_endpoint_mode() {
+	local -a f
+	local i
+	endpoint_mode=""
+	while read -r -a f; do
+		for ((i = 0; i < ${#f[@]} - 1; i++)); do
+			if [ "${f[i]}" = dev ] && [ "${f[i+1]}" = "$1" ]; then
+				endpoint_mode="${f[3]}"
+				return
+			fi
+		done
+	done <<< "$endpoints"
 }
 
 _multipath() {
+	local intf lo_global endpoints=""
 	# Force multipath status
 	# NET_IFACE used to come from Shorewall's params.net; derived directly
 	# from the default route now that Shorewall is gone (matches
 	# omradmin.py's own _detect_default_iface()).
 	NET_IFACE="$(ip -4 route show default 2>/dev/null | awk '{for(i=1;i<=NF;i++) if ($i=="dev"){print $(i+1); exit}}')"
+	# Same answer for every interface: look once, not up to twice per interface
+	lo_global="$(ip a show dev lo | grep -v inet6 | grep global)"
+	# With the upstream MPTCP stack, "multipath <device>" lists the endpoints
+	# three times and runs ip | jq just to print the mode: with the lo check
+	# above, some 25 processes per interface every 10 s, on a VPS with about
+	# twenty tunnel interfaces. Read the list once and only run multipath to
+	# change a mode.
+	if [ -f /proc/sys/net/mptcp/enabled ]; then
+		endpoints="$(ip mptcp endpoint show 2>/dev/null)"
+		# Each multipath call also deleted IPv4-mapped endpoints: still do it
+		case "$endpoints" in
+			*::ffff*) multipath lo >/dev/null 2>&1 ;;
+		esac
+	fi
 	for intf in `ls -1 /sys/class/net`; do
 		if [ "$intf" != "bonding_masters" ]; then
-			if ([ "$(ip a show dev lo | grep -v inet6 | grep global)" != "" ] && [ "$intf" = "lo" ]) || ([ "$intf" = "$NET_IFACE" ] && [ "$(ip a show dev lo | grep -v inet6 | grep global)" = "" ]); then
+			if { [ -n "$lo_global" ] && [ "$intf" = "lo" ]; } || { [ "$intf" = "$NET_IFACE" ] && [ -z "$lo_global" ]; }; then
 				[ -f /proc/sys/net/mptcp/mptcp_enabled ] && [ "$(multipath $intf | tr -d '\n')" != "$intf is in default mode" ] && multipath $intf on >/dev/null 2>&1
-				[ -f /proc/sys/net/mptcp/enabled ] && [ "$(multipath $intf | tr -d '\n')" != "$intf is in signal mode" ] && {
-					multipath $intf signal >/dev/null 2>&1
-					ip mptcp limits set subflows 8 add_addr_accepted 8 >/dev/null 2>&1
-				}
+				if [ -f /proc/sys/net/mptcp/enabled ]; then
+					_endpoint_mode "$intf"
+					[ "$endpoint_mode" != "signal" ] && {
+						multipath $intf signal >/dev/null 2>&1
+						ip mptcp limits set subflows 8 add_addr_accepted 8 >/dev/null 2>&1
+					}
+				fi
+			elif [ -f /proc/sys/net/mptcp/enabled ]; then
+				_endpoint_mode "$intf"
+				[ -n "$endpoint_mode" ] && multipath $intf off >/dev/null 2>&1
 			else
 				[ "$(multipath $intf | tr -d '\n')" != "$intf is deactivated" ] && multipath $intf off >/dev/null 2>&1
 			fi
@@ -189,27 +234,41 @@ _lan_routable() {
 	return 1
 }
 
+# The users' LANs only change with omr-admin-config.json, but reading them
+# took 3 jq per user and 3 ipcalc (a Perl script) per LAN every 10 s: parse
+# the file again only when it changed, and just check the routes and ccd
+# entries in between.
+_lan_route_key=""
+_lan_route_list=""
 _lan_route() {
-	jq -c '.users[0][]?' /etc/openmptcprouter-vps-admin/omr-admin-config.json |
-	while IFS=$"\n" read -r c; do
-		if [ -n "$c" ]; then
-			vpnremoteip=$(echo "$c" | jq -r '.vpnremoteip')
-			username=$(echo "$c" | jq -r '.username')
-			if [ -n "$vpnremoteip" ] && [ "$vpnremoteip" != "null" ]; then
-				echo "$c" | jq -c -r '.lanips[]? //empty' | 
-				while IFS=$"\n" read -r d; do
-					if [ "$d" != "" ]; then
-						network=$(ipcalc -n $d | grep Network | awk '{print $2}')
-						networkonly=$(ipcalc -n $d | grep Network | awk '{print $2}' | cut -d/ -f1)
-						netmask=$(ipcalc -n $d | grep Netmask | awk '{print $2}')
-						_lan_routable "$network" || continue
-						[ -n "$network" ] && [ -z "$(ip r show $network via $vpnremoteip)" ] && ip r replace $network via $vpnremoteip >/dev/null 2>&1
-						[ -n "$networkonly" ] && [ -n "$netmask" ] && ([ ! -f /etc/openvpn/ccd/${username} ] || ! grep -Fqx -- "iroute $networkonly $netmask" /etc/openvpn/ccd/${username}) && echo "iroute $networkonly $netmask" >> /etc/openvpn/ccd/${username}
-					fi
-				done
+	local config=/etc/openmptcprouter-vps-admin/omr-admin-config.json key network networkonly netmask vpnremoteip username
+	key="$(stat -c '%y %z %s %i' "$config" 2>/dev/null)"
+	if [ -z "$key" ] || [ "$key" != "$_lan_route_key" ]; then
+		_lan_route_list="$(jq -c '.users[0][]?' "$config" |
+		while IFS=$"\n" read -r c; do
+			if [ -n "$c" ]; then
+				vpnremoteip=$(echo "$c" | jq -r '.vpnremoteip')
+				username=$(echo "$c" | jq -r '.username')
+				if [ -n "$vpnremoteip" ] && [ "$vpnremoteip" != "null" ]; then
+					echo "$c" | jq -c -r '.lanips[]? //empty' |
+					while IFS=$"\n" read -r d; do
+						if [ "$d" != "" ]; then
+							network=$(ipcalc -n $d | grep Network | awk '{print $2}')
+							networkonly=$(ipcalc -n $d | grep Network | awk '{print $2}' | cut -d/ -f1)
+							netmask=$(ipcalc -n $d | grep Netmask | awk '{print $2}')
+							_lan_routable "$network" || continue
+							printf '%s|%s|%s|%s|%s\n' "$network" "$networkonly" "$netmask" "$vpnremoteip" "$username"
+						fi
+					done
+				fi
 			fi
-		fi
-	done
+		done)"
+		_lan_route_key="$key"
+	fi
+	while IFS='|' read -r network networkonly netmask vpnremoteip username; do
+		[ -n "$network" ] && [ -z "$(ip r show $network via $vpnremoteip)" ] && ip r replace $network via $vpnremoteip >/dev/null 2>&1
+		[ -n "$networkonly" ] && [ -n "$netmask" ] && ([ ! -f /etc/openvpn/ccd/${username} ] || ! grep -Fqx -- "iroute $networkonly $netmask" /etc/openvpn/ccd/${username}) && echo "iroute $networkonly $netmask" >> /etc/openvpn/ccd/${username}
+	done <<< "$_lan_route_list"
 }
 
 _gre_tunnels() {

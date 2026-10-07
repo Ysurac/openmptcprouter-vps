@@ -256,6 +256,127 @@ if bash -c 'systemctl() { printf "%s\n" "present.service enabled enabled"; }; ev
 else
     fail "a listed systemd unit is treated as present"
 fi
+calls_file="$(mktemp)"
+if bash -c 'f="$2"; systemctl() { echo call >> "$f"; printf "%s\n" "present.service enabled enabled"; }; eval "$1"
+        _unit_exists present.service && _unit_exists present.service && _unit_exists present.service' _ "$unit_function" "$calls_file" \
+    && [ "$(grep -c call "$calls_file")" = 1 ]; then
+    pass "a present unit is looked up once"
+else
+    fail "a present unit is looked up once"
+fi
+: > "$calls_file"
+if ! bash -c 'f="$2"; systemctl() { echo call >> "$f"; }; eval "$1"
+        _unit_exists missing.service || _unit_exists missing.service' _ "$unit_function" "$calls_file" \
+    && [ "$(grep -c call "$calls_file")" = 2 ]; then
+    pass "a missing unit is looked up again"
+else
+    fail "a missing unit is looked up again"
+fi
+rm -f "$calls_file"
+
+echo
+echo "== MPTCP endpoint modes =="
+# _multipath reads the endpoint list once and runs multipath only to change a
+# mode. Only the upstream MPTCP stack takes this path.
+if [ -f /proc/sys/net/mptcp/enabled ]; then
+    multipath_functions="$(sed -n '/^_endpoint_mode()/,/^}/p; /^_multipath()/,/^}/p' omr-service)"
+    run_multipath() { # run_multipath <endpoint list> [<global address line on lo>]
+        bash -c '
+            endpoint_list="$2" lo_line="$3"
+            ls() { printf "%s\n" bonding_masters eth0 gt-tun0 lo tun0; }
+            ip() {
+                case "$*" in
+                    "-4 route show default") echo "default via 192.0.2.1 dev eth0 proto static" ;;
+                    "a show dev lo") printf "%s\n" "1: lo: <LOOPBACK,UP,LOWER_UP> mtu 65536" "    inet 127.0.0.1/8 scope host lo" "$lo_line" ;;
+                    "mptcp endpoint show") [ -z "$endpoint_list" ] || printf "%s\n" "$endpoint_list" ;;
+                    *) echo "ip $*" >&3 ;;
+                esac
+            }
+            multipath() { echo "multipath $*" >&3; }
+            eval "$1"
+            _multipath
+        ' _ "$multipath_functions" "$1" "${2:-}" 3>&1
+    }
+    out="$(run_multipath '192.0.2.2 id 1 signal dev eth0')"
+    if [ -z "$out" ]; then
+        pass "nothing is run when every interface is already in its mode"
+    else
+        fail "nothing is run when every interface is already in its mode"
+        printf '         got: %s\n' "$out"
+    fi
+    out="$(run_multipath '198.51.100.2 id 2 subflow fullmesh dev tun0')"
+    assert_contains "the WAN is put in signal mode" "multipath eth0 signal" "$out"
+    assert_contains "the subflow limits are set with signal mode" "ip mptcp limits set subflows 8 add_addr_accepted 8" "$out"
+    assert_contains "an endpoint on another interface is removed" "multipath tun0 off" "$out"
+    if ! grep -q -e "multipath gt-tun0" -e "multipath lo" <<< "$out"; then
+        pass "interfaces without an endpoint are left alone"
+    else
+        fail "interfaces without an endpoint are left alone"
+    fi
+    out="$(run_multipath '192.0.2.2 id 1 signal dev eth0' '    inet 198.51.100.1/32 scope global lo')"
+    assert_contains "a global address on lo is announced instead of the WAN" "multipath lo signal" "$out"
+    assert_contains "the WAN endpoint is removed then" "multipath eth0 off" "$out"
+    out="$(run_multipath "$(printf '%s\n' '192.0.2.2 id 1 signal dev eth0' '::ffff:192.0.2.2 id 2 signal dev eth0')")"
+    if [ "$out" = "multipath lo" ]; then
+        pass "IPv4-mapped endpoints are still cleaned up by multipath"
+    else
+        fail "IPv4-mapped endpoints are still cleaned up by multipath"
+        printf '         got: %s\n' "$out"
+    fi
+    # The dev field is compared whole, as multipath does: eth0.100's endpoint
+    # says nothing about eth0's mode.
+    out="$(run_multipath '198.51.100.9 id 3 signal dev eth0.100')"
+    assert_contains "a VLAN's signal endpoint doesn't count for the WAN" "multipath eth0 signal" "$out"
+    out="$(run_multipath "$(printf '%s\n' '198.51.100.9 id 3 subflow dev eth0.100' '192.0.2.2 id 1 signal dev eth0')")"
+    if [ -z "$out" ]; then
+        pass "a VLAN's endpoint listed first doesn't change the WAN's mode"
+    else
+        fail "a VLAN's endpoint listed first doesn't change the WAN's mode"
+        printf '         got: %s\n' "$out"
+    fi
+else
+    echo "  SKIP no upstream MPTCP on this kernel (/proc/sys/net/mptcp/enabled)"
+fi
+
+echo
+echo "== LAN routes =="
+# omr-admin-config.json is parsed again only when stat reports a change; the
+# routes are checked on every call. No Netmask line from ipcalc keeps the
+# test from touching /etc/openvpn/ccd.
+lan_function="$(sed -n '/^_lan_routable()/,/^}/p;/^_lan_route()/,/^}/p' omr-service)"
+lan_calls="$(bash -c '
+    stat_key=1
+    stat() { echo "$stat_key"; }
+    jq() {
+        echo jq-call
+        case "$*" in
+            "-c .users[0][]? "*) echo "{\"username\":\"user1\",\"vpnremoteip\":\"10.255.255.2\",\"lanips\":[\"192.168.100.1/24\"]}" >&3 ;;
+            "-r .vpnremoteip") echo 10.255.255.2 >&3 ;;
+            "-r .username") echo user1 >&3 ;;
+            "-c -r .lanips[]? //empty") echo 192.168.100.1/24 >&3 ;;
+        esac
+    } 3>&1 1>&2
+    ipcalc() { echo ipcalc-call >&2; echo "Network:   192.168.100.0/24"; }
+    ip() { [ "$1 $2" = "r show" ] || echo "ip $*" >&4; }
+    eval "$1"
+    _lan_route; echo "-- same config" >&2; _lan_route; stat_key=2; echo "-- changed config" >&2; _lan_route
+' _ "$lan_function" 2>&1 4>&2)"
+first="$(sed -n '1,/^-- same config$/p' <<< "$lan_calls")"
+second="$(sed -n '/^-- same config$/,/^-- changed config$/p' <<< "$lan_calls")"
+third="$(sed -n '/^-- changed config$/,$p' <<< "$lan_calls")"
+if [ "$(grep -c jq-call <<< "$first")" = 4 ] && [ "$(grep -c ipcalc-call <<< "$first")" = 3 ] \
+    && [ "$(grep -c -e jq-call -e ipcalc-call <<< "$second")" = 0 ] \
+    && [ "$(grep -c jq-call <<< "$third")" = 4 ]; then
+    pass "the config is parsed again only when it changed"
+else
+    fail "the config is parsed again only when it changed"
+    printf '%s\n' "$lan_calls" | sed 's/^/         /'
+fi
+if [ "$(grep -c 'ip r replace 192.168.100.0/24 via 10.255.255.2' <<< "$lan_calls")" = 3 ]; then
+    pass "a missing LAN route is restored on every call"
+else
+    fail "a missing LAN route is restored on every call"
+fi
 
 echo
 echo "== update and bypass safety invariants =="

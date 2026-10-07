@@ -88,11 +88,11 @@ MLVPN_VERSION="8aa1b16d843ea68734e2520e39a34cb7f3d61b2b"
 MLVPN_BINARY_VERSION="3.0.0+20211028.git.ddafba3"
 OBFS_VERSION="486bebd9208539058e57e23a12f23103016e09b4"
 OBFS_BINARY_VERSION="0.0.5-1"
-OMR_ADMIN_VERSION="2fc09ff3911e908840552a0f7b4082a6eed4e06e"
-OMR_ADMIN_BINARY_VERSION="0.18+20261006"
+OMR_ADMIN_VERSION="274e966e1a79ffe4ab83f5a3acb966c975271036"
+OMR_ADMIN_BINARY_VERSION="0.18+20261007"
 DSVPN_VERSION="3b99d2ef6c02b2ef68b5784bec8adfdd55b29b1a"
 DSVPN_BINARY_VERSION="0.1.4-2"
-MQVPN_VERSION="0.16.3-1"
+MQVPN_VERSION="0.16.3+20261007-1"
 V2RAY_VERSION="5.32.0"
 V2RAY_PLUGIN_VERSION="4.43.0"
 XRAY_VERSION="26.7.11"
@@ -116,7 +116,7 @@ VPSURL="https://www.openmptcprouter.com/"
 REPO="repo.openmptcprouter.com"
 CHINA=${CHINA:-no}
 
-OMR_VERSION="0.1087-rolling-test"
+OMR_VERSION="0.1088-rolling-test"
 
 DIR=$( pwd )
 #"
@@ -2863,10 +2863,35 @@ command -v ufw >/dev/null 2>&1 && ufw --force disable >/dev/null 2>&1 || true
 systemctl mask --now ufw firewalld >/dev/null 2>&1 || true
 systemctl daemon-reload
 systemctl enable --now nftables
-cat > /etc/sysctl.d/90-omr-forwarding.conf <<-EOF
+# With forwarding on, the kernel ignores RAs where accept_ra is 1 and drops
+# the default routes they gave (openmptcprouter-vps#63). Keep them with 2 on
+# the WAN where the kernel handles RAs, set before forwarding; 0 means a
+# network manager handles them (networkd, NetworkManager), or none are wanted.
+OMR_RA_IFACES=""
+for intf in $(printf '%s\n%s\n' "$INTERFACE" "$INTERFACE6" | sort -u); do
+	case "$(cat "/proc/sys/net/ipv6/conf/$intf/accept_ra" 2>/dev/null)" in
+		1|2) OMR_RA_IFACES="$OMR_RA_IFACES $intf" ;;
+	esac
+done
+for intf in $OMR_RA_IFACES; do
+	echo "net.ipv6.conf.$(echo "$intf" | tr . /).accept_ra = 2"
+done > /etc/sysctl.d/90-omr-forwarding.conf
+cat >> /etc/sysctl.d/90-omr-forwarding.conf <<-EOF
 	net.ipv4.ip_forward = 1
 	net.ipv6.conf.all.forwarding = 1
 EOF
+# ifupdown sets accept_ra again at every ifup ("inet6 dhcp" sets 1).
+if [ -d /etc/network/if-up.d ]; then
+	cat > /etc/network/if-up.d/omr-accept-ra <<-'EOF'
+	#!/bin/sh
+	# OpenMPTCProuter VPS: put back the accept_ra 2 that ifup reset, on the
+	# interfaces /etc/sysctl.d/90-omr-forwarding.conf gives it to.
+	key="net.ipv6.conf.$(echo "$IFACE" | tr . /).accept_ra"
+	grep -qxF "$key = 2" /etc/sysctl.d/90-omr-forwarding.conf 2>/dev/null || exit 0
+	sysctl -q -e -w "$key=2" || true
+	EOF
+	chmod 755 /etc/network/if-up.d/omr-accept-ra
+fi
 sysctl -p /etc/sysctl.d/90-omr-forwarding.conf > /dev/null 2>&1 || true
 [ -z "$(grep nf_conntrack_sip /etc/modprobe.d/blacklist.conf)" ] && echo 'blacklist nf_conntrack_sip' >> /etc/modprobe.d/blacklist.conf
 if [ "$ID" = "debian" ] && [ "$VERSION_ID" = "10" ]; then
@@ -3265,7 +3290,7 @@ else
 	# persisted state on startup (see omradmin.py's _nft_resync_all()). That
 	# same startup resync also re-adds OpenVPN's client-to-client directive
 	# to tun0.conf if needed, which the OpenVPN block above this also just
-	# unconditionally regenerated from template (see docs/TECHNICAL.md §7).
+	# unconditionally regenerated from template.
 	systemctl -q restart nftables >/dev/null 2>&1 || true
 	systemctl -q restart omr-admin >/dev/null 2>&1 || true
 	echo 'done'

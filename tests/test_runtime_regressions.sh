@@ -422,5 +422,35 @@ else
 fi
 
 echo
+echo "== omr-admin watchdog grace period =="
+# At boot omr-admin took longer than one loop pass to answer: restarting it
+# whenever the API was silent killed four starts in a row.
+api_function="$(sed -n '/^_omr_api()/,/^}/p' omr-service | sed "s#/proc/uptime#$TMPDIR/uptime#g")"
+# $1 ActiveState, $2 seconds since it became active, $3 API answer
+api_restarts() {
+    local mock_state="$1" mock_age="$2" mock_answer="$3"
+    (
+        printf '1000.42 1900.00\n' > "$TMPDIR/uptime"
+        systemctl() {
+            case "$*" in
+                'show -P ActiveState omr-admin') printf '%s\n' "$mock_state" ;;
+                'show -P ActiveEnterTimestampMonotonic omr-admin') printf '%s\n' "$(( (1000 - mock_age) * 1000000 ))" ;;
+                '-q restart omr-admin') printf 'restart\n' ;;
+            esac
+        }
+        pgrep() { return 1; }
+        curl() { printf '%s' "$mock_answer"; }
+        logger() { :; }
+        eval "$api_function"
+        _omr_api
+    ) 2>&1
+}
+[ -z "$(api_restarts active 30 '')" ] && pass "a silent API is left alone 30s after omr-admin started" || fail "omr-admin restarted 30s after it started"
+[ -z "$(api_restarts activating 0 '')" ] && pass "a starting omr-admin is not restarted" || fail "a starting omr-admin was restarted"
+[ "$(api_restarts active 200 '')" = restart ] && pass "a silent API 200s after start restarts omr-admin" || fail "a silent API 200s after start did not restart omr-admin"
+[ "$(api_restarts failed 0 '')" = restart ] && pass "a failed omr-admin is still restarted" || fail "a failed omr-admin was not restarted"
+[ -z "$(api_restarts active 200 '{"detail":"Not Found"}')" ] && pass "an answering API is not restarted" || fail "an answering API was restarted"
+
+echo
 echo "$PASS passed, $FAIL failed"
 [ "$FAIL" -eq 0 ]

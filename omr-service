@@ -195,7 +195,19 @@ _mqvpn() {
 }
 
 
+# omr-admin needs well over one loop pass to answer after a (re)start on a
+# small VPS, longer still at boot: restarting it as soon as the API is silent
+# kills every start before it finishes. Leave it 90s after it became active;
+# a unit that is not active (failed, start limit hit) is still restarted.
 _omr_api() {
+	local state since now
+	state="$(systemctl show -P ActiveState omr-admin 2>/dev/null)"
+	[ "$state" = "activating" ] && return
+	if [ "$state" = "active" ]; then
+		since="$(systemctl show -P ActiveEnterTimestampMonotonic omr-admin 2>/dev/null)"
+		now="$(cut -d. -f1 /proc/uptime)"
+		[ -n "$since" ] && [ $((now - since / 1000000)) -lt 90 ] && return
+	fi
 	[ -z "$(pgrep curl)" ] && [ -z "$(curl -s -k -m 30 https://127.0.0.1:65500/)" ] && {
 		logger -t "OMR-Service" "Can't contact API, restart OMR-Admin"
 		systemctl -q restart omr-admin

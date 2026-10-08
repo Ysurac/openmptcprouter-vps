@@ -13,8 +13,8 @@
 # and nftables.service just fails, at boot, on a machine nobody is watching.
 #
 # The chains omr-admin owns are the other half: omradmin.py adds and flushes
-# rules in user_accept, user_dnat, gre_snat, client2client, dscp_mark and
-# ct_helpers by name, so those six have to exist here, empty, for the API's
+# rules in user_accept, user_dnat, gre_snat, gre_forward, client2client, dscp_mark and
+# ct_helpers by name, so those seven have to exist here, empty, for the API's
 # port openings and per-user redirects to land anywhere at all.
 #
 # `nft -c -f` (a real parse, if nft is installed and permitted) runs on top of
@@ -126,7 +126,7 @@ fi
 # omradmin.py adds and flushes rules in these by name (_nft_flush_chain);
 # against a chain that does not exist, every one of those calls fails and the
 # API's port openings, redirects and DSCP marks land nowhere.
-for c in user_accept user_dnat gre_snat client2client dscp_mark ct_helpers; do
+for c in user_accept user_dnat gre_snat gre_forward client2client dscp_mark ct_helpers; do
     if printf '%s\n' "$declared" | grep -qx "$c"; then
         pass "chain $c exists for omr-admin to fill"
     else

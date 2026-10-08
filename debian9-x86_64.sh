@@ -2809,6 +2809,8 @@ mkdir -p /etc/nftables/custom.d
 # nftables start/reload (both re-run `flush ruleset`), so it repopulates its
 # dynamic chains from omr-admin-config.json whoever reloaded the firewall,
 # not only this script's update path (see nftables/omr-admin-resync.conf).
+# Another one runs omr-bypass, which puts its inet omr_bypass table back (see
+# nftables/omr-bypass-resync.conf).
 mkdir -p /etc/systemd/system/nftables.service.d
 # Drop-in for the stock systemd-networkd-wait-online.service: it blocks the boot
 # until every managed link is up, so a VPS whose IPv6 never becomes routable
@@ -2820,12 +2822,14 @@ if [ "$LOCALFILES" = "no" ]; then
 	fetch_file ${VPSURL}${VPSPATH}/nftables/omr-vars.nft /etc/nftables/omr-vars.nft
 	fetch_file ${VPSURL}${VPSPATH}/nftables/omr.nft /etc/nftables/omr.nft
 	fetch_file ${VPSURL}${VPSPATH}/nftables/omr-admin-resync.conf /etc/systemd/system/nftables.service.d/omr-admin-resync.conf
+	fetch_file ${VPSURL}${VPSPATH}/nftables/omr-bypass-resync.conf /etc/systemd/system/nftables.service.d/omr-bypass-resync.conf
 	fetch_file ${VPSURL}${VPSPATH}/systemd/20-omr-wait-online-any.conf /etc/systemd/system/systemd-networkd-wait-online.service.d/20-omr-wait-online-any.conf
 else
 	cp ${DIR}/nftables.conf /etc/nftables.conf
 	cp ${DIR}/nftables/omr-vars.nft /etc/nftables/omr-vars.nft
 	cp ${DIR}/nftables/omr.nft /etc/nftables/omr.nft
 	cp ${DIR}/nftables/omr-admin-resync.conf /etc/systemd/system/nftables.service.d/omr-admin-resync.conf
+	cp ${DIR}/nftables/omr-bypass-resync.conf /etc/systemd/system/nftables.service.d/omr-bypass-resync.conf
 	cp ${DIR}/systemd/20-omr-wait-online-any.conf /etc/systemd/system/systemd-networkd-wait-online.service.d/20-omr-wait-online-any.conf
 fi
 [ -n "$INTERFACE" ] && sed -i "/^define NET_IFACE6 /!s:eth0:$INTERFACE:g" /etc/nftables/omr-vars.nft

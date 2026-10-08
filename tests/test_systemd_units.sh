@@ -47,6 +47,7 @@ UNIT_FILES = sorted(f for f in os.listdir('.')
                     if f.endswith(('.service', '.service.in', '.timer.in', '.path.in', '.network')))
 DROPINS = ['systemd/20-omr-wait-online-any.conf',
            'nftables/omr-admin-resync.conf',
+           'nftables/omr-bypass-resync.conf',
            'iperf3.override.conf']
 UNIT_SECTIONS = {'Unit', 'Service', 'Install', 'Timer', 'Socket', 'Path'}
 # systemd-networkd's own vocabulary; anything outside it is a typo that
@@ -190,6 +191,34 @@ for key in ('ExecStartPost', 'ExecReload'):
     else:
         ok("nftables drop-in %s= restarts omr-admin safely" % key)
 
+# The same `flush ruleset` deletes omr-bypass's inet omr_bypass table, and
+# omr-bypass.timer only runs it 300 s after its previous run: something must
+# run it after every start and reload of the ruleset. Whichever drop-in the
+# installer puts in nftables.service.d does it, it must not block (omr-bypass
+# is ordered after nftables.service) nor fail the firewall load.
+hooks = {'ExecStartPost': [], 'ExecReload': []}
+for path in sorted(set(re.findall(r'\$\{DIR\}/(\S+) /etc/systemd/system/nftables\.service\.d/',
+                                  live_text))):
+    for (s, k, v, n) in parse(path)[0]:
+        if k in hooks and re.search(r'systemctl\b.*\bstart omr-bypass(\.service)?\b', v):
+            hooks[k].append((path, v))
+for key, found in hooks.items():
+    when = 'start' if key == 'ExecStartPost' else 'reload'
+    if not found:
+        ko("no nftables.service drop-in runs omr-bypass on %s (%s=): the bypass "
+           "stays off until the next omr-bypass.timer run" % (when, key))
+        continue
+    path, val = found[0]
+    problems = []
+    if '--no-block' not in val:
+        problems.append("is not --no-block (it would deadlock against After=nftables.service)")
+    if not val.startswith('-'):
+        problems.append("has no leading '-' (a failed hook would fail the firewall load)")
+    if problems:
+        ko("%s %s=: %s" % (path, key, "; ".join(problems)))
+    else:
+        ok("%s %s= runs omr-bypass after every %s" % (path, key, when))
+
 # ── 5. ordering that another file depends on ──────────────────────────────
 print("\n== ordering ==")
 admin = open('omr-admin.service.in').read()
@@ -199,6 +228,13 @@ if 'nftables.service' in after:
 else:
     ko("omr-admin.service is no longer ordered after nftables.service, which the "
        "--no-block restart hook in nftables/omr-admin-resync.conf relies on")
+bypass = open('omr-bypass.service.in').read()
+after = " ".join(l.split('=', 1)[1] for l in bypass.splitlines() if l.startswith('After='))
+if 'nftables.service' in after:
+    ok("omr-bypass.service is ordered After=nftables.service")
+else:
+    ko("omr-bypass.service is not ordered after nftables.service: started from "
+       "nftables.service's hook, it could run before the ruleset it adds to is loaded")
 
 # ── 6. installed units are enabled by something ───────────────────────────
 # A unit copied into /lib/systemd/system that nothing enables or starts is

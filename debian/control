@@ -17,7 +17,7 @@ Depends:
  nftables,
  omr-shadowsocks-libev (= 3.3.5-3),
  omr-simple-obfs (= 0.0.5-1),
- omr-vps-admin (>= 0.18+20261008),
+ omr-vps-admin (>= 0.18+20261009),
  omr-mlvpn (= 3.0.0+20211028.git.ddafba3),
  omr-glorytun (= 0.3.4-5),
  omr-glorytun-tcp (= 0.0.35-6),
@@ -28,7 +28,6 @@ Depends:
  shadowsocks-go (= 1.14.0),
  ${misc:Depends}
 Recommends:
- tracebox,
  iperf3
 Suggests:
  v2ray-plugin (= 4.43.0)

@@ -75,7 +75,7 @@ if [ "$KERNEL" = "6.1" ]; then
 	KERNEL_PACKAGE_VERSION="1.30"
 	KERNEL_RELEASE="${KERNEL_VERSION}-mptcp_${KERNEL_PACKAGE_VERSION}"
 fi
-MPTCP_BPF_VERSION="1.2-1"
+MPTCP_BPF_VERSION="1.3-1"
 GLORYTUN_UDP=${GLORYTUN_UDP:-yes}
 GLORYTUN_UDP_VERSION="23100474922259d00a8c0c4b00a0c8de89202cf9"
 GLORYTUN_UDP_BINARY_VERSION="0.3.4-5"
@@ -88,11 +88,11 @@ MLVPN_VERSION="8aa1b16d843ea68734e2520e39a34cb7f3d61b2b"
 MLVPN_BINARY_VERSION="3.0.0+20211028.git.ddafba3"
 OBFS_VERSION="486bebd9208539058e57e23a12f23103016e09b4"
 OBFS_BINARY_VERSION="0.0.5-1"
-OMR_ADMIN_VERSION="627b99129e1bda7a3682c476bc3240d1a472d3a7"
-OMR_ADMIN_BINARY_VERSION="0.18+20261008"
+OMR_ADMIN_VERSION="27ddda7f6636d2b4869238b41a30d2bc65892783"
+OMR_ADMIN_BINARY_VERSION="0.18+20261009"
 DSVPN_VERSION="3b99d2ef6c02b2ef68b5784bec8adfdd55b29b1a"
 DSVPN_BINARY_VERSION="0.1.4-2"
-MQVPN_VERSION="0.16.3+20261007-1"
+MQVPN_VERSION="0.17.0-1"
 V2RAY_VERSION="5.32.0"
 V2RAY_PLUGIN_VERSION="4.43.0"
 XRAY_VERSION="26.7.11"
@@ -961,15 +961,24 @@ if [ "$KERNEL" = "6.18" ]; then
 			rm -f /tmp/${pkg}_${MPTCP_BPF_VERSION}_${ARCH}.deb
 		fi
 	done
-	echo "Install MPTCP BPF DSCP and weight scheduler manager scripts..."
-	wget -O /usr/sbin/mptcp-scheduler-dscp.sh https://github.com/Ysurac/openmptcprouter-feeds/raw/refs/heads/develop/mptcp-dscp-manager/files/usr/sbin/mptcp-scheduler-dscp.sh
-	wget -O /usr/sbin/mptcp-scheduler-weight.sh https://github.com/Ysurac/openmptcprouter-feeds/raw/refs/heads/develop/mptcp-weight-manager/files/usr/sbin/mptcp-scheduler-weight.sh
-	chmod 755 /usr/sbin/mptcp-scheduler-dscp.sh /usr/sbin/mptcp-scheduler-weight.sh
+	# The managers are arch independent and depend on the exact same version
+	# of their scheduler, so they share MPTCP_BPF_VERSION and install after it.
+	echo "Install MPTCP BPF DSCP and weight scheduler managers..."
+	for pkg in mptcp-dscp-manager mptcp-weight-manager; do
+		if ! apt-get -o Dpkg::Options::="--force-confold" -o Dpkg::Options::="--force-confdef" -o Dpkg::Options::="--force-overwrite" -y install ${pkg}=${MPTCP_BPF_VERSION}; then
+			wget -O /tmp/${pkg}_${MPTCP_BPF_VERSION}_all.deb ${VPSURL}debian/${pkg}_${MPTCP_BPF_VERSION}_all.deb
+			dpkg --force-confold --force-confdef --force-overwrite -i /tmp/${pkg}_${MPTCP_BPF_VERSION}_all.deb
+			rm -f /tmp/${pkg}_${MPTCP_BPF_VERSION}_all.deb
+		fi
+	done
 fi
 
-if [ "$ARCH" = "amd64" ]; then
-	echo "Install tracebox OpenMPTCProuter edition"
-	apt-get -y -o Dpkg::Options::="--force-overwrite" install tracebox
+# tracebox is gone: the router runs its own to check a path for MPTCP, nothing
+# used the VPS's copy, and on Debian 13 its libevent-2.1-7t64 dependency was
+# swapped out by the MQVPN install. Remove what an earlier run installed.
+if dpkg -s tracebox > /dev/null 2>&1; then
+	echo "Remove tracebox"
+	apt-get -y purge tracebox > /dev/null 2>&1 || true
 fi
 if [ "$IPERF" = "yes" ] && [ "$CHINA" != "yes" ]; then
 	#echo "Install iperf3 OpenMPTCProuter edition"
@@ -3212,7 +3221,7 @@ else
 	fi
 	echo 'Restarting omr6in4...'
 	systemctl -q start omr6in4@user0 || true
-	systemctl -q restart omr6in4@* || true
+	systemctl -q restart 'omr6in4@*' || true
 	echo 'done'
 	if [ "$OPENVPN" = "yes" ]; then
 		echo 'Restarting OpenVPN'

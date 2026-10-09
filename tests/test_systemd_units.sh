@@ -268,6 +268,27 @@ for f in sorted(x for x in UNIT_FILES if x.endswith('.network')):
     else:
         ko("%s has a [Match] section with no Name=" % f)
 
+# ── 8. privileges of the MQVPN server ─────────────────────────────────────
+# mqvpn runs as root: without a bounding set it holds every capability. The
+# server needs CAP_NET_ADMIN, for its tun device and to raise its UDP socket
+# buffers, and CAP_NET_BIND_SERVICE, since omr-admin's /mqvpn API can move its
+# UDP port below 1024 (443 when the request omits the port).
+print("\n== mqvpn-server.service privileges ==")
+MQVPN_CAPS = {'CAP_NET_ADMIN', 'CAP_NET_BIND_SERVICE'}
+entries, sections = parse('mqvpn-server.service')
+svc = {k: v for (s, k, v, n) in entries if s == 'Service'}
+for key in ('CapabilityBoundingSet', 'AmbientCapabilities'):
+    caps = set(svc.get(key, '').split())
+    if caps == MQVPN_CAPS:
+        ok("mqvpn-server.service %s is %s" % (key, " ".join(sorted(MQVPN_CAPS))))
+    else:
+        ko("mqvpn-server.service %s is %r, not %s"
+           % (key, svc.get(key) or 'unset', " ".join(sorted(MQVPN_CAPS))))
+if svc.get('NoNewPrivileges', '').lower() in ('true', 'yes', '1', 'on'):
+    ok("mqvpn-server.service sets NoNewPrivileges")
+else:
+    ko("mqvpn-server.service does not set NoNewPrivileges")
+
 print("\n%d passed, %d failed" % (passed, failed))
 sys.exit(1 if failed else 0)
 PY

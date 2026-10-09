@@ -22,7 +22,7 @@ Depends:
  omr-glorytun (= 0.3.4-5),
  omr-glorytun-tcp (= 0.0.35-6),
  omr-dsvpn (= 0.1.4-2),
- mqvpn (= 0.16.3+20261007-1),
+ mqvpn (= 0.17.0-1),
  v2ray (= 5.32.0),
  xray (= 26.7.11),
  shadowsocks-go (= 1.14.0),

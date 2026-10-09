@@ -9,7 +9,7 @@ omr-server (0.1089) unstable; urgency=medium
     * debian9-x86_64.sh: stop installing tracebox, and purge what an earlier run installed. The router runs its own to check a path for MPTCP, nothing used the VPS's copy, and on Debian 13 the MQVPN install swapped out its libevent-2.1-7t64 dependency. debian/control no longer recommends it
     * nftables/omr-bypass-resync.conf: start omr-bypass after every start and reload of nftables.service. nftables.conf begins with "flush ruleset", which also deletes the inet omr_bypass table, and omr-bypass.timer only put it back up to 5 minutes later, so after every update (the installer restarts nftables at the end) or rule reload, the bypassed addresses went out through the default route meanwhile. It does not block, omr-bypass.service being ordered after nftables.service. tests/test_systemd_units.sh covers it
     * debian9-x86_64.sh: quote the omr6in4@* given to "systemctl restart" at the end of an update, as the glorytun and dsvpn ones already were. Run from a checkout, the shell expanded it to the omr6in4@.service.in file of the current directory, and the omr6in4 tunnels were not restarted
-    * debian/control: depend on omr-vps-admin 0.18+20261009 or later
+    * debian/control: depend on omr-vps-admin 0.18+20261009 or later and on mqvpn 0.17.0-1
 
  -- OpenMPTCProuter <contact@openmptcprouter.com>  Fri, 09 Oct 2026 00:00:00 +0200
 

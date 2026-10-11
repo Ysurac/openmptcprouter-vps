@@ -451,6 +451,21 @@ api_restarts() {
 [ "$(api_restarts failed 0 '')" = restart ] && pass "a failed omr-admin is still restarted" || fail "a failed omr-admin was not restarted"
 [ -z "$(api_restarts active 200 '{"detail":"Not Found"}')" ] && pass "an answering API is not restarted" || fail "an answering API was restarted"
 
+echo "== uvicorn apt pin =="
+# The installer's records, as appended to openmptcprouter.pref.
+uvicorn_block="$(sed -n '/^\t# The highest uvicorn of all repositories/,/^\tEOF$/p' debian9-x86_64.sh)"
+uvicorn_pref="$(
+    tee() { cat; }
+    eval "$uvicorn_block"
+)"
+records="$(awk -v RS= '/Package: python3-uvicorn/ { gsub(/\n/, "|"); print }' <<< "$uvicorn_pref")"
+[ "$(sed -n 1p <<< "$records")" = 'Explanation: Never uvicorn 0.13, its workers outlive SIGTERM|Package: python3-uvicorn|Pin: version 0.13.*|Pin-Priority: -1' ] \
+    && pass "uvicorn 0.13 is excluded, by the first record" || fail "uvicorn 0.13 is not excluded first: $records"
+[ "$(sed -n 2p <<< "$records")" = 'Explanation: Prefer the highest uvicorn, whatever its origin|Package: python3-uvicorn|Pin: version *|Pin-Priority: 1003' ] \
+    && pass "the highest uvicorn of any origin is preferred" || fail "uvicorn is not taken at its highest: $records"
+[ "$(sed -n 1p <<< "$uvicorn_pref")" = '' ] \
+    && pass "the records start on a line of their own after the libuv1 one" || fail "the uvicorn records are glued to the previous one"
+
 echo
 echo "$PASS passed, $FAIL failed"
 [ "$FAIL" -eq 0 ]

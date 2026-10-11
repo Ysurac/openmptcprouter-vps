@@ -544,6 +544,23 @@ else
 			Pin-Priority: 1003
 		EOF
 	fi
+	# The highest uvicorn of all repositories, not the repo's 0.11.5 (CVE-2020-7694,
+	# CVE-2020-7695) that the pin above preferred over Debian's 0.17/0.32 and
+	# Ubuntu's 0.15/0.27. Never 0.13 (Debian 11's): its supervisor ignores
+	# SIGTERM with several workers, systemd waited 90 s at each omr-admin restart.
+	# The first record that matches a version is the one used.
+	cat <<-EOF | tee -a /etc/apt/preferences.d/openmptcprouter.pref
+
+		Explanation: Never uvicorn 0.13, its workers outlive SIGTERM
+		Package: python3-uvicorn
+		Pin: version 0.13.*
+		Pin-Priority: -1
+
+		Explanation: Prefer the highest uvicorn, whatever its origin
+		Package: python3-uvicorn
+		Pin: version *
+		Pin-Priority: 1003
+	EOF
 	#wget -O - https://${REPO}/openmptcprouter.gpg.key | apt-key add -
 	wget https://${REPO}/openmptcprouter.gpg.key -O /etc/apt/trusted.gpg.d/openmptcprouter.gpg
 fi

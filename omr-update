@@ -2,11 +2,19 @@
 # Triggered by omr-vps-admin dropping a marker file: /update for a full
 # reinstall from the web, /update-bin for the binaries update the omr-server
 # package asks for from its postinst.
-# The channel is the one of the installed installer: a VPS on server-test
-# stays on server-test instead of being moved to the stable release by the
-# full reinstall. "server" (stable) when it can't be read.
+# The channel is the one of the last installer run, which records it: a VPS
+# on server-test stays on server-test instead of being moved to the stable
+# release by the full reinstall. Then the one of the installed installer,
+# for a VPS last installed before that record existed. "server" (stable)
+# when neither can be read.
+# The installed installer alone was not enough: a VPS installed with the
+# script has no omr-server deb, and the installer removes it when its release
+# is not published yet, so a server-test VPS was "updated" to the stable
+# release, whose older packages left apt with broken dependencies.
+INSTALLED_CHANNEL=/etc/openmptcprouter-vps-admin/vpspath
 INSTALLED_INSTALLER=/usr/share/omr-server/debian9-x86_64.sh
-VPSPATH="$(sed -n 's/^VPSPATH="\([A-Za-z0-9_-]*\)"$/\1/p' "$INSTALLED_INSTALLER" 2>/dev/null | head -n 1)"
+VPSPATH="$(grep -sxE '[A-Za-z0-9_-]+' "$INSTALLED_CHANNEL" | head -n 1)"
+[ -n "$VPSPATH" ] || VPSPATH="$(sed -n 's/^VPSPATH="\([A-Za-z0-9_-]*\)"$/\1/p' "$INSTALLED_INSTALLER" 2>/dev/null | head -n 1)"
 [ -n "$VPSPATH" ] || VPSPATH="server"
 if [ -f /etc/openmptcprouter-vps-admin/update ]; then
 	installer="$(mktemp /tmp/omr-update.XXXXXX)" || exit 1

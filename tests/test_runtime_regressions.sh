@@ -386,12 +386,14 @@ if grep -q 'https://www\.openmptcprouter\.com/${VPSPATH}/debian\.sh' omr-update 
 else
     fail "full update is downloaded over TLS before execution"
 fi
-# The full reinstall takes the channel of the installed installer (a
-# server-test VPS stays on server-test), stable "server" when it has none.
+# The full reinstall takes the channel the last installer run recorded, then
+# the one of the installed installer (a server-test VPS stays on
+# server-test), stable "server" when it has neither.
 upd_tmp="$(mktemp -d)"
-sed "s|/usr/share/omr-server/debian9-x86_64.sh|$upd_tmp/installer.sh|" omr-update > "$upd_tmp/omr-update"
+sed -e "s|/usr/share/omr-server/debian9-x86_64.sh|$upd_tmp/installer.sh|" \
+    -e "s|/etc/openmptcprouter-vps-admin/vpspath|$upd_tmp/vpspath|" omr-update > "$upd_tmp/omr-update"
 upd_channel() {
-    sed -n '/^INSTALLED_INSTALLER=/,/^\[ -n "\$VPSPATH" \]/p' "$upd_tmp/omr-update" > "$upd_tmp/head.sh"
+    sed -n '/^INSTALLED_CHANNEL=/,/VPSPATH="server"$/p' "$upd_tmp/omr-update" > "$upd_tmp/head.sh"
     sh -c ". '$upd_tmp/head.sh'; echo \"\$VPSPATH\""
 }
 if grep -q 'https://www\.openmptcprouter\.com/${VPSPATH}/debian\.sh' omr-update; then
@@ -405,7 +407,20 @@ rm -f "$upd_tmp/installer.sh"
 [ "$(upd_channel)" = "server" ] && pass "channel defaults to server without an installed installer" || fail "channel default is $(upd_channel), not server"
 printf 'VPSPATH="x/../../evil"\n' > "$upd_tmp/installer.sh"
 [ "$(upd_channel)" = "server" ] && pass "a VPSPATH that is not a plain name is ignored" || fail "VPSPATH $(upd_channel) taken as is"
+# A VPS installed with the script has no installed installer (no omr-server
+# deb, or the installer removed an older one): it was moved to stable.
+printf 'VPSPATH="server"\n' > "$upd_tmp/installer.sh"
+printf 'server-test\n' > "$upd_tmp/vpspath"
+[ "$(upd_channel)" = "server-test" ] && pass "the recorded channel wins over the installed installer" || fail "recorded channel ignored (got $(upd_channel))"
+rm -f "$upd_tmp/installer.sh"
+[ "$(upd_channel)" = "server-test" ] && pass "channel read from the record without an installed installer" || fail "channel not read from the record (got $(upd_channel))"
+printf 'x/../../evil\n' > "$upd_tmp/vpspath"
+[ "$(upd_channel)" = "server" ] && pass "a recorded channel that is not a plain name is ignored" || fail "recorded channel $(upd_channel) taken as is"
 rm -rf "$upd_tmp"
+recorded="$(sed -n '/^echo "\$VPSPATH" > \/etc\/openmptcprouter-vps-admin\/vpspath$/=' debian9-x86_64.sh)"
+motd="$(grep -n '> /etc/motd$' debian9-x86_64.sh | tail -n 1 | cut -d: -f1)"
+[ -n "$recorded" ] && [ "$recorded" -gt "$motd" ] \
+    && pass "the installer records its channel once the install is done" || fail "the installer does not record its channel for omr-update"
 
 ipv6_rule_line="$(grep -n 'ip -6 rule add' omr-bypass | cut -d: -f1)"
 ipv6_route_line="$(grep -n 'ip -6 route replace default' omr-bypass | cut -d: -f1)"

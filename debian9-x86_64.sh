@@ -3018,6 +3018,13 @@ else
 	echo "< OpenMPTCProuter VPS $OMR_VERSION >" > /etc/motd
 fi
 
+# The channel omr-update takes for a full reinstall from the web. It read it
+# from the omr-server deb's copy of this script only, which a VPS installed
+# with this script may not have (removed below when this release is not
+# published), and the VPS went to the stable channel.
+mkdir -p /etc/openmptcprouter-vps-admin
+echo "$VPSPATH" > /etc/openmptcprouter-vps-admin/vpspath
+
 if [ "$SOURCES" != "yes" ]; then
 	# Not silent any more: when this does not install, the VPS is left with no
 	# omr-server package and no version marker, and the two ways it fails look

@@ -10,8 +10,30 @@ After=network.target network-online.target nftables.service
 [Service]
 Type=simple
 Restart=always
+# Not the default 100ms: a start failing at once used up StartLimitBurst
+# (5 in 10s) in half a second, and systemd left the API down for good.
+RestartSec=5
 ExecStart=/usr/bin/omradmin.py
+# CAP_SYS_MODULE: /sipalg modprobes nf_conntrack_sip.
 CapabilityBoundingSet=CAP_NET_ADMIN CAP_NET_RAW CAP_SYS_ADMIN CAP_IPC_LOCK CAP_SETGID CAP_SETUID CAP_SYS_CHROOT CAP_DAC_OVERRIDE CAP_FOWNER CAP_SETFCAP CAP_SYS_MODULE
+# Nothing it runs (systemctl, sysctl, ip, nft, easyrsa, wg, xray...) needs a
+# setuid binary nor a home directory.
+NoNewPrivileges=yes
+ProtectHome=yes
+# Its own /tmp: the temporary files of the xray, v2ray and wg commands it
+# runs hold users' keys.
+PrivateTmp=yes
+ProtectClock=yes
+ProtectHostname=yes
+ProtectKernelLogs=yes
+ProtectControlGroups=yes
+LockPersonality=yes
+RestrictRealtime=yes
+RestrictSUIDSGID=yes
+# Not 0077: easyrsa, run from here, rewrites the CRL that OpenVPN reads as
+# nobody (crl-verify); 0600, it refused every client. The files holding keys
+# are created 0600 by omr-admin itself.
+UMask=0022
 
 [Install]
 WantedBy=multi-user.target

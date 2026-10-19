@@ -481,6 +481,112 @@ records="$(awk -v RS= '/Package: python3-uvicorn/ { gsub(/\n/, "|"); print }' <<
 [ "$(sed -n 1p <<< "$uvicorn_pref")" = '' ] \
     && pass "the records start on a line of their own after the libuv1 one" || fail "the uvicorn records are glued to the previous one"
 
+echo "== OMR repository apt pin on Debian 13 =="
+# Only the packages OMR builds win over Debian; the repo's stale copies of
+# Debian packages must lose to trixie and trixie-security.
+# The body of the first heredoc after the Debian 13 test, read rather than
+# eval'd: the same test opens other blocks further down the installer.
+omr_pref="$(awk '
+    /^\tif \[ "\$ID" = "debian" \] && \[ "\$VERSION_ID" = "13" \]; then$/ { found = 1; next }
+    found && /^\t\tEOF$/ { exit }
+    found && body { sub(/^\t+/, ""); gsub(/\$\{REPO\}/, "repo.openmptcprouter.com"); print }
+    found && /<<-EOF/ { body = 1 }
+' debian9-x86_64.sh)"
+records="$(awk -v RS= '/Pin: release o=repo.openmptcprouter.com/ { gsub(/\n/, "|"); print }' <<< "$omr_pref")"
+[ "$(wc -l <<< "$records")" -eq 2 ] && pass "two records pin the OMR repository" || fail "the OMR repository is not pinned by two records: $records"
+catchall="$(grep '|Package: \*|' <<< "$records")"
+[ "${catchall##*Pin-Priority: }" -lt 500 ] 2>/dev/null \
+    && pass "the rest of the OMR repository loses to Debian" || fail "the OMR repository catch-all is not below Debian's 500: $catchall"
+[ "${catchall##*Pin-Priority: }" -gt 0 ] 2>/dev/null \
+    && pass "packages only the OMR repository has stay installable" || fail "the OMR repository catch-all forbids its own packages: $catchall"
+omr_own="$(grep -v '|Package: \*|' <<< "$records")"
+[ "${omr_own##*Pin-Priority: }" -gt 500 ] 2>/dev/null \
+    && pass "the packages OMR builds win over Debian" || fail "the packages OMR builds do not win over Debian: $omr_own"
+own_patterns="$(sed 's/.*|Package: \([^|]*\)|.*/\1/' <<< "$omr_own")"
+# apt reads each name of the Package field as a glob(7)
+pinned_to_omr() {
+    local pattern
+    set -f
+    for pattern in $own_patterns; do
+        case "$1" in $pattern) set +f; return 0 ;; esac
+    done
+    set +f
+    return 1
+}
+for pkg in openvpn omr-server omr-vps-admin mqvpn libmqvpn0 mptcp-bpf-rr xray v2ray v2ray-plugin shadowsocks-go linux-image-6.12.47-x64v3-xanmod1 linux-image-5.4.207-mptcp; do
+    pinned_to_omr "$pkg" && pass "$pkg is pinned to the OMR repository" || fail "$pkg is not pinned to the OMR repository"
+done
+for pkg in linux-libc-dev python3-wsproto python3-flask python3-werkzeug libjson-c3; do
+    pinned_to_omr "$pkg" && fail "$pkg, a stale copy of a Debian package, is pinned to the OMR repository" || pass "$pkg is left to Debian"
+done
+
+echo "== OMR openvpn build on Debian 13 =="
+# OMR's MPTCP patched openvpn: asked of apt at its exact version, downloaded
+# from the website when the repository does not carry it yet (as for mqvpn),
+# on amd64 and arm64.
+openvpn_version="$(sed -n 's/^OPENVPN_BINARY_VERSION="\(.*\)"$/\1/p' debian9-x86_64.sh)"
+[ -n "$openvpn_version" ] && pass "OPENVPN_BINARY_VERSION is set ($openvpn_version)" || fail "OPENVPN_BINARY_VERSION is not set"
+grep -q 'install openvpn=${OPENVPN_BINARY_VERSION} easy-rsa; then$' debian9-x86_64.sh \
+    && pass "apt is asked for the OMR openvpn build" || fail "apt is not asked for openvpn=\${OPENVPN_BINARY_VERSION}"
+grep -qxF '			wget -O /tmp/${OPENVPN_DEB} ${VPSURL}debian/${OPENVPN_DEB}' debian9-x86_64.sh \
+    && pass "the build is downloaded when apt does not have it" || fail "no download fallback for the OMR openvpn build"
+# The package version carries "~trixie", the published file name ".trixie":
+# apt never matches a version spelt like the file name.
+case "$openvpn_version" in *.trixie) fail "OPENVPN_BINARY_VERSION is spelt like the file name, apt will never find it" ;; *) pass "OPENVPN_BINARY_VERSION is the package version, not the file name" ;; esac
+deb_line="$(grep -F 'OPENVPN_DEB="openvpn_' debian9-x86_64.sh | sed 's/^[[:space:]]*//')"
+OPENVPN_BINARY_VERSION="$openvpn_version" ARCH=amd64 sh -c "$deb_line"'; case "$OPENVPN_DEB" in *"~"*) exit 1 ;; openvpn_*.trixie_amd64.deb) exit 0 ;; *) exit 1 ;; esac' \
+    && pass "the download names the published file" || fail "the download does not name the published file: $deb_line"
+grep -qxF '	if [ "$VERSION_ID" = "13" ] && [ "$ID" = "debian" ] && { [ "$ARCH" = "amd64" ] || [ "$ARCH" = "arm64" ]; }; then' debian9-x86_64.sh \
+    && pass "the OMR openvpn build is installed on amd64 and arm64" || fail "the OMR openvpn build is not installed on both amd64 and arm64"
+
+echo "== OpenVPN configs =="
+# OpenVPN 2.7 always persists keys and logs "DEPRECATED OPTION: --persist-key".
+for f in openvpn-*.conf; do
+    grep -q '^persist-key' "$f" && fail "$f still sets persist-key" || pass "$f does not set persist-key"
+done
+# Each pool persist seed must sit in the subnet of the server that reads it,
+# or OpenVPN logs "out of pool range" and ignores it.
+seed_subnet() {
+    sed -n "s|.*echo 'openmptcprouter,\(10\.255\.[0-9]*\)\.[0-9]*,' > /etc/openvpn/ccd/$1\$|\1|p" debian9-x86_64.sh
+}
+server_subnet() {
+    sed -n 's/^server \(10\.255\.[0-9]*\)\.0 255\.255\.255\.0$/\1/p' "$1"
+}
+for conf in openvpn-tun0.conf openvpn-tun0.6.1.conf openvpn-tun0.6.1-ipv6.conf openvpn-tun1.conf openvpn-tun1.6.1.conf; do
+    ipp="$(sed -n 's/^#*ifconfig-pool-persist ccd\/\([^ ]*\).*/\1/p' "$conf")"
+    [ -z "$ipp" ] && ipp=ipp_tcp.txt && grep -q '^proto udp' "$conf" && ipp=ipp_udp.txt
+    [ "$(seed_subnet "$ipp")" = "$(server_subnet "$conf")" ] \
+        && pass "$ipp is seeded inside the $conf pool ($(server_subnet "$conf").0/24)" \
+        || fail "$ipp is seeded with $(seed_subnet "$ipp").x, outside the $conf pool $(server_subnet "$conf").0/24"
+done
+# A VPS seeded by an earlier release gets its swapped files rewritten.
+grep -qF "[ \"\$(cat /etc/openvpn/ccd/ipp_tcp.txt)\" = 'openmptcprouter,10.255.250.2,' ]" debian9-x86_64.sh \
+    && pass "the swapped ipp_tcp.txt seed is rewritten" || fail "an ipp_tcp.txt seeded by an earlier release is kept"
+grep -qF "[ \"\$(cat /etc/openvpn/ccd/ipp_udp.txt)\" = 'openmptcprouter,10.255.252.2,' ]" debian9-x86_64.sh \
+    && pass "the swapped ipp_udp.txt seed is rewritten" || fail "an ipp_udp.txt seeded by an earlier release is kept"
+
+echo "== local copies of executables =="
+# cp onto a file being executed fails with "Text file busy" and set -e ends
+# the install: omr-reserved-ports.path started the script mid-run (2026-10-19).
+plain_cp="$(grep -nE '^[[:space:]]*cp \$\{DIR\}/[^ ]+ /usr/(local/)?bin/' debian9-x86_64.sh)"
+[ -z "$plain_cp" ] && pass "no executable is copied over with a plain cp" \
+    || { fail "executables still copied over with a plain cp"; printf '         %s\n' "$plain_cp"; }
+eval "$(sed -n '/^copy_file()/,/^}/p' debian9-x86_64.sh)"
+# A running binary keeps its file write-denied for its whole life.
+cp "$(command -v sleep)" "$TMPDIR/running"
+"$TMPDIR/running" 5 & running_pid=$!
+sleep 0.3
+printf 'new\n' > "$TMPDIR/new"
+copy_file "$TMPDIR/new" "$TMPDIR/running" 2>/dev/null \
+    && [ "$(cat "$TMPDIR/running")" = new ] \
+    && pass "copy_file replaces a file that is being executed" \
+    || fail "copy_file cannot replace a file that is being executed"
+kill "$running_pid" 2>/dev/null; wait "$running_pid" 2>/dev/null
+ls "$TMPDIR"/running.tmp.* >/dev/null 2>&1 && fail "copy_file leaves its temporary file behind" \
+    || pass "copy_file leaves no temporary file behind"
+copy_file "$TMPDIR/missing" "$TMPDIR/dest" 2>/dev/null \
+    && fail "copy_file succeeds on a missing source" || pass "copy_file fails on a missing source"
+
 echo
 echo "$PASS passed, $FAIL failed"
 [ "$FAIL" -eq 0 ]

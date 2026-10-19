@@ -88,11 +88,12 @@ MLVPN_VERSION="8aa1b16d843ea68734e2520e39a34cb7f3d61b2b"
 MLVPN_BINARY_VERSION="3.0.0+20211028.git.ddafba3"
 OBFS_VERSION="486bebd9208539058e57e23a12f23103016e09b4"
 OBFS_BINARY_VERSION="0.0.5-1"
-OMR_ADMIN_VERSION="b689c0a8640658642f7c372fe62893c92c56e9d3"
-OMR_ADMIN_BINARY_VERSION="0.18+20261013"
+OMR_ADMIN_VERSION="740987ecb8d28d0d2094b5facf576e244dcf2200"
+OMR_ADMIN_BINARY_VERSION="0.18+20261014"
 DSVPN_VERSION="3b99d2ef6c02b2ef68b5784bec8adfdd55b29b1a"
 DSVPN_BINARY_VERSION="0.1.4-2"
 MQVPN_VERSION="0.17.0-1"
+OPENVPN_BINARY_VERSION="2.7.8+mptcp.20261015.g5f3fa84~trixie"
 V2RAY_VERSION="5.32.0"
 V2RAY_PLUGIN_VERSION="4.43.0"
 XRAY_VERSION="26.7.11"
@@ -116,7 +117,7 @@ VPSURL="https://www.openmptcprouter.com/"
 REPO="repo.openmptcprouter.com"
 CHINA=${CHINA:-no}
 
-OMR_VERSION="0.1091-rolling-test"
+OMR_VERSION="0.1092-rolling-test"
 
 DIR=$( pwd )
 #"
@@ -177,6 +178,21 @@ fetch_file() {
 	else
 		rm -f "$_fetch_tmp"
 		echo "Error: could not download $1, $2 left unchanged" >&2
+		return 1
+	fi
+}
+
+# Copy a local script into place: copy_file SRC DEST
+# A plain cp opens DEST for writing, which fails with "Text file busy" while
+# DEST is being executed (omr-reserved-ports.path fires on the config writes
+# just before, and omr-update runs this installer), and set -e ends the run.
+# A rename gives DEST a new inode instead and never leaves it missing.
+copy_file() {
+	_copy_tmp="$2.tmp.$$"
+	if cp "$1" "$_copy_tmp"; then
+		mv -f "$_copy_tmp" "$2"
+	else
+		rm -f "$_copy_tmp"
 		return 1
 	fi
 }
@@ -509,12 +525,21 @@ if [ "$CHINA" = "yes" ]; then
 else
 	echo "deb [arch=amd64] https://${REPO} buster main" > /etc/apt/sources.list.d/openmptcprouter.list
 	if [ "$ID" = "debian" ] && [ "$VERSION_ID" = "13" ]; then
+		# Only the packages OMR builds itself win over Debian. The repo also
+		# carries stale copies of plain Debian packages (linux-libc-dev, wsproto,
+		# flask...): a "Package: *" pin above 500 kept those over trixie and
+		# trixie-security. openvpn is listed: it is OMR's MPTCP patched build.
 		cat <<-EOF | tee /etc/apt/preferences.d/openmptcprouter.pref
-			Explanation: Prefer OpenMPTCProuter provided packages over the Debian native ones
-			Package: *
+			Explanation: Prefer the packages OpenMPTCProuter builds over the Debian native ones
+			Package: omr-* mptcp-bpf-* mqvpn libmqvpn* openvpn xray v2ray v2ray-plugin shadowsocks-go linux-image-*-mptcp linux-headers-*-mptcp linux-image-*-xanmod* linux-headers-*-xanmod*
 			Pin: release o=${REPO}
 			Pin-Priority: 999
-			
+
+			Explanation: Prefer Debian for the other packages of the OpenMPTCProuter repository
+			Package: *
+			Pin: release o=${REPO}
+			Pin-Priority: 400
+
 		EOF
 	else
 		cat <<-EOF | tee /etc/apt/preferences.d/openmptcprouter.pref
@@ -928,16 +953,21 @@ elif [ "$KERNEL" = "6.18" ]; then
 	#dpkg --force-all -i -B /tmp/linux-headers-${KERNEL_VERSION}-${PSABI}-xanmod1_${KERNEL_VERSION}-${PSABI}-xanmod1-${KERNEL_REV}_amd64.deb
 	#dpkg --force-all -i -B /tmp/linux-image-${KERNEL_VERSION}-${PSABI}-xanmod1_${KERNEL_VERSION}-${PSABI}-xanmod1-${KERNEL_REV}_amd64.deb
 	#set_grub_default_kernel "${KERNEL_VERSION}" "${PSABI}-xanmod"
-	KERNEL_VERSION="6.18.41"
-	KERNEL_REV="20260730"
+	# 20260730 was built for x86-64-v3 under every name: its x64v1 and x64v2
+	# packages did not boot on a CPU without AVX2 (Ysurac/openmptcprouter#4407)
+	KERNEL_VERSION="6.18.57"
+	KERNEL_REV="20261018"
+	# The GitHub release of this build, for when ${VPSURL}kernel/ lacks it
+	KERNEL_RELEASE_URL="https://github.com/Ysurac/linux/releases/download/omr-kernel-20261018-30-c74a102/"
 	#if [ "$CHINA" = "yes" ]; then
 	#	wget -O /tmp/linux-image-${KERNEL_VERSION}-${PSABI}-xanmod1_${KERNEL_VERSION}-${PSABI}-xanmod1-${KERNEL_REV}_amd64.deb https://sourceforge.net/projects/xanmod/files/releases/lts/${KERNEL_VERSION}-xanmod1/${KERNEL_VERSION}-${PSABI}-xanmod1/linux-image-${KERNEL_VERSION}-${PSABI}-xanmod1_${KERNEL_VERSION}-${PSABI}-xanmod1-${KERNEL_REV}_amd64.deb
 	#	wget -O /tmp/linux-headers-${KERNEL_VERSION}-${PSABI}-xanmod1_${KERNEL_VERSION}-${PSABI}-xanmod1-${KERNEL_REV}_amd64.deb https://sourceforge.net/projects/xanmod/files/releases/lts/${KERNEL_VERSION}-xanmod1/${KERNEL_VERSION}-${PSABI}-xanmod1/linux-headers-${KERNEL_VERSION}-${PSABI}-xanmod1_${KERNEL_VERSION}-${PSABI}-xanmod1-${KERNEL_REV}_amd64.deb
 	#else
-	wget -O /tmp/linux-image-${KERNEL_VERSION}-${KERNEL_REV}.${PSABI}-omr_${KERNEL_VERSION}-${KERNEL_REV}.${PSABI}-omr_${ARCH}.deb ${VPSURL}kernel/linux-image-${KERNEL_VERSION}-${KERNEL_REV}.${PSABI}-omr_${KERNEL_VERSION}-${KERNEL_REV}.${PSABI}-omr_${ARCH}.deb
-	if [ "$ARCH" = "amd64" ]; then
-		wget -O /tmp/linux-headers-${KERNEL_VERSION}-${KERNEL_REV}.${PSABI}-omr_${KERNEL_VERSION}-${KERNEL_REV}.${PSABI}-omr_${ARCH}.deb ${VPSURL}kernel/linux-headers-${KERNEL_VERSION}-${KERNEL_REV}.${PSABI}-omr_${KERNEL_VERSION}-${KERNEL_REV}.${PSABI}-omr_${ARCH}.deb
-	fi
+	for pkg in image headers; do
+		[ "$pkg" = "headers" ] && [ "$ARCH" != "amd64" ] && continue
+		deb=linux-${pkg}-${KERNEL_VERSION}-${KERNEL_REV}.${PSABI}-omr_${KERNEL_VERSION}-${KERNEL_REV}.${PSABI}-omr_${ARCH}.deb
+		fetch_file ${VPSURL}kernel/${deb} /tmp/${deb} || fetch_file ${KERNEL_RELEASE_URL}${deb} /tmp/${deb}
+	done
 	echo "Install kernel linux-image-${KERNEL_VERSION}-${PSABI}-omr source release"
 	if [ "$ARCH" = "amd64" ]; then
 		dpkg --force-all -i -B /tmp/linux-headers-${KERNEL_VERSION}-${KERNEL_REV}.${PSABI}-omr_${KERNEL_VERSION}-${KERNEL_REV}.${PSABI}-omr_${ARCH}.deb
@@ -1319,7 +1349,7 @@ if [ "$OMR_ADMIN" = "yes" ]; then
 			apt-get -y --allow-downgrades install python3-passlib python3-jwt python3-netaddr libuv1t64 python3-uvloop
 		fi
 	fi
-	apt-get -y --allow-downgrades install python3-uvicorn jq ipcalc python3-netifaces python3-aiofiles python3-psutil python3-requests pwgen
+	apt-get -y --allow-downgrades install python3-uvicorn jq ipcalc python3-netifaces python3-aiofiles python3-psutil python3-requests pwgen conntrack
 	echo '-- pip3 install needed python modules'
 	echo "If you see any error here, I really don't care: it's about a module not used for home users"
 	#pip3 install pyjwt passlib uvicorn fastapi netjsonconfig python-multipart netaddr
@@ -1561,7 +1591,7 @@ if [ "$LOCALFILES" = "no" ]; then
 	chmod 755 /usr/bin/omr-update
 else
 	cp ${DIR}/omr-update.service.in /lib/systemd/system/omr-update.service
-	cp ${DIR}/omr-update /usr/bin/omr-update
+	copy_file ${DIR}/omr-update /usr/bin/omr-update
 	chmod 755 /usr/bin/omr-update
 fi
 chmod 644 /lib/systemd/system/omr-update.service
@@ -2206,7 +2236,19 @@ if [ "$OPENVPN" = "yes" ]; then
 	echo "Install OpenVPN"
 	rm -f /var/lib/dpkg/lock
 	rm -f /var/lib/dpkg/lock-frontend
-	if [ "$VERSION_ID" = "13" ] && [ "$ID" = "debian" ]; then
+	if [ "$VERSION_ID" = "13" ] && [ "$ID" = "debian" ] && { [ "$ARCH" = "amd64" ] || [ "$ARCH" = "arm64" ]; }; then
+		# OMR's MPTCP patched build, only built for trixie amd64 and arm64.
+		# The OMR repository is amd64 only: arm64 always takes the download
+		if ! apt-get -o Dpkg::Options::="--force-confold" -o Dpkg::Options::="--force-confdef" -o Dpkg::Options::="--force-overwrite" --allow-downgrades -y install openvpn=${OPENVPN_BINARY_VERSION} easy-rsa; then
+			# The published file name has "." where the version has "~"
+			OPENVPN_DEB="openvpn_$(echo ${OPENVPN_BINARY_VERSION} | tr '~' '.')_${ARCH}.deb"
+			wget -O /tmp/${OPENVPN_DEB} ${VPSURL}debian/${OPENVPN_DEB}
+			dpkg --force-all -i -B /tmp/${OPENVPN_DEB}
+			apt-get -o Dpkg::Options::="--force-confold" -o Dpkg::Options::="--force-confdef" -o Dpkg::Options::="--force-overwrite" -y --fix-broken install
+			rm -f /tmp/${OPENVPN_DEB}
+			apt-get -y install easy-rsa
+		fi
+	elif [ "$VERSION_ID" = "13" ] && [ "$ID" = "debian" ]; then
 		apt-get -y --allow-downgrades install openvpn easy-rsa
 	else
 		# Not --default-release: it takes a value, "install" became the
@@ -2345,11 +2387,14 @@ if [ "$OPENVPN" = "yes" ]; then
 		fi
 	fi
 	mkdir -p /etc/openvpn/ccd
-	if [ ! -f /etc/openvpn/ccd/ipp_tcp.txt ]; then
-		echo 'openmptcprouter,10.255.250.2,' > /etc/openvpn/ccd/ipp_tcp.txt
+	# tun0 (TCP) serves 10.255.252.0/24, tun1 (UDP) 10.255.250.0/24. Earlier
+	# releases seeded these two files swapped, and tun0 logged "out of pool
+	# range" for the address: rewrite them when they still hold that seed.
+	if [ ! -f /etc/openvpn/ccd/ipp_tcp.txt ] || [ "$(cat /etc/openvpn/ccd/ipp_tcp.txt)" = 'openmptcprouter,10.255.250.2,' ]; then
+		echo 'openmptcprouter,10.255.252.2,' > /etc/openvpn/ccd/ipp_tcp.txt
 	fi
-	if [ ! -f /etc/openvpn/ccd/ipp_udp.txt ]; then
-		echo 'openmptcprouter,10.255.252.2,' > /etc/openvpn/ccd/ipp_udp.txt
+	if [ ! -f /etc/openvpn/ccd/ipp_udp.txt ] || [ "$(cat /etc/openvpn/ccd/ipp_udp.txt)" = 'openmptcprouter,10.255.252.2,' ]; then
+		echo 'openmptcprouter,10.255.250.2,' > /etc/openvpn/ccd/ipp_udp.txt
 	fi
 	if [ "$ID" = "ubuntu" ]; then
 		# for old OpenVPN releases
@@ -2403,7 +2448,7 @@ if [ "$GLORYTUN_UDP" = "yes" ]; then
 		if [ "$LOCALFILES" = "no" ]; then
 			fetch_file ${VPSURL}${VPSPATH}/glorytun-udp-run /usr/local/bin/glorytun-udp-run
 		else
-			cp ${DIR}/glorytun-udp-run /usr/local/bin/glorytun-udp-run
+			copy_file ${DIR}/glorytun-udp-run /usr/local/bin/glorytun-udp-run
 		fi
 		chmod 755 /usr/local/bin/glorytun-udp-run
 		if [ "$LOCALFILES" = "no" ]; then
@@ -2478,7 +2523,7 @@ if [ "$DSVPN" = "yes" ]; then
 			fetch_file ${VPSURL}${VPSPATH}/dsvpn-server%40.service.in /lib/systemd/system/dsvpn-server@.service
 			fetch_file ${VPSURL}${VPSPATH}/dsvpn0-config /etc/dsvpn/dsvpn0
 		else
-			cp ${DIR}/dsvpn-run /usr/local/bin/dsvpn-run
+			copy_file ${DIR}/dsvpn-run /usr/local/bin/dsvpn-run
 			cp ${DIR}/dsvpn-server@.service.in /lib/systemd/system/dsvpn-server@.service
 			cp ${DIR}/dsvpn0-config /etc/dsvpn/dsvpn0
 		fi
@@ -2568,7 +2613,7 @@ if [ "$GLORYTUN_TCP" = "yes" ]; then
 			fetch_file ${VPSURL}${VPSPATH}/glorytun-tcp-post.sh /etc/glorytun-tcp/post.sh
 			fetch_file ${VPSURL}${VPSPATH}/tun0.glorytun /etc/glorytun-tcp/tun0
 		else
-			cp ${DIR}/glorytun-tcp-run /usr/local/bin/glorytun-tcp-run
+			copy_file ${DIR}/glorytun-tcp-run /usr/local/bin/glorytun-tcp-run
 			cp ${DIR}/glorytun-tcp@.service.in /lib/systemd/system/glorytun-tcp@.service
 			cp ${DIR}/glorytun-tcp-post.sh /etc/glorytun-tcp/post.sh
 			cp ${DIR}/tun0.glorytun /etc/glorytun-tcp/tun0
@@ -2717,7 +2762,7 @@ fi
 if [ "$LOCALFILES" = "no" ]; then
 	fetch_file ${VPSURL}${VPSPATH}/multipath /usr/local/bin/multipath
 else
-	cp ${DIR}/multipath /usr/local/bin/multipath
+	copy_file ${DIR}/multipath /usr/local/bin/multipath
 fi
 chmod 755 /usr/local/bin/multipath
 
@@ -2725,7 +2770,7 @@ chmod 755 /usr/local/bin/multipath
 if [ "$LOCALFILES" = "no" ]; then
 	fetch_file ${VPSURL}${VPSPATH}/omr-test-speed /usr/local/bin/omr-test-speed
 else
-	cp ${DIR}/omr-test-speed /usr/local/bin/omr-test-speed
+	copy_file ${DIR}/omr-test-speed /usr/local/bin/omr-test-speed
 fi
 chmod 755 /usr/local/bin/omr-test-speed
 
@@ -2746,19 +2791,19 @@ if [ "$LOCALFILES" = "no" ]; then
 	fetch_file ${VPSURL}${VPSPATH}/omr-net-mem /usr/local/bin/omr-net-mem
 	fetch_file ${VPSURL}${VPSPATH}/omr-net-mem.service.in /lib/systemd/system/omr-net-mem.service
 else
-	cp ${DIR}/omr-service /usr/local/bin/omr-service
+	copy_file ${DIR}/omr-service /usr/local/bin/omr-service
 	cp ${DIR}/omr.service.in /lib/systemd/system/omr.service
-	cp ${DIR}/omr-6in4-run /usr/local/bin/omr-6in4-run
+	copy_file ${DIR}/omr-6in4-run /usr/local/bin/omr-6in4-run
 	cp ${DIR}/omr6in4@.service.in /lib/systemd/system/omr6in4@.service
-	cp ${DIR}/omr-vxlan-run /usr/local/bin/omr-vxlan-run
+	copy_file ${DIR}/omr-vxlan-run /usr/local/bin/omr-vxlan-run
 	cp ${DIR}/omr-vxlan@.service.in /lib/systemd/system/omr-vxlan@.service
-	cp ${DIR}/omr-bypass /usr/local/bin/omr-bypass
+	copy_file ${DIR}/omr-bypass /usr/local/bin/omr-bypass
 	cp ${DIR}/omr-bypass.service.in /lib/systemd/system/omr-bypass.service
 	cp ${DIR}/omr-bypass.timer.in /lib/systemd/system/omr-bypass.timer
-	cp ${DIR}/omr-reserved-ports /usr/local/bin/omr-reserved-ports
+	copy_file ${DIR}/omr-reserved-ports /usr/local/bin/omr-reserved-ports
 	cp ${DIR}/omr-reserved-ports.service.in /lib/systemd/system/omr-reserved-ports.service
 	cp ${DIR}/omr-reserved-ports.path.in /lib/systemd/system/omr-reserved-ports.path
-	cp ${DIR}/omr-net-mem /usr/local/bin/omr-net-mem
+	copy_file ${DIR}/omr-net-mem /usr/local/bin/omr-net-mem
 	cp ${DIR}/omr-net-mem.service.in /lib/systemd/system/omr-net-mem.service
 
 fi

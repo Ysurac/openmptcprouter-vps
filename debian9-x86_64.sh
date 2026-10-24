@@ -399,6 +399,16 @@ rm -f /var/cache/apt/archives/lock
 echo "Install apt-transport-https, gnupg and openssh-server..."
 apt-get -y install apt-transport-https gnupg openssh-server libcrypt1 zstd
 
+# Eight intermediates of the "emSign ECC Root CA - G3" root (eMudhra) have private
+# keys anyone can compute: stop trusting the root, before this script downloads
+# anything over HTTPS. A fixed ca-certificates (Debian bug #1151413) drops the
+# file itself, and the "!" line is then harmless.
+apt-get -y install --only-upgrade ca-certificates || true
+if [ -f /usr/share/ca-certificates/mozilla/emSign_ECC_Root_CA_-_G3.crt ] && [ -f /etc/ca-certificates.conf ]; then
+	sed -i 's|^mozilla/emSign_ECC_Root_CA_-_G3.crt|!mozilla/emSign_ECC_Root_CA_-_G3.crt|' /etc/ca-certificates.conf
+	update-ca-certificates --fresh >/dev/null 2>&1 || true
+fi
+
 #if [ "$ID" = "debian" ] && [ "$VERSION_ID" = "9" ] && [ "$UPDATE_DEBIAN" = "yes" ] && [ "$update" = "0" ]; then
 if [ "$ID" = "debian" ] && [ "$VERSION_ID" = "9" ] && [ "$UPDATE_OS" = "yes" ]; then
 	echo "Update Debian 9 Stretch to Debian 10 Buster"

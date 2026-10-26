@@ -513,7 +513,7 @@ pinned_to_omr() {
     set +f
     return 1
 }
-for pkg in openvpn omr-server omr-vps-admin mqvpn libmqvpn0 mptcp-bpf-rr xray v2ray v2ray-plugin shadowsocks-go linux-image-6.12.47-x64v3-xanmod1 linux-image-5.4.207-mptcp; do
+for pkg in openvpn omr-server omr-vps-admin mqvpn libmqvpn0 libmqvpn4 mptcp-bpf-rr xray v2ray v2ray-plugin shadowsocks-go linux-image-6.12.47-x64v3-xanmod1 linux-image-5.4.207-mptcp; do
     pinned_to_omr "$pkg" && pass "$pkg is pinned to the OMR repository" || fail "$pkg is not pinned to the OMR repository"
 done
 for pkg in linux-libc-dev python3-wsproto python3-flask python3-werkzeug libjson-c3; do

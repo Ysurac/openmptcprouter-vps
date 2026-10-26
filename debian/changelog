@@ -1,3 +1,11 @@
+omr-server (0.1095) unstable; urgency=medium
+
+    * debian9-x86_64.sh: update the 6.18 kernel (the default) to 6.18.58, build 20261026
+    * Update MQVPN to 0.18.0+20261026-1: redundant mode (a copy of outgoing UDP packets over every path), PathMTU and PMTUD, TUN GSO offload, a full JSON parser for the config and control API; the dgram reinjection mode is removed (omr-admin already turns it into default). Its library package is now libmqvpn4, which replaces libmqvpn0: the download fallback fetches libmqvpn4
+    * debian/control: depend on mqvpn 0.18.0+20261026-1
+
+ -- OpenMPTCProuter <contact@openmptcprouter.com>  Mon, 26 Oct 2026 00:00:00 +0100
+
 omr-server (0.1094) unstable; urgency=medium
 
     * Update omr-admin to 2a74e44 (0.18+20261023): a VXLAN UDP port is dropped unless it comes from a VPN interface, client-wg* or lo (vxlan_input chain before the base input chain), the kernel took frames of its VNI from the internet into a router's tunnel or L2 bridge; ports of the server's UDP services are never dropped, and /mqvpn, /shadowsocks, /glorytun refuse a port a VXLAN has, /vxlan and /vxlan_user one a service has; /wireguard leaves out peers that aren't a single router address of 10.255.247.0/24 before the key check; /add_user refuses 'server' (OpenVPN's own CN); /xray refuses VLESS Reality while a user redirects tcp/443, /mqvpn a port a user redirects or another service listens on; services are restarted once the config lock is released, each on its own (every router's request waited for the unit to stop), units whose files go away stopped at once; a disabled main router's MLVPN is stopped too; /lan removes a previous LAN's push route sent as "ip/prefix/"; omr-vxlan files replaced only when they change; /vpnips accepts the same addresses again and rewrites a differing 6in4 file; GRE tunnels of gone addresses are removed after the grace period even down to one public IPv4; an unredirect without destip removes the caller's redirects only; /firewallopen with ipproto any takes the IPv4 rule back when the IPv6 one is refused; user_dnat is rebuilt even when nft refuses user_accept, sipalg and client2client applied under the config lock; metrics rate table no longer grows with refused interfaces, auto_learning persisted; install_omr-ai.sh installs influxdb3-core with --force-confdef/--force-confold

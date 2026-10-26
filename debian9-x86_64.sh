@@ -92,7 +92,7 @@ OMR_ADMIN_VERSION="2a74e44e0f3a8f1c0579f5398818881749c88e37"
 OMR_ADMIN_BINARY_VERSION="0.18+20261023"
 DSVPN_VERSION="3b99d2ef6c02b2ef68b5784bec8adfdd55b29b1a"
 DSVPN_BINARY_VERSION="0.1.4-2"
-MQVPN_VERSION="0.17.0-1"
+MQVPN_VERSION="0.18.0+20261026-1"
 OPENVPN_BINARY_VERSION="2.7.8+mptcp.20261015.g5f3fa84~trixie"
 V2RAY_VERSION="5.32.0"
 V2RAY_PLUGIN_VERSION="4.43.0"
@@ -117,7 +117,7 @@ VPSURL="https://www.openmptcprouter.com/"
 REPO="repo.openmptcprouter.com"
 CHINA=${CHINA:-no}
 
-OMR_VERSION="0.1094-rolling-test"
+OMR_VERSION="0.1095-rolling-test"
 
 DIR=$( pwd )
 #"
@@ -955,10 +955,10 @@ elif [ "$KERNEL" = "6.18" ]; then
 	#set_grub_default_kernel "${KERNEL_VERSION}" "${PSABI}-xanmod"
 	# 20260730 was built for x86-64-v3 under every name: its x64v1 and x64v2
 	# packages did not boot on a CPU without AVX2 (Ysurac/openmptcprouter#4407)
-	KERNEL_VERSION="6.18.57"
-	KERNEL_REV="20261018"
+	KERNEL_VERSION="6.18.58"
+	KERNEL_REV="20261026"
 	# The GitHub release of this build, for when ${VPSURL}kernel/ lacks it
-	KERNEL_RELEASE_URL="https://github.com/Ysurac/linux/releases/download/omr-kernel-20261018-30-c74a102/"
+	KERNEL_RELEASE_URL="https://github.com/Ysurac/linux/releases/download/omr-kernel-20261026-32-606e411/"
 	#if [ "$CHINA" = "yes" ]; then
 	#	wget -O /tmp/linux-image-${KERNEL_VERSION}-${PSABI}-xanmod1_${KERNEL_VERSION}-${PSABI}-xanmod1-${KERNEL_REV}_amd64.deb https://sourceforge.net/projects/xanmod/files/releases/lts/${KERNEL_VERSION}-xanmod1/${KERNEL_VERSION}-${PSABI}-xanmod1/linux-image-${KERNEL_VERSION}-${PSABI}-xanmod1_${KERNEL_VERSION}-${PSABI}-xanmod1-${KERNEL_REV}_amd64.deb
 	#	wget -O /tmp/linux-headers-${KERNEL_VERSION}-${PSABI}-xanmod1_${KERNEL_VERSION}-${PSABI}-xanmod1-${KERNEL_REV}_amd64.deb https://sourceforge.net/projects/xanmod/files/releases/lts/${KERNEL_VERSION}-xanmod1/${KERNEL_VERSION}-${PSABI}-xanmod1/linux-headers-${KERNEL_VERSION}-${PSABI}-xanmod1_${KERNEL_VERSION}-${PSABI}-xanmod1-${KERNEL_REV}_amd64.deb
@@ -2158,22 +2158,22 @@ if [ "$MQVPN" = "yes" ]; then
 	if [ "$ARCH" = "amd64" ]; then
 		if ! apt-get -o Dpkg::Options::="--force-confold" -o Dpkg::Options::="--force-confdef" -o Dpkg::Options::="--force-overwrite" --allow-downgrades -y install mqvpn=${MQVPN_VERSION}; then
 			wget -O /tmp/mqvpn_${MQVPN_VERSION}_${ARCH}.deb ${VPSURL}debian/mqvpn_${MQVPN_VERSION}_${ARCH}.deb
-			wget -O /tmp/libmqvpn0_${MQVPN_VERSION}_${ARCH}.deb ${VPSURL}debian/libmqvpn0_${MQVPN_VERSION}_${ARCH}.deb
+			wget -O /tmp/libmqvpn4_${MQVPN_VERSION}_${ARCH}.deb ${VPSURL}debian/libmqvpn4_${MQVPN_VERSION}_${ARCH}.deb
 			apt-get -y install libevent-2.1-7
-			dpkg --force-all -i -B /tmp/libmqvpn0_${MQVPN_VERSION}_${ARCH}.deb
+			dpkg --force-all -i -B /tmp/libmqvpn4_${MQVPN_VERSION}_${ARCH}.deb
 			dpkg --force-all -i -B /tmp/mqvpn_${MQVPN_VERSION}_${ARCH}.deb
 			apt-get -o Dpkg::Options::="--force-confold" -o Dpkg::Options::="--force-confdef" -o Dpkg::Options::="--force-overwrite" -y --fix-broken install
-			rm -f /tmp/mqvpn_${MQVPN_VERSION}_${ARCH}.deb /tmp/libmqvpn0_${MQVPN_VERSION}_${ARCH}.deb
+			rm -f /tmp/mqvpn_${MQVPN_VERSION}_${ARCH}.deb /tmp/libmqvpn4_${MQVPN_VERSION}_${ARCH}.deb
 		fi
 	elif [ "$ARCH" = "arm64" ]; then
 		wget -O /tmp/mqvpn_${MQVPN_VERSION}_arm64.deb ${VPSURL}/debian/mqvpn_${MQVPN_VERSION}_arm64.deb
-		wget -O /tmp/libmqvpn0_${MQVPN_VERSION}_arm64.deb ${VPSURL}/debian/libmqvpn0_${MQVPN_VERSION}_arm64.deb
+		wget -O /tmp/libmqvpn4_${MQVPN_VERSION}_arm64.deb ${VPSURL}/debian/libmqvpn4_${MQVPN_VERSION}_arm64.deb
 		apt-get -y install libevent-2.1-7
-		dpkg --force-all -i -B /tmp/libmqvpn0_${MQVPN_VERSION}_arm64.deb
+		dpkg --force-all -i -B /tmp/libmqvpn4_${MQVPN_VERSION}_arm64.deb
 		dpkg --force-all -i -B /tmp/mqvpn_${MQVPN_VERSION}_arm64.deb
 		apt-get -o Dpkg::Options::="--force-confold" -o Dpkg::Options::="--force-confdef" -o Dpkg::Options::="--force-overwrite" -y --fix-broken install
 		rm -f /tmp/mqvpn_${MQVPN_VERSION}_arm64.deb
-		rm -f /tmp/libmqvpn0_${MQVPN_VERSION}_arm64.deb
+		rm -f /tmp/libmqvpn4_${MQVPN_VERSION}_arm64.deb
 	fi
 	mkdir -p /etc/mqvpn
 	MQVPN_USERS=""

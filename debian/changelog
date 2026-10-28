@@ -1,3 +1,10 @@
+omr-server (0.1096) unstable; urgency=medium
+
+    * debian9-x86_64.sh: update the 6.18 kernel (the default) to 6.18.59, build 20261028
+    * Update iperf3 to 3.22-0.1 (IPERF_VERSION), trixie has 3.18: on Debian 13 amd64 and arm64 iperf3 and libiperf0 are installed together from the OMR repository, downloaded when the repository lacks them (always on arm64), trixie's 3.18 as last resort; both are pinned to the OMR repository. The source build follows IPERF_VERSION. iperf3 does MPTCP itself (-m): mptcpize is disabled for it instead of enabled. An update restarts iperf3: its package upgrade stopped it without starting it again (debconf iperf3/start_daemon is false)
+
+ -- OpenMPTCProuter <contact@openmptcprouter.com>  Wed, 28 Oct 2026 00:00:00 +0100
+
 omr-server (0.1095) unstable; urgency=medium
 
     * debian9-x86_64.sh: update the 6.18 kernel (the default) to 6.18.58, build 20261026

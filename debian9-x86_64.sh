@@ -94,6 +94,7 @@ DSVPN_VERSION="3b99d2ef6c02b2ef68b5784bec8adfdd55b29b1a"
 DSVPN_BINARY_VERSION="0.1.4-2"
 MQVPN_VERSION="0.18.0+20261026-1"
 OPENVPN_BINARY_VERSION="2.7.8+mptcp.20261015.g5f3fa84~trixie"
+IPERF_VERSION="3.22-0.1"
 V2RAY_VERSION="5.32.0"
 V2RAY_PLUGIN_VERSION="4.43.0"
 XRAY_VERSION="26.7.11"
@@ -117,7 +118,7 @@ VPSURL="https://www.openmptcprouter.com/"
 REPO="repo.openmptcprouter.com"
 CHINA=${CHINA:-no}
 
-OMR_VERSION="0.1095-rolling-test"
+OMR_VERSION="0.1096-rolling-test"
 
 DIR=$( pwd )
 #"
@@ -529,9 +530,10 @@ else
 		# carries stale copies of plain Debian packages (linux-libc-dev, wsproto,
 		# flask...): a "Package: *" pin above 500 kept those over trixie and
 		# trixie-security. openvpn is listed: it is OMR's MPTCP patched build.
+		# iperf3 is listed: trixie has 3.18, OMR ships a newer one.
 		cat <<-EOF | tee /etc/apt/preferences.d/openmptcprouter.pref
 			Explanation: Prefer the packages OpenMPTCProuter builds over the Debian native ones
-			Package: omr-* mptcp-bpf-* mqvpn libmqvpn* openvpn xray v2ray v2ray-plugin shadowsocks-go linux-image-*-mptcp linux-headers-*-mptcp linux-image-*-xanmod* linux-headers-*-xanmod*
+			Package: omr-* mptcp-bpf-* mqvpn libmqvpn* openvpn iperf3 libiperf0 xray v2ray v2ray-plugin shadowsocks-go linux-image-*-mptcp linux-headers-*-mptcp linux-image-*-xanmod* linux-headers-*-xanmod*
 			Pin: release o=${REPO}
 			Pin-Priority: 999
 
@@ -955,10 +957,10 @@ elif [ "$KERNEL" = "6.18" ]; then
 	#set_grub_default_kernel "${KERNEL_VERSION}" "${PSABI}-xanmod"
 	# 20260730 was built for x86-64-v3 under every name: its x64v1 and x64v2
 	# packages did not boot on a CPU without AVX2 (Ysurac/openmptcprouter#4407)
-	KERNEL_VERSION="6.18.58"
-	KERNEL_REV="20261026"
+	KERNEL_VERSION="6.18.59"
+	KERNEL_REV="20261028"
 	# The GitHub release of this build, for when ${VPSURL}kernel/ lacks it
-	KERNEL_RELEASE_URL="https://github.com/Ysurac/linux/releases/download/omr-kernel-20261026-32-606e411/"
+	KERNEL_RELEASE_URL="https://github.com/Ysurac/linux/releases/download/omr-kernel-20261028-33-a9675c9/"
 	#if [ "$CHINA" = "yes" ]; then
 	#	wget -O /tmp/linux-image-${KERNEL_VERSION}-${PSABI}-xanmod1_${KERNEL_VERSION}-${PSABI}-xanmod1-${KERNEL_REV}_amd64.deb https://sourceforge.net/projects/xanmod/files/releases/lts/${KERNEL_VERSION}-xanmod1/${KERNEL_VERSION}-${PSABI}-xanmod1/linux-image-${KERNEL_VERSION}-${PSABI}-xanmod1_${KERNEL_VERSION}-${PSABI}-xanmod1-${KERNEL_REV}_amd64.deb
 	#	wget -O /tmp/linux-headers-${KERNEL_VERSION}-${PSABI}-xanmod1_${KERNEL_VERSION}-${PSABI}-xanmod1-${KERNEL_REV}_amd64.deb https://sourceforge.net/projects/xanmod/files/releases/lts/${KERNEL_VERSION}-xanmod1/${KERNEL_VERSION}-${PSABI}-xanmod1/linux-headers-${KERNEL_VERSION}-${PSABI}-xanmod1_${KERNEL_VERSION}-${PSABI}-xanmod1-${KERNEL_REV}_amd64.deb
@@ -1036,13 +1038,15 @@ if [ "$IPERF" = "yes" ] && [ "$CHINA" != "yes" ]; then
 	if [ "$SOURCES" = "yes" ]; then
 		apt-get -y remove iperf3 libiperf0
 		apt-get -y install xz-utils devscripts equivs
+		# Upstream version, without the Debian revision
+		IPERF_SOURCE_VERSION="${IPERF_VERSION%-*}"
 		cd /tmp
-		rm -rf iperf-3.18
-		wget https://github.com/esnet/iperf/releases/download/3.18/iperf-3.18.tar.gz
-		tar xzf iperf-3.18.tar.gz
-		cd iperf-3.18
-		wget --waitretry=1 --read-timeout=20 --timeout=15 -t 5 --continue --no-dns-cache https://www.openmptcprouter.com/debian/iperf3_3.18-2.debian.tar.xz
-		tar xJf iperf3_3.18-2.debian.tar.xz
+		rm -rf iperf-${IPERF_SOURCE_VERSION}
+		wget https://github.com/esnet/iperf/releases/download/${IPERF_SOURCE_VERSION}/iperf-${IPERF_SOURCE_VERSION}.tar.gz
+		tar xzf iperf-${IPERF_SOURCE_VERSION}.tar.gz
+		cd iperf-${IPERF_SOURCE_VERSION}
+		wget --waitretry=1 --read-timeout=20 --timeout=15 -t 5 --continue --no-dns-cache https://www.openmptcprouter.com/debian/iperf3_${IPERF_VERSION}.debian.tar.xz
+		tar xJf iperf3_${IPERF_VERSION}.debian.tar.xz
 		sleep 1
 		echo "Install iperf3 dependencies..."
 		rm -f /var/lib/dpkg/lock
@@ -1057,8 +1061,23 @@ if [ "$IPERF" = "yes" ] && [ "$CHINA" != "yes" ]; then
 		cd /tmp
 		echo "Install iperf3 package..."
 		dpkg -i iperf3_*.deb libiperf0_*.deb >/dev/null 2>&1
-		rm -rf iperf-3.18
+		rm -rf iperf-${IPERF_SOURCE_VERSION}
 		rm -f iperf* libiperf*
+	elif [ "$ID" = "debian" ] && [ "$VERSION_ID" = "13" ] && { [ "$ARCH" = "amd64" ] || [ "$ARCH" = "arm64" ]; }; then
+		# Debian forky's build, it installs as is on trixie (glibc >= 2.38,
+		# libssl3t64). Both packages are asked for: iperf3 alone would pull
+		# trixie's libiperf0 3.18. Downloaded when the repository lacks it
+		# (always on arm64, the OMR repository is amd64 only), and trixie's
+		# 3.18 when that fails too.
+		if ! apt-get -o Dpkg::Options::="--force-confold" -o Dpkg::Options::="--force-confdef" --allow-downgrades -y install iperf3=${IPERF_VERSION} libiperf0=${IPERF_VERSION}; then
+			for pkg in libiperf0 iperf3; do
+				fetch_file ${VPSURL}debian/${pkg}_${IPERF_VERSION}_${ARCH}.deb /tmp/${pkg}_${IPERF_VERSION}_${ARCH}.deb || true
+			done
+			if ! apt-get -o Dpkg::Options::="--force-confold" -o Dpkg::Options::="--force-confdef" --allow-downgrades -y install /tmp/libiperf0_${IPERF_VERSION}_${ARCH}.deb /tmp/iperf3_${IPERF_VERSION}_${ARCH}.deb; then
+				apt-get -y install iperf3 libiperf0
+			fi
+			rm -f /tmp/libiperf0_${IPERF_VERSION}_${ARCH}.deb /tmp/iperf3_${IPERF_VERSION}_${ARCH}.deb
+		fi
 	else
 		apt-get -y install iperf3 libiperf0
 	fi
@@ -1119,9 +1138,9 @@ if [ "$KERNEL" != "5.4" ]; then
 		rm -rf iproute2
 	fi
 
+	# iperf3 does MPTCP itself (-m): drop the LD_PRELOAD an earlier run set
 	if [ "$ID" = "debian" ]; then
-		echo "MPTCPize iperf3..."
-		mptcpize enable iperf3 >/dev/null 2>&1 || true
+		mptcpize disable iperf3 >/dev/null 2>&1 || true
 	fi
 
 	#if [ "$UPSTREAM6" = "yes" ]; then
@@ -3301,6 +3320,13 @@ else
 	if [ "$WIREGUARD" = "yes" ]; then
 		echo 'Restarting WireGuard'
 		restart_or_warn wg-quick@wg0
+		echo 'done'
+	fi
+	# Its package upgrade stops it and does not start it again (debconf
+	# iperf3/start_daemon is false), and mptcpize disable only reloads it
+	if [ "$IPERF" = "yes" ] && [ "$CHINA" != "yes" ]; then
+		echo 'Restarting iperf3'
+		restart_or_warn iperf3
 		echo 'done'
 	fi
 	if [ "$OMR_ADMIN" = "yes" ]; then

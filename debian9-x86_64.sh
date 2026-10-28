@@ -1003,7 +1003,7 @@ fi # IS_CONTAINER check
 if [ "$KERNEL" = "6.18" ]; then
 	
 	echo "Install MPTCP BPF schedulers for kernel 6.18..."
-	for pkg in mptcp-bpf-bkup mptcp-bpf-burst mptcp-bpf-first mptcp-bpf-red mptcp-bpf-rr mptcp-bpf-dscp mptcp-bpf-weight mptcp-bpf-weight-rr mptcp-bpf-ecf mptcp-bpf-blest mptcp-bpf-overflow; do
+	for pkg in mptcp-bpf-bkup mptcp-bpf-burst mptcp-bpf-first mptcp-bpf-red mptcp-bpf-rr mptcp-bpf-dscp mptcp-bpf-weight mptcp-bpf-weight-rr; do
 		if ! apt-get -o Dpkg::Options::="--force-confold" -o Dpkg::Options::="--force-confdef" -o Dpkg::Options::="--force-overwrite" -y install ${pkg}=${MPTCP_BPF_VERSION}; then
 			wget -O /tmp/${pkg}_${MPTCP_BPF_VERSION}_${ARCH}.deb ${VPSURL}debian/${pkg}_${MPTCP_BPF_VERSION}_${ARCH}.deb
 			dpkg --force-confold --force-confdef --force-overwrite -i /tmp/${pkg}_${MPTCP_BPF_VERSION}_${ARCH}.deb

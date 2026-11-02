@@ -71,6 +71,9 @@ rejected() { for bad in $NFT_REJECT; do case "$1" in *"$bad"*) return 0 ;; esac;
 case "$*" in
 "list chain inet omr_bypass output")
     [ -f "$ST/table" ] ;;
+"delete table inet omr_bypass")
+    [ -f "$ST/table" ] || exit 1
+    rm -f "$ST/table" "$ST/elements" ;;
 "-f -")
     in="$(cat)"
     case "$in" in
@@ -276,6 +279,34 @@ set_list '{"vpn2":{"ipv4":["8.8.8.8"]}}'
 run_bypass
 assert_eq "no list for the interface: exit 0" 0 "$RC"
 check "no list for the interface: no element is added" eval '! grep -q "add element" "$T/log"'
+check "no list for the interface: no table is loaded" test ! -f "$T/st/table"
+check "no list for the interface: no fwmark rule" test ! -f "$T/st/rule4"
+
+# What a router sends when nothing is bypassed, on a VPS without vpn1: this
+# failed on every run of the timer, waiting for a route to vpn1.
+setup
+set_list '{"vpn1":{"ipv4":[],"ipv6":[]}}'
+rm "$T/st/main4"
+run_bypass
+assert_eq "an empty list and no vpn1: exit 0 (was exit 1 on every run)" 0 "$RC"
+assert_eq "an empty list and no vpn1: no command outside the expected ones" "" "$(unexpected)"
+check "an empty list and no vpn1: no table is loaded" test ! -f "$T/st/table"
+check "an empty list and no vpn1: no fwmark rule" test ! -f "$T/st/rule4"
+check "an empty list and no vpn1: says nothing" test ! -s "$T/err"
+
+setup
+set_list '{"vpn1":{"ipv4":["8.8.8.8"],"ipv6":["2a00::/16"]}}'
+echo 'default via fd00::1 metric 1024 pref medium' > "$T/st/main6"
+run_bypass
+set_list '{"vpn1":{"ipv4":[],"ipv6":[]}}'
+run_bypass
+assert_eq "a list emptied by the router: exit 0" 0 "$RC"
+check "a list emptied by the router: the table is removed" test ! -f "$T/st/table"
+check "a list emptied by the router: the IPv4 fwmark rule is removed" test ! -f "$T/st/rule4"
+check "a list emptied by the router: the IPv6 fwmark rule is removed" test ! -f "$T/st/rule6"
+check "a list emptied by the router: omr-service's route is left alone" test -s "$T/st/t4"
+run_bypass
+assert_eq "a list emptied by the router, next run: exit 0" 0 "$RC"
 
 setup
 run_bypass
@@ -378,6 +409,13 @@ EOF
     else
         note "ping is not installed; skipping the marking check"
     fi
+
+    set_list '{"vpn1":{"ipv4":[],"ipv6":[]}}'
+    sh "$T/omr-bypass"
+    assert_eq "a list emptied by the router: exit 0" 0 $?
+    check "a list emptied by the router: the table is removed" sh -c '! nft list table inet omr_bypass > /dev/null 2>&1'
+    check "a list emptied by the router: the fwmark rules are removed" sh -c '! ip rule show | grep -q "fwmark 0x539" && ! ip -6 rule show | grep -q "fwmark 0x539"'
+    check "a list emptied by the router: the OMR ruleset is untouched" sh -c '! nft list tables | grep -q "inet omr$" || nft list chain inet omr forward > /dev/null'
 }
 
 section_netns() {

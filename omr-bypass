@@ -55,6 +55,23 @@ if command -v ipset > /dev/null 2>&1; then
 	done
 fi
 
+# The words of each list that can be an address, a prefix or a range: nft
+# would read anything else as part of the command.
+ipv4=$(jq -r --arg intf "$INTERFACE" '[.[$intf].ipv4[]? | strings | splits("\\s+") | select(test("^[0-9A-Fa-f:./-]+$"))] | join(",")' /etc/openmptcprouter-vps-admin/omr-bypass.json)
+ipv6=$(jq -r --arg intf "$INTERFACE" '[.[$intf].ipv6[]? | strings | splits("\\s+") | select(test("^[0-9A-Fa-f:./-]+$"))] | join(",")' /etc/openmptcprouter-vps-admin/omr-bypass.json)
+
+# Nothing to bypass (an empty list, or none for ${INTERFACE}): take away the
+# table and the rule a previous list left, and don't wait for a route nothing
+# would be sent to. This failed on every run of the timer where the router
+# sends an empty list and ${INTERFACE} doesn't exist. The route in table
+# ${TABLE} is left alone: omr-service puts it there.
+if [ -z "$ipv4" ] && [ -z "$ipv6" ]; then
+	nft delete table inet omr_bypass > /dev/null 2>&1 || true
+	ip rule del prio 1 fwmark ${MARK} lookup ${TABLE} > /dev/null 2>&1 || true
+	ip -6 rule del prio 1 fwmark ${MARK} lookup ${TABLE} > /dev/null 2>&1 || true
+	exit 0
+fi
+
 # Mark what goes to the bypassed addresses, forwarded (prerouting) or sent by
 # the VPS itself (output: a route chain, so a changed mark is routed again),
 # for the rule below. This used ipset and iptables, but the installer only
@@ -98,11 +115,7 @@ add_elements() {
 		nft add element inet omr_bypass "$1" "{ $ip }" > /dev/null 2>&1 || true
 	done
 }
-# The words of each list that can be an address, a prefix or a range: nft
-# would read anything else as part of the command.
-ipv4=$(jq -r --arg intf "$INTERFACE" '[.[$intf].ipv4[]? | strings | splits("\\s+") | select(test("^[0-9A-Fa-f:./-]+$"))] | join(",")' /etc/openmptcprouter-vps-admin/omr-bypass.json)
 add_elements dst4 "$ipv4"
-ipv6=$(jq -r --arg intf "$INTERFACE" '[.[$intf].ipv6[]? | strings | splits("\\s+") | select(test("^[0-9A-Fa-f:./-]+$"))] | join(",")' /etc/openmptcprouter-vps-admin/omr-bypass.json)
 add_elements dst6 "$ipv6"
 
 ip rule del prio 1 fwmark ${MARK} lookup ${TABLE} > /dev/null 2>&1 || true

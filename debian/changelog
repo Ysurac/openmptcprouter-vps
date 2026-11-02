@@ -1,3 +1,16 @@
+omr-server (0.1097) unstable; urgency=medium
+
+    * Update omr-admin to dafd126 (0.18+20261102): /mqvpn writes the reorder "enabled" to server.json as a JSON boolean, which mqvpn 0.19.0 requires (it refused the "on", "off" or "auto" written before, for every user); the router's "on", "off" and "auto" are still taken, and /config still reports "on" or "off". At startup a server.json with a string reorder "enabled" is rewritten and mqvpn, stopped on it by its upgrade to 0.19.0, started again. From 0.18+20261026: /mqvpn takes mqvpn 0.18.0's PathMTU (path_mtu, 0 or 1280-9000), PMTUD (pmtud) and TUN batching (tun_offload, tun_gro), each left as it is when not sent, and /config gives them to the router; the dgram reinjection mode, removed from mqvpn 0.18.0, is written as default
+    * debian/control: depend on omr-vps-admin 0.18+20261102 or later
+    * Update V2Ray to 5.54.2 (V2RAY_VERSION)
+    * debian/control: depend on v2ray 5.54.2
+    * Update MQVPN to 0.19.0+20261101-1 (MQVPN_VERSION): one client's backlog no longer slows the other clients of the server (its packets are dropped and counted), get_stats reports udp_rx_drops, InitMaxPathId is limited to 1-128, xquic fixes (a lost retry probe no longer counted as 50-100% loss, multipath key update, PMTUD). An on/off key that isn't a boolean now stops mqvpn at startup: the reorder "enabled" of server.json has to be a JSON boolean, "on", "off" and "auto" are refused. The library package is still libmqvpn4
+    * debian/control: depend on mqvpn 0.19.0+20261101-1
+    * Update MPTCP BPF to 1.5-1 (MPTCP_BPF_VERSION), and install mptcp-bpf-ecf, mptcp-bpf-blest and mptcp-bpf-overflow again: 1.5-1 publishes them for amd64 and arm64 (they were dropped because 1.4-1 had none). omr-admin registers every object in /usr/share/bpf/scheduler at startup, so bpf_ecf, bpf_blest and bpf_overflow are in net.mptcp.available_schedulers and POST /mptcp no longer answers "Refused by the kernel" for them
+    * omr-bypass: with nothing to bypass (the router's list for bypass_intf empty, or none for it), remove the inet omr_bypass table and the fwmark 0x539 rules a previous list left, and exit 0. It loaded an empty table and the rule anyway, then waited for a route through bypass_intf, so on a VPS without vpn1 omr-bypass.service failed on every run of its timer (every 5 minutes) and left the system degraded. A non-empty list without a route still fails, for the timer to retry. tests/test_omr_bypass.sh covers an empty list without vpn1 and a list the router empties
+
+ -- OpenMPTCProuter <contact@openmptcprouter.com>  Mon, 02 Nov 2026 00:00:00 +0100
+
 omr-server (0.1096) unstable; urgency=medium
 
     * debian9-x86_64.sh: update the 6.18 kernel (the default) to 6.18.59, build 20261028

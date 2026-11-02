@@ -75,7 +75,7 @@ if [ "$KERNEL" = "6.1" ]; then
 	KERNEL_PACKAGE_VERSION="1.30"
 	KERNEL_RELEASE="${KERNEL_VERSION}-mptcp_${KERNEL_PACKAGE_VERSION}"
 fi
-MPTCP_BPF_VERSION="1.4-1"
+MPTCP_BPF_VERSION="1.5-1"
 GLORYTUN_UDP=${GLORYTUN_UDP:-yes}
 GLORYTUN_UDP_VERSION="23100474922259d00a8c0c4b00a0c8de89202cf9"
 GLORYTUN_UDP_BINARY_VERSION="0.3.4-5"
@@ -88,14 +88,14 @@ MLVPN_VERSION="8aa1b16d843ea68734e2520e39a34cb7f3d61b2b"
 MLVPN_BINARY_VERSION="3.0.0+20211028.git.ddafba3"
 OBFS_VERSION="486bebd9208539058e57e23a12f23103016e09b4"
 OBFS_BINARY_VERSION="0.0.5-1"
-OMR_ADMIN_VERSION="2a74e44e0f3a8f1c0579f5398818881749c88e37"
-OMR_ADMIN_BINARY_VERSION="0.18+20261023"
+OMR_ADMIN_VERSION="dafd12657517731ac8b1a270b5affcb1eab65d3f"
+OMR_ADMIN_BINARY_VERSION="0.18+20261102"
 DSVPN_VERSION="3b99d2ef6c02b2ef68b5784bec8adfdd55b29b1a"
 DSVPN_BINARY_VERSION="0.1.4-2"
-MQVPN_VERSION="0.18.0+20261026-1"
+MQVPN_VERSION="0.19.0+20261101-1"
 OPENVPN_BINARY_VERSION="2.7.8+mptcp.20261015.g5f3fa84~trixie"
 IPERF_VERSION="3.22-0.1"
-V2RAY_VERSION="5.32.0"
+V2RAY_VERSION="5.54.2"
 V2RAY_PLUGIN_VERSION="4.43.0"
 XRAY_VERSION="26.7.11"
 EASYRSA_VERSION="3.2.2"
@@ -118,7 +118,7 @@ VPSURL="https://www.openmptcprouter.com/"
 REPO="repo.openmptcprouter.com"
 CHINA=${CHINA:-no}
 
-OMR_VERSION="0.1096-rolling-test"
+OMR_VERSION="0.1097-rolling-test"
 
 DIR=$( pwd )
 #"
@@ -1003,7 +1003,7 @@ fi # IS_CONTAINER check
 if [ "$KERNEL" = "6.18" ]; then
 	
 	echo "Install MPTCP BPF schedulers for kernel 6.18..."
-	for pkg in mptcp-bpf-bkup mptcp-bpf-burst mptcp-bpf-first mptcp-bpf-red mptcp-bpf-rr mptcp-bpf-dscp mptcp-bpf-weight mptcp-bpf-weight-rr; do
+	for pkg in mptcp-bpf-bkup mptcp-bpf-burst mptcp-bpf-first mptcp-bpf-red mptcp-bpf-rr mptcp-bpf-dscp mptcp-bpf-weight mptcp-bpf-weight-rr mptcp-bpf-ecf mptcp-bpf-blest mptcp-bpf-overflow; do
 		if ! apt-get -o Dpkg::Options::="--force-confold" -o Dpkg::Options::="--force-confdef" -o Dpkg::Options::="--force-overwrite" -y install ${pkg}=${MPTCP_BPF_VERSION}; then
 			wget -O /tmp/${pkg}_${MPTCP_BPF_VERSION}_${ARCH}.deb ${VPSURL}debian/${pkg}_${MPTCP_BPF_VERSION}_${ARCH}.deb
 			dpkg --force-confold --force-confdef --force-overwrite -i /tmp/${pkg}_${MPTCP_BPF_VERSION}_${ARCH}.deb

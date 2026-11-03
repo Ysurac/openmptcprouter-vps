@@ -3,7 +3,7 @@
 This is the server side ("VPS") of [OpenMPTCProuter](https://www.openmptcprouter.com/): a piece of
 software that runs on a cheap VPS and terminates the tunnels your OpenMPTCProuter router aggregates
 its internet connections through. This manual covers installing, configuring, and operating that
-VPS. For internal architecture and contributor notes, see [TECHNICAL.md](TECHNICAL.md).
+VPS.
 
 ## 1. What gets installed
 
@@ -11,7 +11,7 @@ A single install script sets up, on a fresh Debian/Ubuntu box:
 
 - An MPTCP-enabled kernel
 - One or more tunnel/proxy endpoints your router can connect through: Shadowsocks(-libev and Go),
-  V2Ray, Xray (incl. VLESS Reality), Glorytun (TCP and UDP), MLVPN, UBOND, DSVPN, WireGuard, MQVPN,
+  V2Ray, Xray (incl. VLESS Reality), Glorytun (TCP and UDP), MLVPN, DSVPN, WireGuard, MQVPN,
   OpenVPN (with up to 8 "bonding" instances), SoftEther, VXLAN, and 6in4 (IPv6-in-IPv4)
 - `omr-admin`, the REST API the router's web UI talks to for provisioning and monitoring
 - A native nftables firewall ruleset (replaces the older Shorewall/Shorewall6 setup)
@@ -36,7 +36,7 @@ You don't need to enable everything — most tunnel types are individually toggl
 The simplest install, run as root on a fresh VPS:
 
 ```sh
-wget -O - http://www.openmptcprouter.com/server/debian.sh | sh
+wget -O - https://www.openmptcprouter.com/server/debian.sh | sh
 ```
 
 This is fully non-interactive — there are no prompts. Everything is controlled by environment
@@ -44,7 +44,7 @@ variables read at the top of the script, each with a sensible default. To custom
 variables before running it, e.g.:
 
 ```sh
-MQVPN=no WIREGUARD=no SOFTETHERVPN=yes wget -O - http://www.openmptcprouter.com/server/debian.sh | sh
+MQVPN=no WIREGUARD=no SOFTETHERVPN=yes wget -O - https://www.openmptcprouter.com/server/debian.sh | sh
 ```
 
 ### Commonly-adjusted options
@@ -56,7 +56,6 @@ MQVPN=no WIREGUARD=no SOFTETHERVPN=yes wget -O - http://www.openmptcprouter.com/
 | `V2RAY` | `yes` | Enable V2Ray |
 | `XRAY` | `yes` | Enable Xray (incl. VLESS Reality) |
 | `MLVPN` | `yes` | Enable MLVPN |
-| `UBOND` | `no` | Enable UBOND |
 | `MQVPN` | `yes` | Enable MQVPN |
 | `OPENVPN` / `OPENVPN_BONDING` | `yes` / `yes` | Enable OpenVPN, and its 8-way bonding tunnels |
 | `SOFTETHERVPN` | `no` | Enable SoftEther VPN |
@@ -100,7 +99,6 @@ shown in `/etc/motd`):
 | Glorytun | 65001 |
 | DSVPN | 65401 |
 | MLVPN | 65201+ |
-| UBOND | 65251+ |
 | MQVPN | 65443 |
 | WireGuard (server / client) | 65311 / 65312 |
 | OpenVPN | 65301 |
@@ -177,7 +175,6 @@ rule` into any chain, including two the installer sets aside just for this:
 Without that second rule, a DNAT redirect covering the same port (per-user, or the bulk toggle)
 would still steal the traffic before it ever reaches `custom_accept` — previously the only fix was
 editing `omr-admin-config.json` by hand to remove/narrow the conflicting redirect (see
-[TECHNICAL.md §7](TECHNICAL.md#7-firewall-nftablesconf-nftables--migrated-off-shorewall) and
 [issue #4356](https://github.com/Ysurac/openmptcprouter/issues/4356)). A single file covering both
 chains is now enough — no `omr-admin-config.json` edits needed. After adding or changing a file
 there, apply it with `systemctl reload nftables` (or `restart`; no need to touch `omr-admin`, since
@@ -215,7 +212,7 @@ repeated connection attempts.
 - **Router can't reach the admin API**: confirm `omr-admin` is listening on 65500
   (`curl -k https://127.0.0.1:65500/`) and that port isn't blocked by the nftables firewall
   (`nft list ruleset` to inspect it; port 65500 should be reachable via the `user_accept`/base
-  `input` chain rules — see [TECHNICAL.md §7](TECHNICAL.md#7-firewall-nftablesconf-nftables--migrated-off-shorewall)).
+  `input` chain rules).
 - **Re-running the installer does nothing**: you likely have `REINSTALL=no` and are already on the
   current version — set `REINSTALL=yes` to force it.
 - **Wrong network interface detected**: set `INTERFACE`/`INTERFACE6` explicitly and re-run.

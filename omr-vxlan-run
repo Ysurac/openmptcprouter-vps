@@ -2,12 +2,41 @@
 
 set -e
 
+# Read the KEY=value lines omr-admin writes for this user without running the
+# file as shell code: it carries values a router sent through the API, and a
+# `. file` as root would run anything one of them smuggled in. Only the keys
+# given are set, and only to a value that can be an address, a number or a
+# name, which every one of them is.
+read_conf() {
+        conf="$1"
+        shift
+        while IFS= read -r line || [ -n "$line" ]; do
+                key="${line%%=*}"
+                [ "$key" = "$line" ] && continue
+                case "$key" in
+                        ""|*[!A-Z0-9_]*) continue ;;
+                esac
+                case " $* " in
+                        *" $key "*) ;;
+                        *) continue ;;
+                esac
+                value="${line#*=}"
+                case "$value" in
+                        *[!A-Za-z0-9:./_-]*)
+                                echo "$(basename "$0"): ignoring invalid $key in $conf" >&2
+                                continue
+                                ;;
+                esac
+                eval "$key=\$value"
+        done < "$conf"
+}
+
 if [ ! -f "$2" ]; then
         echo "usage: $(basename "$0") start FILE"
         exit 0
 fi
 
-. "$(readlink -f "$2")"
+read_conf "$(readlink -f "$2")" VNI PORT LOCALIP REMOTEIP MODE BRIDGE LOCALTUNIP LOCALTUNIP6 MTU
 
 DEV="vx-$(basename "$2")"
 PORT=${PORT:-4789}

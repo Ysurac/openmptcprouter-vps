@@ -1,0 +1,18 @@
+[Unit]
+Description=Re-run omr-reserved-ports when a service config changes
+
+[Path]
+# Every file omr-reserved-ports reads. omr-admin rewrites the v2ray/xray
+# configs whenever the router adds or removes a forwarded port.
+PathChanged=/etc/v2ray/v2ray-server.json
+PathChanged=/etc/xray/xray-server.json
+PathChanged=/etc/shadowsocks-go/server.json
+PathChanged=/etc/shadowsocks-libev/manager.json
+PathChanged=/etc/mqvpn/server.json
+PathChanged=/etc/openmptcprouter-vps-admin/omr-admin-config.json
+PathChanged=/etc/openmptcprouter-vps-admin/omr-vxlan
+PathChanged=/etc/openmptcprouter-vps-admin/reserved-ports
+Unit=omr-reserved-ports.service
+
+[Install]
+WantedBy=paths.target

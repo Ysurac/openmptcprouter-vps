@@ -158,6 +158,11 @@
 				"userLevel": 0
 			},
 			"tag": "direct"
+		},
+		{
+			"protocol": "blackhole",
+			"settings": {},
+			"tag": "blocked"
 		}
 	],
 	"routing": {
@@ -180,6 +185,38 @@
 					"api"
 				],
 				"outboundTag": "api",
+				"type": "field"
+			},
+			{
+				"inboundTag": [
+					"omrin-tunnel",
+					"omrin-vmess-tunnel",
+					"omrin-socks-tunnel",
+					"omrin-trojan-tunnel"
+				],
+				"ip": [
+					"0.0.0.0/8",
+					"127.0.0.0/8",
+					"::/128",
+					"::1/128"
+				],
+				"outboundTag": "blocked",
+				"type": "field"
+			},
+			{
+				"inboundTag": [
+					"omrin-tunnel",
+					"omrin-vmess-tunnel",
+					"omrin-socks-tunnel",
+					"omrin-trojan-tunnel"
+				],
+				"domain": [
+					"domain:localhost",
+					"full:localhost.localdomain",
+					"full:ip6-localhost",
+					"full:ip6-loopback"
+				],
+				"outboundTag": "blocked",
 				"type": "field"
 			}
 		]

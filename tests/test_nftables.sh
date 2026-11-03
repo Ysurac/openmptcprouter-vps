@@ -13,8 +13,8 @@
 # and nftables.service just fails, at boot, on a machine nobody is watching.
 #
 # The chains omr-admin owns are the other half: omradmin.py adds and flushes
-# rules in user_accept, user_dnat, gre_snat, client2client, dscp_mark and
-# ct_helpers by name, so those six have to exist here, empty, for the API's
+# rules in user_accept, user_dnat, gre_snat, gre_forward, client2client, dscp_mark and
+# ct_helpers by name, so those seven have to exist here, empty, for the API's
 # port openings and per-user redirects to land anywhere at all.
 #
 # `nft -c -f` (a real parse, if nft is installed and permitted) runs on top of
@@ -99,7 +99,7 @@ fi
 # The installer rewrites these three per install; omr-vps-admin's /vpnips
 # rewrites them again at run time. Losing one leaves the ruleset pointing at
 # the shipped placeholder.
-for v in NET_IFACE VPS_IFACE VPS_ADDR OMR_ADDR OMR_ADDR6 VPN_IFACES VPNCL_IFACES; do
+for v in NET_IFACE NET_IFACE6 VPS_IFACE VPS_ADDR OMR_ADDR OMR_ADDR6 VPN_IFACES VPNCL_IFACES; do
     if printf '%s\n' "$defined" | grep -qx "$v"; then
         pass "\$$v is defined in omr-vars.nft"
     else
@@ -126,7 +126,7 @@ fi
 # omradmin.py adds and flushes rules in these by name (_nft_flush_chain);
 # against a chain that does not exist, every one of those calls fails and the
 # API's port openings, redirects and DSCP marks land nowhere.
-for c in user_accept user_dnat gre_snat client2client dscp_mark ct_helpers; do
+for c in user_accept user_dnat gre_snat gre_forward client2client dscp_mark ct_helpers; do
     if printf '%s\n' "$declared" | grep -qx "$c"; then
         pass "chain $c exists for omr-admin to fill"
     else
@@ -147,7 +147,7 @@ done
 # regular chain that nothing ever traverses.
 echo
 echo "== base chains declare a hook =="
-for c in input forward output nat_prerouting nat_postrouting mangle_post raw_prerouting raw_output; do
+for c in input forward output nat_prerouting nat_postrouting mangle_post helper_prerouting helper_output raw_prerouting raw_output; do
     if awk -v c="$c" '
         $1 == "chain" && $2 == c { inside = 1 }
         inside && /type .* hook .* priority .*;/ { found = 1 }
@@ -185,7 +185,7 @@ fi
 # 0.1080 again: sshd is moved to 65222 during the install and the ruleset is
 # loaded a few lines later. If the two disagree, the VPS is unreachable from
 # the next reboot and the only survivor is the session running the installer.
-SSH_PORT="$(uncommented | sed -nE 's|.*sed -i .s:#?Port 22:Port ([0-9]+):g.*|\1|p' | head -n 1)"
+SSH_PORT="$(uncommented | grep -F 'sshd_config' | sed -nE 's|.*Port[^0-9]+22[^/]*/Port ([0-9]+)/.*|\1|p' | head -n 1)"
 if [ -z "$SSH_PORT" ]; then
     fail "cannot tell which port the installer moves sshd to"
 elif nft_body "$RULES" | grep -qE "tcp dport $SSH_PORT accept"; then
@@ -193,6 +193,97 @@ elif nft_body "$RULES" | grep -qE "tcp dport $SSH_PORT accept"; then
 else
     fail "the installer moves sshd to $SSH_PORT but the input chain never accepts it"
 fi
+
+# #4381: 0.1068 dropped what Shorewall6 accepted for IPv6 on the link. A DHCPv6
+# Advertise/Reply comes back to our link-local address from the server's, not
+# as the reply to the multicast Solicit, so conntrack calls it NEW: without an
+# explicit accept the VPS never gets or renews a lease. MLD is untracked, and
+# an unanswered query lets an MLD-snooping switch stop forwarding neighbour
+# solicitations to us. MLD carries a hop-by-hop header, so a rule spelled
+# `ip6 nexthdr icmpv6 ... mld-listener-query` loads fine and never matches.
+if nft_body "$RULES" | grep -qE 'udp dport 546 accept'; then
+    pass "the input chain accepts DHCPv6 replies (udp/546)"
+else
+    fail "the input chain no longer accepts udp/546; DHCPv6 replies are rejected and the lease is lost (#4381)"
+fi
+mld="$(nft_body "$RULES" | grep -E 'icmpv6 type[^#]*mld-listener-query[^#]*accept')"
+if [ -z "$mld" ]; then
+    fail "the input chain no longer accepts MLD queries; snooping switches drop our multicast groups (#4381)"
+elif printf '%s\n' "$mld" | grep -q 'nexthdr'; then
+    fail "the MLD rule matches on ip6 nexthdr, which is the hop-by-hop header for MLD: it never matches (#4381)"
+else
+    pass "the input chain accepts MLD queries without an ip6 nexthdr match"
+fi
+
+# #4382: the router's IPv6 arrives through the omr-6in4-user* sit tunnel, a
+# vpn interface in shorewall6/interfaces. Left out of VPN_IFACES, everything
+# the router routes into it hits the forward chain's trailing reject.
+if nft_body "$VARS" | grep -E '^define VPN_IFACES' | grep -q '"omr-6in4-user\*"'; then
+    pass "VPN_IFACES includes the 6in4 tunnel (omr-6in4-user*)"
+else
+    fail "VPN_IFACES lacks omr-6in4-user*; the router's IPv6 is rejected in forward (#4382)"
+fi
+# With the tunnel in VPN_IFACES, an unrestricted net->vpn accept lets any new
+# IPv6 connection from the internet reach a LAN using a public prefix.
+# shorewall6 only let DNAT'd connections through (net all DROP).
+if nft_body "$RULES" | grep -E 'iifname \$NET_IFACE6? oifname \$VPN_IFACES' | grep -vq 'ct status dnat'; then
+    fail "something from the internet into a tunnel is accepted without ct status dnat; a router LAN or a public LAN prefix is open (#4382)"
+else
+    pass "nothing from the internet is forwarded into a tunnel unless it was redirected (ct status dnat)"
+fi
+if nft_body "$RULES" | grep -q 'meta nfproto ipv6 iifname \$NET_IFACE6 oifname \$VPN_IFACES ct status dnat accept'; then
+    pass "IPv6 net->vpn forwarding is limited to redirected (DNAT'd) connections"
+else
+    fail "the IPv6 net->vpn rule for redirected ports is gone; IPv6 port redirects to the router are rejected (#4382)"
+fi
+# omr-service routes every router's LAN subnets into its tunnel, so an
+# unrestricted IPv4 net->vpn accept let any host able to route those subnets
+# (or 10.255.0.0/16) at the VPS -- a neighbour on the provider's segment --
+# reach the router LANs and tunnel addresses. Shorewall4 only let DNAT'd
+# connections through (net all DROP), and the port redirects are DNAT.
+if nft_body "$RULES" | grep -q 'meta nfproto ipv4 iifname \$NET_IFACE oifname \$VPN_IFACES ct status dnat accept'; then
+    pass "IPv4 net->vpn forwarding is limited to redirected (DNAT'd) connections"
+else
+    fail "the IPv4 net->vpn rule for redirected ports is gone; port redirects to the router are rejected"
+fi
+
+# Client isolation for IPv6: shorewall6's "vpn all ACCEPT" accepted ahead of
+# the vpn->vpn drop let IPv6 from one user's tunnel into another's (the 6in4
+# tunnels and the prefixes routed into them) skip /client2client. The vpn
+# accept has to come after the client2client jump and the vpn->vpn drop, and
+# the drop itself must not be limited to one family.
+awk '
+    $1 == "chain" && $2 == "forward" { inside = 1; n = 0; next }
+    inside && /^\t\}/ { inside = 0 }
+    inside { n++; sub(/#.*/, "");
+             if ($0 ~ /jump client2client/) c2c = n
+             if ($0 ~ /iifname \$VPN_IFACES oifname \$VPN_IFACES drop/ && $0 !~ /nfproto/) drop = n
+             if ($0 ~ /iifname \$VPN_IFACES/ && $0 ~ /accept/ && $0 !~ /oifname/ && $0 !~ /meta mark/) { if (!acc || n < acc) acc = n } }
+    END { exit !(c2c && drop && acc && c2c < drop && drop < acc) }' "$RULES" \
+    && pass "forward's vpn->all accept comes after the client2client jump and the vpn->vpn drop" \
+    || fail "forward accepts traffic from the tunnels ahead of the vpn->vpn drop: IPv6 between two users skips /client2client"
+if nft_body "$RULES" | grep -E 'ip6 saddr[^#]*masquerade' | grep -q 'oifname \$NET_IFACE6 '; then
+    pass "the NAT66 masquerade follows the IPv6 WAN (\$NET_IFACE6)"
+else
+    fail "the NAT66 masquerade is not on \$NET_IFACE6; with IPv6 on another NIC the LAN's ULA leaves unmasqueraded (#3271)"
+fi
+
+# The installer's own sed lines, run against the shipped omr-vars.nft. The
+# second case is the trap: an IPv6 NIC named eth0 next to an IPv4 NIC with
+# another name must not be rewritten to the IPv4 one by the first sed.
+uncommented | grep -E 'sed -i .*/etc/nftables/omr-vars\.nft' > "$TMPDIR/vars-seds.sh"
+for case in "ens3 ens3" "enx5 enx4" "enx5 eth0" "eth0 enx4"; do
+    set -- $case
+    cp "$VARS" "$TMPDIR/omr-vars.nft"
+    INTERFACE="$1" INTERFACE6="$2" bash -c "$(sed "s|/etc/nftables/omr-vars.nft|$TMPDIR/omr-vars.nft|" "$TMPDIR/vars-seds.sh")"
+    got4="$(sed -nE 's/^define NET_IFACE += *//p' "$TMPDIR/omr-vars.nft")"
+    got6="$(sed -nE 's/^define NET_IFACE6 += *//p' "$TMPDIR/omr-vars.nft")"
+    if [ "$got4" = "$1" ] && [ "$got6" = "$2" ]; then
+        pass "INTERFACE=$1 INTERFACE6=$2 gives NET_IFACE=$got4 NET_IFACE6=$got6"
+    else
+        fail "INTERFACE=$1 INTERFACE6=$2 gives NET_IFACE=$got4 NET_IFACE6=$got6"
+    fi
+done
 
 # The management rule and the dynamic chains have to be evaluated before the
 # trailing reject, or they are dead rules.
@@ -204,6 +295,25 @@ awk '
     END { exit !(ssh && ua && rej && ssh < rej && ua < rej) }' "$RULES" \
     && pass "the SSH rule and jump user_accept come before the trailing reject" \
     || fail "the input chain's trailing reject now comes before the SSH rule or jump user_accept"
+
+# #4384: omr-bypass routes what it marks out through bypass_intf (vpn1), no
+# zone of this ruleset. Unless forward accepts the mark ahead of its reject
+# and nat_postrouting masquerades it there, the router's bypassed IPv4 is
+# rejected, and what gets out leaves with a tunnel address.
+bypass_mark="$(sed -nE 's/^MARK="(0x[0-9a-fA-F]+)"$/\1/p' omr-bypass)"
+awk -v m="meta mark $bypass_mark accept" '
+    $1 == "chain" && $2 == "forward" { inside = 1; n = 0; next }
+    inside && /^\t\}/ { inside = 0 }
+    inside { n++; sub(/#.*/, ""); if (index($0, m) && $0 ~ /iifname \$VPN_IFACES/) acc = n; if ($0 ~ /reject/) rej = n }
+    END { exit !(acc && rej && acc < rej) }' "$RULES" \
+    && pass "forward accepts omr-bypass's mark ($bypass_mark) from the tunnels before its reject" \
+    || fail "forward does not accept omr-bypass's mark ($bypass_mark) before its reject; bypassed IPv4 is rejected (#4384)"
+if awk '$1 == "chain" && $2 == "nat_postrouting" { inside = 1 } inside && /^\t\}/ { inside = 0 } inside { sub(/#.*/, ""); print }' "$RULES" \
+    | grep -E "meta mark $bypass_mark " | grep -q masquerade; then
+    pass "nat_postrouting masquerades omr-bypass's mark ($bypass_mark)"
+else
+    fail "nat_postrouting does not masquerade omr-bypass's mark ($bypass_mark); bypassed traffic leaves vpn1 with a tunnel address (#4384)"
+fi
 
 # ── 5. a real parse ──────────────────────────────────────────────────────
 

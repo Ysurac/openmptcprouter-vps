@@ -2,10 +2,42 @@
 # Triggered by omr-vps-admin dropping a marker file: /update for a full
 # reinstall from the web, /update-bin for the binaries update the omr-server
 # package asks for from its postinst.
+# The channel is the one of the last installer run, which records it: a VPS
+# on server-test stays on server-test instead of being moved to the stable
+# release by the full reinstall. Then the one of the installed installer,
+# for a VPS last installed before that record existed. "server" (stable)
+# when neither can be read.
+# The installed installer alone was not enough: a VPS installed with the
+# script has no omr-server deb, and the installer removes it when its release
+# is not published yet, so a server-test VPS was "updated" to the stable
+# release, whose older packages left apt with broken dependencies.
+INSTALLED_CHANNEL=/etc/openmptcprouter-vps-admin/vpspath
+INSTALLED_INSTALLER=/usr/share/omr-server/debian9-x86_64.sh
+VPSPATH="$(grep -sxE '[A-Za-z0-9_-]+' "$INSTALLED_CHANNEL" | head -n 1)"
+[ -n "$VPSPATH" ] || VPSPATH="$(sed -n 's/^VPSPATH="\([A-Za-z0-9_-]*\)"$/\1/p' "$INSTALLED_INSTALLER" 2>/dev/null | head -n 1)"
+[ -n "$VPSPATH" ] || VPSPATH="server"
 if [ -f /etc/openmptcprouter-vps-admin/update ]; then
-        wget -O - http://www.openmptcprouter.com/server/debian.sh | sh
-        rm -f /etc/openmptcprouter-vps-admin/update
-        reboot
+	installer="$(mktemp /tmp/omr-update.XXXXXX)" || exit 1
+	# Do not pipe the network response into a root shell: POSIX pipelines report
+	# only the last command's status, so an empty response from a failed wget can
+	# look like a successful install.  Download over TLS, then execute only when
+	# the download completed successfully.
+	#
+	# Run it with sh, not bash: the installer is #!/bin/sh and carries no
+	# bashisms, and naming the interpreter here overrides its shebang.  Under
+	# bash the six `echo "\033[1m...\033[0m"` lines print their escapes
+	# literally instead of rendering, which includes the line that shows the
+	# generated omr-admin password.
+	if wget -O "$installer" "https://www.openmptcprouter.com/${VPSPATH}/debian.sh" \
+		&& sh "$installer"; then
+		rm -f "$installer" /etc/openmptcprouter-vps-admin/update
+		reboot
+	else
+		rc=$?
+		rm -f "$installer"
+		echo "omr-update: the full installer failed, keeping /etc/openmptcprouter-vps-admin/update so the next run retries" >&2
+		exit "$rc"
+	fi
 fi
 if [ -f /etc/openmptcprouter-vps-admin/update-bin ]; then
         # Wait for the package manager first. This unit is started by the
@@ -16,7 +48,9 @@ if [ -f /etc/openmptcprouter-vps-admin/update-bin ]; then
         #   E: `apt-get check` failed, you may have broken packages. Aborting...
         # which took one second and left nothing behind but the removed flag.
         i=0
-        while [ $i -lt 600 ] && pgrep -x "apt|apt-get|dpkg|unattended-upgrade" >/dev/null 2>&1; do
+        # A process name is cut to 15 characters: unattended-upgrade runs as
+        # "unattended-upgr", which "unattended-upgrade" never matched
+        while [ $i -lt 600 ] && pgrep -x "apt|apt-get|dpkg|unattended-upgr" >/dev/null 2>&1; do
                 sleep 1
                 i=$((i + 1))
         done

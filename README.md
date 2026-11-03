@@ -6,6 +6,7 @@ This is the VPS part of [OpenMPTCProuter](https://www.openmptcprouter.com/), a s
  
 * ```debian9-x86_64.sh```: The main script install ShadowSocks, Glorytun TCP, Glorytun UDP, nftables, the MPTCP kernel and can install OpenVPN
 * ```debian9-x86_64-mlvpn.sh```: Script to install MLVPN
+* ```omr-uninstall.sh```: Script to remove what ```debian9-x86_64.sh``` installed (configuration and keys are saved first in /root/omr-uninstall-backup-*.tar.gz)
 * ```config.json```: shadowsocks config
 * ```/nftables.conf```: installed at Debian's default nftables path, /etc/nftables.conf
 * ```/nftables```: native nftables ruleset (omr.nft) and per-install values (omr-vars.nft), installed under /etc/nftables/

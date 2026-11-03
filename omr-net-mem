@@ -1,0 +1,291 @@
+#!/bin/bash
+#
+# Copyright (C) 2026 Ycarus (Yannick Chabanois) <ycarus@zugaina.org> for OpenMPTCProuter
+#
+# omr-net-mem - size net.ipv4.tcp_mem and net.ipv4.udp_mem from the RAM this
+# VPS actually has, and keep tcp_rmem/tcp_wmem's max within what it can hold.
+#
+# WHY THIS EXISTS
+#
+# 90-shadowsocks.conf used to ship fixed values, in pages:
+#
+#   shadowsocks.6.1.conf / .6.18.conf   tcp_mem = 409600 819200 1638400
+#                                       udp_mem = 4096 87380 16777216
+#   shadowsocks.conf (older kernels)    tcp_mem = 8092 131072 67108864
+#
+# On a 1 GB VPS that is a TCP pressure threshold of 3.2 GB and a ceiling of
+# 6.4 GB (256 GB on the older set), and a UDP ceiling of 64 GB - the udp_mem
+# line is the classic tcp_rmem byte triple "4096 87380 16777216" pasted into a
+# sysctl that counts pages. The kernel enters memory pressure (pruning receive
+# queues, refusing to grow send buffers) when socket memory crosses the middle
+# value and refuses allocations above the last one; with both above physical
+# RAM neither ever happens, and socket memory grows until the OOM killer picks
+# a victim. On a VPS that terminates every router's proxy and VPN connections
+# that victim is typically one of those daemons.
+#
+# MPTCP makes the pool matter more, not less: net/mptcp/protocol.c sets
+# mptcp_prot.sysctl_mem = sysctl_tcp_mem, so the mptcp-level socket and every
+# subflow draw on this same tcp_mem pool, and mptcp_rcv_space_adjust() grows
+# each subflow's receive buffer to the mptcp socket's target.
+#
+# The sizing is the router's (feeds: openmptcprouter/files/bin/omr-net-mem):
+# the kernel's own 3/4 : 1 : 3/2 shape (tcp_init_mem(), udp_init()) on a base
+# of 16% of RAM for TCP from 768 MB up (12% from 192 MB, 8% below) and 12% for
+# UDP, never below the kernel's own RAM/16 and RAM/8, and never with a combined
+# ceiling above 75% of RAM. The result is applied and persisted to
+# /etc/sysctl.d/99-omr-net-mem.conf, which systemd-sysctl applies after
+# 90-shadowsocks.conf. omr-net-mem.service re-runs this at every boot, so a
+# resized VPS is re-sized too.
+#
+# Socket buffers: 90-shadowsocks.conf sets tcp_rmem/tcp_wmem's max to 128 MB,
+# what one connection needs for ~10 Gbit/s up to ~50 ms RTT. The only cap is
+# that no single socket's max may pass the tcp_mem pressure threshold (divided
+# by CONN_SHARE), so every VPS with ~1 GB keeps the full 128 MB and smaller ones
+# get what they can hold. It is not divided by the MPTCP subflow count: an
+# MPTCP connection has one receive window for all its subflows (measured on the
+# bench: a frozen three-subflow connection held 98% of one tcp_rmem max), and
+# its send side grows only with the paths' real rate. The value is only ever
+# lowered, never raised, and never below the kernel's own default maximum.
+#
+# Overrides, for a VPS that needs a different split, in /etc/default/omr-net-mem:
+#
+#   TCP_PERCENT=16
+#   UDP_PERCENT=12
+#   CONN_SHARE=1        one socket may use 1/N of the pressure threshold
+#   SOCKET_BUFFERS=0    leave tcp_rmem/tcp_wmem as 90-shadowsocks.conf sets them
+#
+# USAGE
+#
+#   omr-net-mem               size, apply and persist (default)
+#   omr-net-mem -s            show current vs computed, change nothing
+#   omr-net-mem -n            dry run: report, change nothing
+#   omr-net-mem --no-persist  apply without writing /etc/sysctl.d
+#   omr-net-mem --ram-mb N    with -s/-n: size for a VPS with N MB instead
+#   omr-net-mem -q            quiet
+
+set -u
+
+# Tests only: prefix for the files read and written
+ROOT="${OMR_NM_ROOT:-}"
+PERSIST_FILE="${ROOT}/etc/sysctl.d/99-omr-net-mem.conf"
+DEFAULTS_FILE="${ROOT}/etc/default/omr-net-mem"
+
+ACTION="apply"
+QUIET=0
+PERSIST=1
+FORCE_RAM_MB=""
+
+usage() {
+	sed -n '/^# USAGE/,/^$/p' "$0" | sed -e 's/^# \{0,1\}//' -e '$d'
+	exit "${1:-0}"
+}
+
+_say() { [ "$QUIET" -eq 1 ] || echo "$@"; }
+_warn() { echo "omr-net-mem: $*" >&2; }
+
+while [ $# -gt 0 ]; do
+	case "$1" in
+		-s|--show)	ACTION="show" ;;
+		-n|--dry-run)	ACTION="dryrun" ;;
+		-a|--apply)	ACTION="apply" ;;
+		--no-persist)	PERSIST=0 ;;
+		--ram-mb)	FORCE_RAM_MB="${2:-}"; shift ;;
+		-q|--quiet)	QUIET=1 ;;
+		-h|--help)	usage 0 ;;
+		*)		_warn "unknown option '$1'"; usage 1 ;;
+	esac
+	shift
+done
+
+TCP_PERCENT=""
+UDP_PERCENT=""
+CONN_SHARE=""
+SOCKET_BUFFERS=""
+# shellcheck disable=SC1090
+[ -f "$DEFAULTS_FILE" ] && . "$DEFAULTS_FILE"
+
+#
+# RAM
+#
+
+PAGE_KB=$(( $(getconf PAGESIZE 2>/dev/null || echo 4096) / 1024 ))
+[ "$PAGE_KB" -gt 0 ] 2>/dev/null || PAGE_KB=4
+
+if [ -n "$FORCE_RAM_MB" ]; then
+	case "$ACTION" in show|dryrun) ;; *) _warn "--ram-mb describes other hardware; use with -s or -n"; exit 1 ;; esac
+	case "$FORCE_RAM_MB" in ''|*[!0-9]*|0) _warn "--ram-mb must be a positive integer"; exit 1 ;; esac
+	RAM_KB=$(( FORCE_RAM_MB * 1024 ))
+else
+	RAM_KB=$(awk '/^MemTotal:/ { print $2; exit }' "${ROOT}/proc/meminfo" 2>/dev/null)
+fi
+case "${RAM_KB:-}" in ''|*[!0-9]*) _warn "cannot read MemTotal"; exit 1 ;; esac
+RAM_PAGES=$(( RAM_KB / PAGE_KB ))
+RAM_MB=$(( RAM_KB / 1024 ))
+_mb() { echo $(( $1 * PAGE_KB / 1024 )); }
+
+#
+# Shares
+#
+
+if [ -z "$TCP_PERCENT" ]; then
+	# Below the nominal sizes on purpose: MemTotal is always short of the
+	# advertised RAM (a 1 GB droplet reports ~960 MB).
+	if [ "$RAM_MB" -ge 768 ]; then TCP_PERCENT=16
+	elif [ "$RAM_MB" -ge 192 ]; then TCP_PERCENT=12
+	else TCP_PERCENT=8
+	fi
+fi
+[ -n "$UDP_PERCENT" ] || UDP_PERCENT=12
+[ -n "$CONN_SHARE" ] || CONN_SHARE=1
+[ -n "$SOCKET_BUFFERS" ] || SOCKET_BUFFERS=1
+case "$CONN_SHARE" in ''|*[!0-9]*|0) _warn "CONN_SHARE must be a positive integer"; exit 1 ;; esac
+for v in "$TCP_PERCENT" "$UDP_PERCENT"; do
+	case "$v" in ''|*[!0-9]*|0) _warn "TCP_PERCENT/UDP_PERCENT must be positive integers (got '$v')"; exit 1 ;; esac
+	[ "$v" -le 60 ] || { _warn "a share of $v% is above the 60% safety limit"; exit 1; }
+done
+
+TCP_LIMIT=$(( RAM_PAGES * TCP_PERCENT / 100 ))
+UDP_LIMIT=$(( RAM_PAGES * UDP_PERCENT / 100 ))
+# Never below what the kernel would have chosen, nor its 128-page minimum
+[ "$TCP_LIMIT" -ge $(( RAM_PAGES / 16 )) ] || TCP_LIMIT=$(( RAM_PAGES / 16 ))
+[ "$UDP_LIMIT" -ge $(( RAM_PAGES / 8 )) ]  || UDP_LIMIT=$(( RAM_PAGES / 8 ))
+[ "$TCP_LIMIT" -ge 128 ] || TCP_LIMIT=128
+[ "$UDP_LIMIT" -ge 128 ] || UDP_LIMIT=128
+
+TCP_MEM="$(( TCP_LIMIT * 3 / 4 )) ${TCP_LIMIT} $(( TCP_LIMIT * 3 / 2 ))"
+UDP_MEM="$(( UDP_LIMIT * 3 / 4 )) ${UDP_LIMIT} $(( UDP_LIMIT * 3 / 2 ))"
+COMBINED_MAX=$(( TCP_LIMIT * 3 / 2 + UDP_LIMIT * 3 / 2 ))
+if [ "$COMBINED_MAX" -ge $(( RAM_PAGES * 3 / 4 )) ]; then
+	_warn "computed ceilings ($(_mb $COMBINED_MAX) MB) exceed 75% of RAM; lower TCP_PERCENT/UDP_PERCENT"
+	exit 1
+fi
+
+#
+# Socket buffer maxima
+#
+
+# _conf_value <key>: what the sysctl.d files configure for <key> - the last
+# definition in systemd-sysctl's (file name) order, leaving out our own file.
+# The cap works from this, not from the live value, which after one run is
+# our own cap and would leave nothing to compare against.
+_conf_value() {
+	local f v="" nv
+	for f in "${ROOT}"/etc/sysctl.d/*.conf; do
+		[ -f "$f" ] || continue
+		[ "$f" = "$PERSIST_FILE" ] && continue
+		nv=$(sed -e 's/#.*//' "$f" | awk -F= -v k="$1" '
+			{ key = $1; gsub(/[ \t]/, "", key) }
+			key == k { val = $2; gsub(/^[ \t]+|[ \t]+$/, "", val); gsub(/[ \t]+/, " ", val); last = val }
+			END { if (last != "") print last }')
+		[ -n "$nv" ] && v=$nv
+	done
+	echo "$v"
+}
+CUR_RMEM=$(sysctl -n net.ipv4.tcp_rmem 2>/dev/null | tr -s ' \t' ' ')
+CUR_WMEM=$(sysctl -n net.ipv4.tcp_wmem 2>/dev/null | tr -s ' \t' ' ')
+BASE_RMEM=$(_conf_value net.ipv4.tcp_rmem); [ -n "$BASE_RMEM" ] || BASE_RMEM=$CUR_RMEM
+BASE_WMEM=$(_conf_value net.ipv4.tcp_wmem); [ -n "$BASE_WMEM" ] || BASE_WMEM=$CUR_WMEM
+read -r B_RMIN B_RDEF B_RMAX <<< "$BASE_RMEM"
+read -r B_WMIN B_WDEF B_WMAX <<< "$BASE_WMEM"
+: "${B_RMIN:=4096}" "${B_RDEF:=131072}" "${B_RMAX:=6291456}"
+: "${B_WMIN:=4096}" "${B_WDEF:=16384}" "${B_WMAX:=4194304}"
+
+CAP_BYTES=$(( TCP_LIMIT / CONN_SHARE * PAGE_KB * 1024 ))
+[ "$CAP_BYTES" -le 2147483647 ] || CAP_BYTES=2147483647
+# the kernel's own default maximum for this RAM (tcp_init(): RAM/128, rmem
+# within 128K..32M, wmem within 64K..4M) is the floor
+RAM_128=$(( RAM_KB * 8 ))
+K_RMAX=$RAM_128; [ "$K_RMAX" -gt 33554432 ] && K_RMAX=33554432; [ "$K_RMAX" -lt 131072 ] && K_RMAX=131072
+K_WMAX=$RAM_128; [ "$K_WMAX" -gt 4194304 ] && K_WMAX=4194304;   [ "$K_WMAX" -lt 65536 ] && K_WMAX=65536
+_capped() {
+	local m=$CAP_BYTES
+	[ "$m" -ge "$2" ] || m=$2
+	[ "$m" -le "$1" ] || m=$1
+	echo "$m"
+}
+if [ "$SOCKET_BUFFERS" = "1" ]; then
+	N_RMAX=$(_capped "$B_RMAX" "$K_RMAX"); N_WMAX=$(_capped "$B_WMAX" "$K_WMAX")
+else
+	N_RMAX=$B_RMAX; N_WMAX=$B_WMAX
+fi
+N_RDEF=$B_RDEF; [ "$N_RDEF" -le "$N_RMAX" ] || N_RDEF=$N_RMAX
+N_WDEF=$B_WDEF; [ "$N_WDEF" -le "$N_WMAX" ] || N_WDEF=$N_WMAX
+NEW_RMEM="$B_RMIN $N_RDEF $N_RMAX"
+NEW_WMEM="$B_WMIN $N_WDEF $N_WMAX"
+LIMIT=$N_RMAX; [ "$N_WMAX" -lt "$LIMIT" ] && LIMIT=$N_WMAX
+_gbps() { awk -v b="$1" -v r="$2" 'BEGIN { printf "%.1f", b * 8 / (2 * r / 1000) / 1e9 }'; }
+
+CUR_TCP_MEM=$(sysctl -n net.ipv4.tcp_mem 2>/dev/null | tr -s ' \t' ' ')
+CUR_UDP_MEM=$(sysctl -n net.ipv4.udp_mem 2>/dev/null | tr -s ' \t' ' ')
+
+set -- $TCP_MEM; T_LOW=$1; T_PRESS=$2; T_MAX=$3
+set -- $UDP_MEM; U_LOW=$1; U_PRESS=$2; U_MAX=$3
+
+_say "RAM               : ${RAM_MB} MB (${RAM_PAGES} pages of ${PAGE_KB} kB)"
+_say "tcp_mem current   : ${CUR_TCP_MEM}"
+_say "tcp_mem computed  : ${TCP_MEM}"
+_say "                    $(_mb $T_LOW) MB / $(_mb $T_PRESS) MB / $(_mb $T_MAX) MB  (${TCP_PERCENT}% of RAM at pressure)"
+_say "udp_mem current   : ${CUR_UDP_MEM}"
+_say "udp_mem computed  : ${UDP_MEM}"
+_say "                    $(_mb $U_LOW) MB / $(_mb $U_PRESS) MB / $(_mb $U_MAX) MB  (${UDP_PERCENT}% of RAM at pressure)"
+_say "combined ceiling  : $(_mb $COMBINED_MAX) MB of ${RAM_MB} MB RAM"
+_say "tcp_rmem configured: ${B_RMIN} ${B_RDEF} ${B_RMAX}   computed: ${NEW_RMEM}"
+_say "tcp_wmem configured: ${B_WMIN} ${B_WDEF} ${B_WMAX}   computed: ${NEW_WMEM}"
+if [ "$SOCKET_BUFFERS" != "1" ]; then
+	_say "                    (not capped: SOCKET_BUFFERS=0)"
+elif [ "$CAP_BYTES" -lt "$B_RMAX" ] || [ "$CAP_BYTES" -lt "$B_WMAX" ]; then
+	_say "                    max capped at $(( CAP_BYTES / 1048576 )) MB = pressure threshold / ${CONN_SHARE}"
+else
+	_say "                    enough RAM: configured max kept ($(( CAP_BYTES / 1048576 )) MB would be allowed)"
+fi
+_say "per connection    : ~$(_gbps $LIMIT 20) Gbit/s at 20 ms RTT, ~$(_gbps $LIMIT 50) at 50 ms, ~$(_gbps $LIMIT 100) at 100 ms"
+
+[ "$ACTION" = "show" ] && exit 0
+[ "$ACTION" = "dryrun" ] && { _say ""; _say "(dry run, nothing changed)"; exit 0; }
+
+#
+# Apply
+#
+
+RC=0
+_apply() {
+	if [ "$(sysctl -n "$1" 2>/dev/null | tr -s ' \t' ' ')" = "$2" ]; then
+		return 0
+	elif sysctl -qw "$1=$2" 2>/dev/null; then
+		_say "applied $1 = $2"
+	else
+		_warn "failed to set $1"
+		RC=1
+	fi
+}
+_apply net.ipv4.tcp_mem "$TCP_MEM"
+_apply net.ipv4.udp_mem "$UDP_MEM"
+# applied whether capped or not: with SOCKET_BUFFERS=0 this puts the
+# configured value back after an earlier capped run
+_apply net.ipv4.tcp_rmem "$NEW_RMEM"
+_apply net.ipv4.tcp_wmem "$NEW_WMEM"
+
+#
+# Persist: only values the kernel just accepted, only when they change.
+#
+
+if [ "$PERSIST" -eq 1 ] && [ "$RC" -eq 0 ]; then
+	NEW_CONTENT="# Generated by omr-net-mem - do not edit.
+# Sized from ${RAM_MB} MB of RAM (re-sized at every boot by omr-net-mem.service).
+# Overrides go in /etc/default/omr-net-mem (TCP_PERCENT=, UDP_PERCENT=,
+# CONN_SHARE=, SOCKET_BUFFERS=).
+net.ipv4.tcp_mem = ${TCP_MEM}
+net.ipv4.udp_mem = ${UDP_MEM}"
+	[ "$SOCKET_BUFFERS" = "1" ] && NEW_CONTENT="${NEW_CONTENT}
+net.ipv4.tcp_rmem = ${NEW_RMEM}
+net.ipv4.tcp_wmem = ${NEW_WMEM}"
+	if [ -f "$PERSIST_FILE" ] && [ "$(cat "$PERSIST_FILE" 2>/dev/null)" = "$NEW_CONTENT" ]; then
+		_say "$PERSIST_FILE already up to date"
+	elif echo "$NEW_CONTENT" > "$PERSIST_FILE"; then
+		_say "persisted to $PERSIST_FILE"
+	else
+		_warn "cannot write $PERSIST_FILE"
+		RC=1
+	fi
+fi
+exit "$RC"

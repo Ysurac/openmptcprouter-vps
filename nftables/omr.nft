@@ -22,10 +22,11 @@
 #   user_accept    -- ACCEPT-type opened ports                 (shorewall/rules ACCEPT lines)
 #   user_dnat      -- DNAT-type redirected ports + bulk toggle  (shorewall/rules DNAT lines)
 #   gre_snat       -- per-public-IP GRE tunnel SNAT pairs       (shorewall/snat SNAT(...) lines)
+#   gre_forward    -- GRE tunnel <-> its public IP's interface   (a public IP on another NIC than NET_IFACE)
 #   client2client  -- vpn<->vpn forwarding toggle               (shorewall/policy `vpn vpn DROP`)
 #   dscp_mark      -- destination-DSCP classification           (shorewall/mangle DSCP(...) rows)
-#   ct_helpers     -- SIP ALG toggle                             (shorewall.conf DONT_LOAD/AUTOHELPERS)
-# All six are empty (disabled) by default, matching the shipped Shorewall
+#   ct_helpers     -- SIP ALG toggle                             (shorewall.conf DONT_LOAD/AUTOHELPERS; FTP is in helper_*)
+# All seven are empty (disabled) by default, matching the shipped Shorewall
 # templates' own defaults (bulk redirect commented out, client2client
 # defaulting to DROP i.e. this chain staying empty, no DSCP classification
 # synced yet, no ports opened yet, no GRE tunnels provisioned yet, SIP ALG
@@ -51,6 +52,7 @@ table inet omr {
 	chain user_accept {}
 	chain user_dnat {}
 	chain gre_snat {}
+	chain gre_forward {}
 	chain client2client {}
 	chain dscp_mark {}
 	chain ct_helpers {}
@@ -78,6 +80,20 @@ table inet omr {
 		icmp type echo-request accept
 		icmpv6 type echo-request accept
 		ip6 nexthdr icmpv6 icmpv6 type { nd-neighbor-solicit, nd-router-advert, nd-neighbor-advert } accept
+		# shorewall6.conf AllowICMPs / shorewall6/rules ACCEPT net $FW ipv6-icmp:
+		# MLD queries from the on-link router. Conntrack leaves MLD untracked,
+		# and the queries carry a hop-by-hop header (router alert), so the
+		# `ip6 nexthdr icmpv6` above never matches them -- `icmpv6 type` alone
+		# looks past extension headers. Left unanswered, an MLD-snooping switch
+		# stops forwarding neighbour solicitations for our addresses and IPv6
+		# goes away (issue #4381).
+		ip6 saddr fe80::/10 icmpv6 type mld-listener-query accept
+		# shorewall6/interfaces: `dhcp` on $NET_IFACE. The Solicit goes to
+		# ff02::1:2 but the Advertise/Reply comes back to our link-local
+		# address, so conntrack sees it as NEW: without this the VPS never
+		# gets (or renews) a DHCPv6 lease. No iifname: IPv6 is not always on
+		# $NET_IFACE (#3271), and fe80::/10 already keeps it on-link.
+		ip6 daddr fe80::/10 udp dport 546 accept
 
 		tcp dport 65000-65535 accept                            # shorewall/rules: shadowsocks/glorytun ephemeral range
 		udp dport 65000-65535 accept
@@ -101,13 +117,40 @@ table inet omr {
 		iifname $VPN_IFACES oifname $NET_IFACE accept           # policy: vpn net ACCEPT
 		iifname $VPNCL_IFACES oifname $VPN_IFACES accept        # policy: vpncl vpn ACCEPT
 		iifname $VPN_IFACES oifname $VPNCL_IFACES accept        # policy: vpn vpncl ACCEPT
+		# omr-bypass marks (0x539) what goes to the bypassed addresses and
+		# routes it out through its bypass_intf (vpn1 by default), which is
+		# no zone here: without this the router's IPv4 for those addresses
+		# hits the trailing reject. Masqueraded in nat_postrouting.
+		iifname $VPN_IFACES meta mark 0x539 accept
+		jump gre_forward                                        # a GRE tunnel's public IP on another interface than NET_IFACE
 
-		iifname $NET_IFACE oifname $VPN_IFACES accept
-
-		meta nfproto ipv6 iifname $VPN_IFACES accept            # shorewall6/policy: vpn all ACCEPT
+		# net->vpn: only what user_dnat redirected (the per-user port
+		# redirects, the bulk 1-64999 toggle, a GRE public IP's redirects),
+		# as with shorewall4/6 (net all DROP, DNAT rules). Everything else a
+		# WAN host could route at us is still headed somewhere the internet
+		# has no business reaching: omr-service routes each router's LAN
+		# subnets into its tunnel, and the tunnel addresses themselves are
+		# one hop away, so a neighbour on the provider's segment (or anyone
+		# upstream willing to route 10.255.0.0/16 or 192.168.0.0/16 at this
+		# box) reached them directly. Return traffic of what the routers
+		# open is established and accepted above.
+		meta nfproto ipv4 iifname $NET_IFACE oifname $VPN_IFACES ct status dnat accept
+		# Same for IPv6. A public prefix the router asks for ("IPv6 Prefix")
+		# is routed into its omr-6in4 tunnel by omr-6in4-run; that must not
+		# open the router's LAN to the internet (#4382).
+		meta nfproto ipv6 iifname $NET_IFACE6 oifname $VPN_IFACES ct status dnat accept
 
 		jump client2client                                      # policy: vpn vpn DROP, unless /client2client enabled
 		iifname $VPN_IFACES oifname $VPN_IFACES drop
+
+		# shorewall6/policy: vpn all ACCEPT -- vpn->net (the router's IPv6
+		# out of its omr-6in4 tunnel, on $NET_IFACE6 or any other NIC) and
+		# vpn->vpncl. Only after the vpn->vpn drop above: accepted ahead of
+		# it, IPv6 from one user's tunnel into another's (the 6in4 tunnels,
+		# their routed ULA/public prefixes, the fd00:: tunnel addresses)
+		# skipped the client isolation IPv4 gets. vpn->fw IPv6 is the input
+		# chain's, not this one.
+		meta nfproto ipv6 iifname $VPN_IFACES accept
 
 		reject with icmpx type port-unreachable
 	}
@@ -159,13 +202,21 @@ table inet omr {
 
 		# shorewall6/snat: MASQUERADE fe80::/10,fd00::/8 $NET_IFACE -- NAT66
 		# for the clients' ULA (and link-local) sources egressing the WAN.
-		ip6 saddr { fe80::/10, fd00::/8 } oifname $NET_IFACE masquerade
+		# shorewall6's $NET_IFACE was the IPv6 WAN, hence $NET_IFACE6 (#3271).
+		ip6 saddr { fe80::/10, fd00::/8 } oifname $NET_IFACE6 masquerade
 
 		# shorewall4/snat's own commented-out example ("SNAT from VPN server
 		# for all VPN clients") -- disabled by default there too:
 		#   ip saddr 0.0.0.0/0 oifname $VPS_IFACE snat ip to $VPS_ADDR
 
 		jump gre_snat                                            # live GRE-tunnel-per-public-IP SNAT pairs
+
+		# omr-bypass (mark 0x539): the router's tunnel addresses (and the
+		# VPS's own WAN address, chosen before the mark rerouted it) mean
+		# nothing past bypass_intf, so take that interface's address. Not on
+		# the WAN, where the marked traffic only goes while bypass_intf has
+		# no route: the rules above already handle it there.
+		meta mark 0x539 oifname != $NET_IFACE oifname != $NET_IFACE6 masquerade
 	}
 
 	# --- shorewall4/mangle (DSCP destination classification) ----------------
@@ -174,18 +225,30 @@ table inet omr {
 		jump dscp_mark
 	}
 
-	# --- shorewall.conf DONT_LOAD/AUTOHELPERS (SIP ALG) ---------------------
-	# ct helper assignment must happen before conntrack builds state, i.e. at
-	# raw priority -- both directions (prerouting for inbound SIP signalling,
-	# output for the box's own outbound SIP) to match the old conntrack
-	# file's "PO" (PREROUTING+OUTPUT) position marker.
+	# --- shorewall4/conntrack: CT:helper:ftp:PO tcp 21 (AUTOHELPERS=Yes) ----
+	# Passive FTP through a port 21 redirect needs it (openmptcprouter#4365).
+	# The installer loads nf_nat_ftp, or removes these lines where it can't.
+	ct helper ftp { type "ftp" protocol tcp; }
+	# After conntrack (-200), as firewall4 does: at priority raw there is no
+	# connection yet and "ct helper set" does nothing. ct_helpers: omr-admin's SIP.
+	chain helper_prerouting {
+		type filter hook prerouting priority filter; policy accept;
+		tcp dport 21 ct helper set "ftp"
+		jump ct_helpers
+	}
+
+	chain helper_output {
+		type filter hook output priority filter; policy accept;
+		tcp dport 21 ct helper set "ftp"
+		jump ct_helpers
+	}
+
+	# Before conntrack, for notrack rules of your own (custom.d).
 	chain raw_prerouting {
 		type filter hook prerouting priority raw; policy accept;
-		jump ct_helpers
 	}
 
 	chain raw_output {
 		type filter hook output priority raw; policy accept;
-		jump ct_helpers
 	}
 }

@@ -199,6 +199,27 @@ test_stop_keeps_bridge_still_used_by_another_client() {
     assert_calls_lack "bridge left alone (other client still on it)" "$calls" "link del br-vxlan9"
 }
 
+# ── config file is data, never shell code ─────────────────────────────────────
+
+test_config_is_not_run_as_shell_code() {
+    # The file carries values a router sent through the API, and the script
+    # runs as root: nothing in it may run, and only the expected keys apply.
+    local cfg calls
+    rm -f "$TMPDIR/pwned"*
+    cfg=$(_write_cfg user_inject 'VNI=6' 'LOCALIP=10.0.0.1' 'REMOTEIP=10.0.0.3' \
+        'LOCALTUNIP=10.255.249.17/30$(touch '"$TMPDIR"'/pwned1)' \
+        'LOCALTUNIP6=fd00::b04:1/126;touch '"$TMPDIR"'/pwned2' \
+        'touch '"$TMPDIR"'/pwned3' \
+        'PATH=/nonexistent' 'MTU=1380')
+    calls=$(_run start "$cfg")
+    assert_eq "no command from the file ran" "" "$(ls "$TMPDIR"/pwned* 2>/dev/null)"
+    assert_calls_contain "valid keys still applied" "$calls" \
+        "ip link add vx-user_inject type vxlan id 6 local 10.0.0.1 remote 10.0.0.3 dstport 4789"
+    assert_calls_contain "PATH not taken from the file" "$calls" "ip link set mtu 1380 dev vx-user_inject"
+    assert_calls_lack "invalid LOCALTUNIP ignored" "$calls" "ip addr add"
+    assert_calls_lack "invalid LOCALTUNIP6 ignored" "$calls" "ip -6 addr add"
+}
+
 # ── Run ───────────────────────────────────────────────────────────────────────
 
 for t in \
@@ -211,6 +232,7 @@ for t in \
     test_stop_deletes_device_l3_no_bridge_touched \
     test_stop_removes_now_empty_shared_bridge \
     test_stop_keeps_bridge_still_used_by_another_client \
+    test_config_is_not_run_as_shell_code \
 ; do
     printf '\n▶ %s\n' "$t"
     "$t"

@@ -174,6 +174,60 @@ for tag in $(uncommented | grep -oE '\.tag=="[^"]+"' | sed 's/.*=="//; s/"//' | 
     fi
 done
 
+# ── 4b. proxy users and the VPS's loopback ────────────────────────────────
+# A proxy user's freedom outbound dials from the VPS itself, so 127.0.0.1 is
+# the VPS: the xray/v2ray gRPC API (10086/10085), OpenVPN's management socket
+# (65302, no password), ss-manager (8839/udp), the MQVPN control API (9090),
+# shadowsocks-go's API (65279) and the omr-admin API seen from loopback
+# (exempt from fail2ban). Routers never send loopback through the proxy (their
+# transparent proxy bypasses it), and the VPS->LAN port forwards are
+# dokodemo-door inbounds of their own, so the block is scoped to the inbounds
+# the users connect to. omr-admin's xray_del_routing/v2ray_del_routing read
+# rule['outboundTag'] on every rule, so none may lack one.
+
+echo
+echo "== proxy users can't reach the VPS's loopback =="
+REALITY_TAGS="$(jq -r '.inbounds[]?.tag' xray-vless-reality.json 2>/dev/null)"
+for f in xray-server.json v2ray-server.json; do
+    [ -f "$f" ] || continue
+    extra=""
+    [ "$f" = xray-server.json ] && extra="$REALITY_TAGS"
+    if [ "$(jq -r '.outbounds[0].protocol' "$f")" = freedom ]; then
+        pass "$f: the first (default) outbound is still freedom"
+    else
+        fail "$f: the first outbound is no longer freedom, it is what every unmatched connection takes"
+    fi
+    if jq -e '[.routing.rules[] | select(has("outboundTag") | not)] | length == 0' "$f" >/dev/null; then
+        pass "$f: every routing rule has an outboundTag (omr-admin's *_del_routing index it)"
+    else
+        fail "$f: a routing rule has no outboundTag; omr-admin's *_del_routing raise KeyError on it"
+    fi
+    out=$(jq -r --arg extra "$extra" '
+        ([.outbounds[] | select(.protocol == "blackhole") | .tag]) as $bh |
+        ([.outbounds[] | select(.protocol == "freedom") | .tag]) as $free |
+        ([.inbounds[] | select(.protocol != "dokodemo-door") | .tag] + ($extra | split("\n") | map(select(. != "")))) as $users |
+        (.routing.rules | to_entries) as $r |
+        ([$r[] | select((.value.outboundTag as $o | $bh | index($o)) and ((.value.ip // []) | index("127.0.0.0/8")) and ((.value.ip // []) | index("::1/128")))]) as $ipr |
+        ([$r[] | select((.value.outboundTag as $o | $bh | index($o)) and ((.value.domain // []) | index("domain:localhost")))]) as $dnr |
+        if ($bh | length) == 0 then "no blackhole outbound"
+        elif ($ipr | length) == 0 then "no rule sends 127.0.0.0/8 and ::1/128 to a blackhole outbound"
+        elif ($dnr | length) == 0 then "no rule sends domain:localhost to a blackhole outbound"
+        elif ([$users[] | select(. as $u | ($ipr[0].value.inboundTag | index($u)) == null)] | length) > 0 then
+            "the loopback ip rule misses inbound(s) " + ([$users[] | select(. as $u | ($ipr[0].value.inboundTag | index($u)) == null)] | join(","))
+        elif ([$users[] | select(. as $u | ($dnr[0].value.inboundTag | index($u)) == null)] | length) > 0 then
+            "the localhost domain rule misses inbound(s) " + ([$users[] | select(. as $u | ($dnr[0].value.inboundTag | index($u)) == null)] | join(","))
+        elif ($ipr[0].value.inboundTag + $dnr[0].value.inboundTag | index("api")) != null then
+            "the loopback block applies to the api inbound, which is how omr-admin reaches the proxy"
+        elif ([$r[] | select(.key < ([$ipr[0].key, $dnr[0].key] | max)) | select(.value.outboundTag as $o | $free | index($o)) | select((.value.inboundTag // []) as $i | [$users[] | select(. as $u | $i | index($u))] | length > 0)] | length) > 0 then
+            "a rule ahead of the loopback block already sends user traffic to freedom"
+        else "ok" end' "$f")
+    if [ "$out" = ok ]; then
+        pass "$f: loopback (127.0.0.0/8, ::1, localhost) from every user inbound goes to a blackhole outbound"
+    else
+        fail "$f: $out"
+    fi
+done
+
 # ── 5. files the runtime appends to ────────────────────────────────────────
 # omr-admin rewrites /etc/sysctl.d/90-shadowsocks.conf (POST /settings, the
 # MPTCP block) and /etc/openvpn/tun0.conf (the client2client sync) by reading
@@ -306,6 +360,54 @@ for f in shadowsocks.6.1.conf shadowsocks.6.18.conf; do
     else
         pass "$f carries no out of tree net.mptcp.mptcp_* key"
     fi
+done
+
+# ── 8. OpenVPN socket buffers ──────────────────────────────────────────────
+# On a TCP tunnel a non-zero sndbuf/rcvbuf sets SO_SNDBUF/SO_RCVBUF, which pins
+# the socket (the kernel doubles the value) and turns TCP autotuning off. The
+# 6.1 templates had "sndbuf 262144"/"rcvbuf 262144" and pushed them to every
+# router, holding the TCP tunnel's window at 512 KB - ~200 Mbit/s at 20 ms
+# RTT, ~80 Mbit/s at 50 ms - whatever the links. UDP never autotunes, so a UDP
+# tunnel should set a real size, but one the kernel does not clamp: SO_RCVBUF
+# is silently capped at net.core.rmem_max.
+
+echo
+echo "== OpenVPN socket buffers =="
+RMEM_MAX=$(sed -e 's/#.*//' shadowsocks.6.18.conf | sed -n 's/^[[:space:]]*net\.core\.rmem_max[[:space:]]*=[[:space:]]*//p' | tail -1)
+for f in openvpn-*.conf; do
+    [ -f "$f" ] || continue
+    body=$(sed -e 's/#.*//' "$f")
+    bufs=$(echo "$body" | grep -nE '^[[:space:]]*(push[[:space:]]+"?)?(sndbuf|rcvbuf)[[:space:]]+[1-9]')
+    if echo "$body" | grep -qE '^[[:space:]]*proto[[:space:]]+tcp'; then
+        if [ -n "$bufs" ]; then
+            fail "$f (TCP) pins a socket buffer, which disables autotuning: $bufs"
+        else
+            pass "$f (TCP) leaves its socket buffers to autotuning"
+        fi
+    else
+        too_big=$(echo "$bufs" | awk -v m="${RMEM_MAX:-0}" '{ v = $NF; gsub(/"/, "", v); if (m > 0 && v + 0 > m + 0) print }')
+        if [ -n "$too_big" ]; then
+            fail "$f (UDP) asks for more than net.core.rmem_max ($RMEM_MAX), which the kernel clamps: $too_big"
+        else
+            pass "$f (UDP) buffer requests fit under net.core.rmem_max"
+        fi
+    fi
+done
+if sed -e 's/#.*//' openvpn-tun1.6.1.conf | grep -qE '^[[:space:]]*rcvbuf[[:space:]]+([1-9][0-9]{6,})'; then
+    pass "openvpn-tun1.6.1.conf (UDP) sets a receive buffer of at least 1 MB"
+else
+    fail "openvpn-tun1.6.1.conf (UDP) sets under 1 MB of receive buffer, or none (rmem_default, 208 KB): UDP does not autotune"
+fi
+
+# ── 9. tcp_mtu_probing ─────────────────────────────────────────────────────
+# 1 = blackhole detection. With 0, an MPTCP subflow over a path filtering ICMP
+# "fragmentation needed" never recovered on the bench and the connection lost
+# that WAN; 2 would start every connection at 1024-byte segments.
+echo
+echo "== tcp_mtu_probing =="
+for f in shadowsocks.conf shadowsocks.6.1.conf shadowsocks.6.18.conf; do
+    v=$(sed -e 's/#.*//' "$f" | sed -n 's/^[[:space:]]*net\.ipv4\.tcp_mtu_probing[[:space:]]*=[[:space:]]*//p' | tail -1)
+    if [ "$v" = "1" ]; then pass "$f sets tcp_mtu_probing = 1"; else fail "$f sets tcp_mtu_probing = '${v:-unset}', expected 1"; fi
 done
 
 echo

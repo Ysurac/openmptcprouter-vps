@@ -619,8 +619,13 @@ sleep 2
 # thousand lines below: the omr-vps-admin deb Depends on it, and on a fresh VPS
 # that dependency is unsatisfied by the time this script installs it, which
 # leaves the package unconfigured and (set -e) ends the whole install
+# bpftool too: mptcp-bpf-dscp, -weight and -weight-rr Depend on it, and
+# when the APT repository lacks MPTCP_BPF_VERSION they are installed with
+# dpkg -i, which does not pull dependencies (set -e then ends the install)
 if [ "$ID" = "debian" ] && [ "$VERSION_ID" = "13" ]; then
 	apt-get -y install dirmngr patch rename curl unzip pkg-config ipset bpftool nftables
+elif [ "$ID" = "debian" ] && [ "$VERSION_ID" = "12" ]; then
+	apt-get -y install dirmngr patch rename curl libcurl4 unzip pkg-config ipset bpftool nftables
 else
 	apt-get -y install dirmngr patch rename curl libcurl4 unzip pkg-config ipset nftables
 fi

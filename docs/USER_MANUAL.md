@@ -62,6 +62,7 @@ MQVPN=no WIREGUARD=no SOFTETHERVPN=yes wget -O - https://www.openmptcprouter.com
 | `DSVPN` | `yes` | Enable DSVPN |
 | `WIREGUARD` | `yes` | Enable WireGuard |
 | `FAIL2BAN` | `yes` | Install and configure fail2ban |
+| `TRAFFIC_LOG` | `no` | Log each user connection, with its username, to `/var/log/omr-traffic.log` (see section 9). Once on, it stays on across updates until you run the installer with `TRAFFIC_LOG=no` |
 | `OMR_ADMIN` | `yes` | Install the `omr-admin` API server (needed by the router's web UI) |
 | `OMR_METRICS` | `no` | Install the metrics collector |
 | `OMR_AI` | `no` | Install the AI-assisted forecasting/decision add-on |
@@ -275,7 +276,35 @@ practice this matters less for these than for password-style logins: their share
 long random keys exchanged out of band, not something an attacker can meaningfully guess by
 repeated connection attempts.
 
-## 9. Troubleshooting
+## 9. Traffic log (`TRAFFIC_LOG=yes`)
+
+Off by default. With `TRAFFIC_LOG=yes`, the installer installs syslog-ng and the `omr-traffic-log`
+service, and `/var/log/omr-traffic.log` gets one JSON object per connection, with the username
+(rotated daily, 30 days kept):
+
+```
+{"server": "mqvpn", "network": "udp", "clientAddress": "10.255.220.2:63317", "username": "openmptcprouter", "targetAddress": "9.9.9.9:53", "nl2r": 86, "nr2l": 202}
+{"server": "ss-2022", "listener": 0, "listenAddress": "[::]:65280", "clientAddress": "[::ffff:203.0.113.7]:48524", "username": "openmptcprouter", "targetAddress": "1.1.1.1:80", "client": "direct", "nl2r": 72, "nr2l": 219}
+```
+
+`nl2r` and `nr2l` are the bytes sent and received, from the side that opened the connection.
+
+- **MQVPN, Glorytun TCP/UDP, OpenVPN (tun0, tun1)**: from the kernel connection tracking, one line
+  when each connection ends, external traffic only (not the router's own DNS or pings to the VPS).
+  `clientAddress` is the router's tunnel address: the router hides its LAN behind it.
+- **Shadowsocks-Go**: its own log, TCP connections; shadowsocks-go is switched to `info` logging
+  for this.
+- **Xray, V2Ray**: their own access log, one line when each connection opens, without byte counts
+  (they don't keep any per connection).
+
+Not covered: the OpenVPN bonding tunnels, and a router LAN that is routed rather than hidden behind
+the tunnel address. To also send it to a remote syslog server, see the example at the end of
+`/etc/syslog-ng/conf.d/omr-traffic.conf`.
+
+This log records every destination your users reach: check what your local privacy law (GDPR in
+the EU) requires before turning it on.
+
+## 10. Troubleshooting
 
 - **Tunnel keeps dropping**: check `journalctl -u omr-service` for restart log lines — the watchdog
   logs which tunnel it restarted and why (missing process vs. no ping response).
@@ -287,7 +316,7 @@ repeated connection attempts.
   current version — set `REINSTALL=yes` to force it.
 - **Wrong network interface detected**: set `INTERFACE`/`INTERFACE6` explicitly and re-run.
 
-## 10. Uninstalling
+## 11. Uninstalling
 
 There is no automated uninstaller. Removing the `omr-server` package removes the files this repo
 installs, but tunnel packages, the kernel, and the nftables configuration under `/etc/nftables.conf`

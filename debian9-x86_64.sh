@@ -47,6 +47,10 @@ SOFTETHERVPN_PASS_USER=${SOFTETHERVPN_PASS_USER:-$(od -vN "16" -An -tx1 /dev/ura
 DSVPN=${DSVPN:-yes}
 WIREGUARD=${WIREGUARD:-yes}
 FAIL2BAN=${FAIL2BAN:-yes}
+# Opt-in, and kept once chosen: the updates a router triggers (omr-update) run
+# this script without any setting, which would otherwise switch it off again.
+[ -e /lib/systemd/system/omr-traffic-log.service ] && TRAFFIC_LOG=${TRAFFIC_LOG:-yes}
+TRAFFIC_LOG=${TRAFFIC_LOG:-no}
 BPFTUNE=${BPFTUNE:-no}
 SOURCES=${SOURCES:-no}
 #if [ "$KERNEL" != "5.4" ]; then
@@ -92,7 +96,7 @@ OMR_ADMIN_VERSION="aee208030982a3a8dc43a4fa2da067cdb345b8d4"
 OMR_ADMIN_BINARY_VERSION="0.18+20261111"
 DSVPN_VERSION="3b99d2ef6c02b2ef68b5784bec8adfdd55b29b1a"
 DSVPN_BINARY_VERSION="0.1.4-2"
-MQVPN_VERSION="0.19.0+20261101-1"
+MQVPN_VERSION="0.19.2+20261112-1"
 OPENVPN_BINARY_VERSION="2.7.8+mptcp.20261015.g5f3fa84~trixie"
 IPERF_VERSION="3.22-0.1"
 V2RAY_VERSION="5.54.2"
@@ -118,7 +122,7 @@ VPSURL="https://www.openmptcprouter.com/"
 REPO="repo.openmptcprouter.com"
 CHINA=${CHINA:-no}
 
-OMR_VERSION="0.1098-rolling-test"
+OMR_VERSION="0.1099-rolling-test"
 
 DIR=$( pwd )
 #"
@@ -2262,6 +2266,47 @@ if [ "$FAIL2BAN" = "yes" ]; then
 	echo "Install Fail2ban done"
 fi
 
+# Traffic log with usernames: one JSON line per connection of MQVPN, Glorytun,
+# OpenVPN, Xray, V2Ray and shadowsocks-go, through syslog-ng into
+# /var/log/omr-traffic.log. Opt-in: it records every destination users reach.
+if [ "$TRAFFIC_LOG" = "yes" ]; then
+	echo "Install the traffic log"
+	rm -f /var/lib/dpkg/lock
+	rm -f /var/lib/dpkg/lock-frontend
+	apt-get -y install syslog-ng-core conntrack
+	mkdir -p /etc/syslog-ng/conf.d /etc/systemd/system/shadowsocks-go.service.d
+	if [ "$LOCALFILES" = "no" ]; then
+		fetch_file ${VPSURL}${VPSPATH}/omr-traffic-log /usr/local/bin/omr-traffic-log
+		fetch_file ${VPSURL}${VPSPATH}/omr-traffic-log.service.in /lib/systemd/system/omr-traffic-log.service
+		fetch_file ${VPSURL}${VPSPATH}/syslog-ng-omr-traffic.conf /etc/syslog-ng/conf.d/omr-traffic.conf
+		fetch_file ${VPSURL}${VPSPATH}/omr-traffic.logrotate /etc/logrotate.d/omr-traffic
+		fetch_file ${VPSURL}${VPSPATH}/shadowsocks-go-traffic-log.conf /etc/systemd/system/shadowsocks-go.service.d/omr-traffic-log.conf
+	else
+		copy_file ${DIR}/omr-traffic-log /usr/local/bin/omr-traffic-log
+		cp ${DIR}/omr-traffic-log.service.in /lib/systemd/system/omr-traffic-log.service
+		cp ${DIR}/syslog-ng-omr-traffic.conf /etc/syslog-ng/conf.d/omr-traffic.conf
+		cp ${DIR}/omr-traffic.logrotate /etc/logrotate.d/omr-traffic
+		cp ${DIR}/shadowsocks-go-traffic-log.conf /etc/systemd/system/shadowsocks-go.service.d/omr-traffic-log.conf
+	fi
+	chmod 755 /usr/local/bin/omr-traffic-log
+	chmod 644 /lib/systemd/system/omr-traffic-log.service /etc/syslog-ng/conf.d/omr-traffic.conf \
+		/etc/logrotate.d/omr-traffic /etc/systemd/system/shadowsocks-go.service.d/omr-traffic-log.conf
+	systemctl daemon-reload
+	systemctl enable syslog-ng.service omr-traffic-log.service
+	echo "Install the traffic log done"
+elif [ -e /lib/systemd/system/omr-traffic-log.service ]; then
+	# TRAFFIC_LOG=no given explicitly: remove it. syslog-ng and the log
+	# already written stay.
+	echo "Remove the traffic log"
+	systemctl -q disable --now omr-traffic-log.service > /dev/null 2>&1 || true
+	rm -f /usr/local/bin/omr-traffic-log /lib/systemd/system/omr-traffic-log.service \
+		/etc/syslog-ng/conf.d/omr-traffic.conf /etc/logrotate.d/omr-traffic \
+		/etc/systemd/system/shadowsocks-go.service.d/omr-traffic-log.conf
+	rmdir /etc/systemd/system/shadowsocks-go.service.d 2> /dev/null || true
+	systemctl daemon-reload
+	systemctl -q reload syslog-ng > /dev/null 2>&1 || true
+fi
+
 if systemctl -q is-active openvpn-server@tun0.service 2>/dev/null; then
 	systemctl -q stop openvpn-server@tun0 > /dev/null 2>&1 || true
 	systemctl -q disable openvpn-server@tun0 > /dev/null 2>&1 || true
@@ -3443,6 +3488,12 @@ else
 	if [ "$FAIL2BAN" = "yes" ]; then
 		echo 'Restarting fail2ban...'
 		restart_or_warn fail2ban
+		echo 'done'
+	fi
+	if [ "$TRAFFIC_LOG" = "yes" ]; then
+		echo 'Restarting the traffic log...'
+		restart_or_warn syslog-ng
+		restart_or_warn omr-traffic-log
 		echo 'done'
 	fi
 	echo '===================================================================================='

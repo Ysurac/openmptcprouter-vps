@@ -293,7 +293,7 @@ echo "Stop OpenMPTCProuter services..."
 # being stopped here, and GET /update starts omr-update, which reinstalls all.
 stop_units omr-admin.service omr-admin-ipv6.service omr-update.service omr.service \
 	omr-bypass.timer omr-bypass.service omr-reserved-ports.path omr-reserved-ports.service \
-	omr-net-mem.service omr-geoban-update.timer omr-geoban-update.service omr-geoban.service \
+	omr-net-mem.service omr-geoban-update.timer omr-geoban-update.service omr-geoban.service omr-traffic-log.service \
 	'omr6in4@*' 'omr-vxlan@*' \
 	'shadowsocks-libev-manager@*' 'shadowsocks-libev-server@*' shadowsocks-go.service \
 	v2ray.service xray.service 'mlvpn@*' mqvpn.service mqvpn-server.service 'dsvpn-server@*' \
@@ -406,6 +406,7 @@ echo "done"
 echo "Remove OpenMPTCProuter files..."
 rm_unowned /usr/local/bin/omr-service /usr/local/bin/omr-6in4-run /usr/local/bin/omr-vxlan-run \
 	/usr/local/bin/omr-bypass /usr/local/bin/omr-reserved-ports /usr/local/bin/omr-net-mem /usr/local/bin/omr-geoban \
+	/usr/local/bin/omr-traffic-log \
 	/usr/local/bin/omr-test-speed /usr/local/bin/multipath /usr/local/bin/glorytun-tcp \
 	/usr/local/bin/glorytun-tcp-run /usr/local/bin/glorytun-udp-run /usr/local/bin/dsvpn-run \
 	/usr/local/bin/v2ray-plugin /usr/local/bin/obfs-server \
@@ -414,7 +415,7 @@ rm_unowned /usr/local/bin/omr-service /usr/local/bin/omr-6in4-run /usr/local/bin
 	/var/log/omr-update.log
 for unit in omr.service omr6in4@.service omr-vxlan@.service omr-bypass.service omr-bypass.timer \
 	omr-reserved-ports.service omr-reserved-ports.path omr-net-mem.service omr-update.service \
-	omr-geoban.service omr-geoban-update.service omr-geoban-update.timer \
+	omr-geoban.service omr-geoban-update.service omr-geoban-update.timer omr-traffic-log.service \
 	omr-admin.service omr-admin-ipv6.service glorytun-tcp@.service glorytun-udp@.service \
 	mlvpn@.service dsvpn-server@.service mqvpn.service shadowsocks-libev-manager@.service \
 	v2ray.service xray.service; do
@@ -424,8 +425,11 @@ rm_unowned /lib/systemd/network/mlvpn.network /lib/systemd/network/glorytun.netw
 	/lib/systemd/network/glorytun-udp.network /lib/systemd/network/glorytun-tcp.network \
 	/lib/systemd/network/openvpn.network
 rm -f /etc/systemd/system/iperf3.service.d/override.conf \
-	/etc/systemd/system/systemd-networkd-wait-online.service.d/20-omr-wait-online-any.conf
-rmdir_unowned /etc/systemd/system/iperf3.service.d /etc/systemd/system/systemd-networkd-wait-online.service.d
+	/etc/systemd/system/systemd-networkd-wait-online.service.d/20-omr-wait-online-any.conf \
+	/etc/systemd/system/shadowsocks-go.service.d/omr-traffic-log.conf \
+	/etc/syslog-ng/conf.d/omr-traffic.conf /etc/logrotate.d/omr-traffic
+rmdir_unowned /etc/systemd/system/iperf3.service.d /etc/systemd/system/systemd-networkd-wait-online.service.d \
+	/etc/systemd/system/shadowsocks-go.service.d
 
 rm_unowned /etc/openmptcprouter-vps-admin /etc/shadowsocks-libev /etc/shadowsocks-go /etc/v2ray /etc/xray \
 	/etc/glorytun-tcp /etc/glorytun-udp /etc/dsvpn /etc/mlvpn /etc/mqvpn /etc/iperf3 /var/lib/softether \

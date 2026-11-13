@@ -1,0 +1,163 @@
+#!/bin/sh
+# Traffic log with usernames for the OMR VPNs and proxies that have none of
+# their own, one JSON object per connection on stdout, i.e. to the journal and
+# from there to syslog-ng (see syslog-ng-omr-traffic.conf). Keys are those of
+# shadowsocks-go's own "Bidirectional copy completed" line, so all read alike.
+#
+# Tunnels (MQVPN, Glorytun TCP/UDP, OpenVPN tun0/tun1): flows come from
+# conntrack, one line per flow when it ends, external traffic only (not to the
+# VPS itself nor between two clients). The tunnel IP -> user map comes from:
+#   - MQVPN: its "ADDRESS_ASSIGN: client=<ip>/<len> (user=<name>)" lines
+#   - OpenVPN: its "MULTI: Learn: <ip> -> <user>/<addr>" lines
+#   - Glorytun: one tunnel per user, /etc/glorytun-{tcp,udp}/tun<userid>
+#     REMOTEIP, and omr-admin's userid -> username (reread every minute)
+# A flow is attributed when it starts (conntrack NEW), so a tunnel IP handed
+# to another user later cannot be blamed for it.
+#   {"server": "mqvpn", "network": "udp", "clientAddress": "10.255.220.2:63317",
+#    "username": "alice", "targetAddress": "9.9.9.9:53", "nl2r": 86, "nr2l": 202}
+# nl2r is bytes in the direction of the first packet: router -> Internet for
+# outbound flows, Internet -> router for port forwards.
+#
+# Xray/V2Ray: their own access log ("accepted ... email: <user>", on stdout as
+# no access path is set), one line per connection as it opens. They do not
+# log byte counts per connection, so those lines have no nl2r/nr2l.
+
+# Overridable for tests only.
+ETC=${OMR_TRAFFIC_LOG_ETC:-/etc}
+
+# Without accounting, DESTROY events carry no packets=/bytes= fields.
+sysctl -qw net.netfilter.nf_conntrack_acct=1
+
+# Debian's awk is mawk, which otherwise waits for a full input buffer before
+# reading a line: on a quiet VPS nothing would be logged for minutes.
+AWK=awk
+command -v mawk > /dev/null && AWK="mawk -W interactive"
+
+# "MAP <ip> <server> <user>" for each Glorytun tunnel. The router end of
+# userid 0 is not in tun0 (it may be dhcp); .2 of the default static subnet.
+glorytun_map() {
+	users="$(jq -r '.users[0] | to_entries[] | select(.value.userid != null) | "\(.value.userid) \(.key)"' "$ETC/openmptcprouter-vps-admin/omr-admin-config.json" 2> /dev/null)"
+	for f in "$ETC"/glorytun-tcp/tun* "$ETC"/glorytun-udp/tun*; do
+		n="${f##*/tun}"
+		case "$n" in '' | *[!0-9]*) continue ;; esac
+		case "$f" in
+			*-tcp/*) server=glorytun-tcp default=10.255.255.2 ;;
+			*) server=glorytun-udp default=10.255.254.2 ;;
+		esac
+		ip="$(sed -n 's/^REMOTEIP=//p' "$f")"
+		[ -z "$ip" ] && [ "$n" = 0 ] && ip=$default
+		user="$(printf '%s\n' "$users" | awk -v n="$n" '$1 == n { print $2; exit }')"
+		[ -n "$ip" ] && [ -n "$user" ] && echo "MAP $ip $server $user"
+	done
+}
+
+# Four writers share the pipe: each must write whole lines (stdbuf -oL; echo
+# writes a line at once), or a chunk of journal backlog ending mid-line glues
+# another writer's line into it and that line is lost.
+{
+	# backlog included: it rebuilds the tunnel IP -> user map
+	stdbuf -oL journalctl -b -f -n all -o cat -u mqvpn -u 'openvpn@*' &
+	# new lines only: the backlog was logged by an earlier run
+	stdbuf -oL journalctl -f -n 0 -o short-unix -u xray -u v2ray &
+	while :; do glorytun_map; sleep 60; done &
+	# shortcut: lets the journal backlog fill the map before conntrack events
+	# arrive; flows opened in the first second are attributed at DESTROY instead.
+	sleep 1
+	exec stdbuf -oL conntrack -E -e NEW,DESTROY -o extended,id -b 8388608
+} | exec $AWK '
+# The VPS own addresses. Reloaded at each new tunnel address, as a tunnel
+# interface only gets its address once its daemon is up.
+function load_local(   cmd, l, a) {
+	delete loc
+	cmd = "ip -o addr show"
+	while ((cmd | getline l) > 0) {
+		split(l, a, " ")
+		sub(/\/.*/, "", a[4])
+		loc[a[4]] = 1
+	}
+	close(cmd)
+}
+function learn(ip, server, u) {
+	if ((ip in user) && user[ip] == u && srv[ip] == server) return
+	user[ip] = u; srv[ip] = server
+	load_local()
+}
+# ip:port as shadowsocks-go writes it, [ip]:port for IPv6, bare ip for ICMP
+function addr(ip, port) {
+	if (ip ~ /:/) ip = "[" ip "]"
+	return port == "" ? ip : ip ":" port
+}
+# no counters when accounting was off as the flow started
+function num(n) { return n ~ /^[0-9]+$/ ? n : 0 }
+# usernames come from the API: keep the JSON valid whatever they hold.
+# shortcut: replaced, not escaped (gsub backslash rules differ between mawk
+# and gawk); escape properly if such names ever become legitimate.
+function clean(s) { gsub(/[\\"]/, "_", s); return s }
+
+BEGIN { load_local() }
+
+$1 == "MAP" { learn($2, $3, $4); next }
+
+/ADDRESS_ASSIGN: client=/ {
+	ip = $0; sub(/.*client=/, "", ip); sub(/\/.*/, "", ip)
+	u = $0; sub(/.*\(user=/, "", u); sub(/\)[^)]*$/, "", u)
+	learn(ip, "mqvpn", u)
+	next
+}
+
+# Single IPv4 addresses only: the same lines also carry the iroute subnets
+# (x.x.x.x/len) and, on the tap bonding instances, MAC addresses.
+/ MULTI: Learn: [0-9.]+ -> / {
+	ip = $0; sub(/.* MULTI: Learn: /, "", ip); sub(/ .*/, "", ip)
+	u = $0; sub(/.* -> /, "", u); sub(/\/.*/, "", u)
+	learn(ip, "openvpn", u)
+	next
+}
+
+# Xray: <date> <time> from [tcp:]<ip:port> accepted <tcp|udp>:<host:port> [<in> >> <out>] email: <user>
+# V2Ray: <date> <time> [tcp:]<ip:port> accepted <tcp|udp>:<host:port> [<tag>] email: <user>
+# With -o short-unix, $3 is "xray[pid]:" and the message starts at $4.
+/ accepted .*email: ?[^ ]/ && $3 ~ /^(xray|v2ray)\[/ {
+	server = $3; sub(/\[.*/, "", server)
+	for (i = 4; i < NF; i++) if ($i == "accepted") break
+	from = $(i - 1); sub(/^(tcp|udp):/, "", from)
+	to = $(i + 1)
+	network = to; sub(/:.*/, "", network)
+	sub(/^(tcp|udp):/, "", to)
+	u = $0; sub(/.*email: ?/, "", u); sub(/ .*/, "", u)
+	printf "{\"server\": \"%s\", \"network\": \"%s\", \"clientAddress\": \"%s\", \"username\": \"%s\", \"targetAddress\": \"%s\"}\n", \
+		server, network, from, clean(u), to
+	fflush()
+	next
+}
+
+/^ *\[(NEW|DESTROY)\]/ {
+	delete f
+	for (i = 1; i <= NF; i++) {
+		eq = index($i, "=")
+		if (!eq) continue
+		k = substr($i, 1, eq - 1)
+		# fields come twice: original direction first, then reply
+		if (k in f) k = k "_r"
+		if (!(k in f)) f[k] = substr($i, eq + 1)
+	}
+	# External traffic only: an outbound flow (tunnel IP as original source)
+	# not to the VPS itself nor to another tunnel client, or a port forward
+	# (tunnel IP as reply source) not opened by the VPS itself.
+	if (f["src"] in user) {
+		tip = f["src"]
+		if (f["dst"] in loc || f["dst"] in user) next
+	} else if (f["src_r"] in user) {
+		tip = f["src_r"]
+		if (f["src"] in loc) next
+	} else next
+	id = $NF
+	if ($1 ~ /NEW/) { byid[id] = user[tip]; bysrv[id] = srv[tip]; next }
+	if (id in byid) { u = byid[id]; server = bysrv[id]; delete byid[id]; delete bysrv[id] }
+	else { u = user[tip]; server = srv[tip] }
+	# reply source = the real target, after DNAT for a port forward. Byte
+	# counts stay strings: old mawk clamps %d at 2^31.
+	printf "{\"server\": \"%s\", \"network\": \"%s\", \"clientAddress\": \"%s\", \"username\": \"%s\", \"targetAddress\": \"%s\", \"nl2r\": %s, \"nr2l\": %s}\n", \
+		server, $4, addr(f["src"], f["sport"]), clean(u), addr(f["src_r"], f["sport_r"]), num(f["bytes"]), num(f["bytes_r"])
+	fflush()
+}'

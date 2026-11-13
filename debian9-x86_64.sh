@@ -135,7 +135,10 @@ set -e
 # a killed run is gone at the next boot.
 OMR_INSTALL_LOCK=/run/omr-install.running
 touch "$OMR_INSTALL_LOCK" 2>/dev/null || true
-trap 'rm -f "$OMR_INSTALL_LOCK"' EXIT INT TERM
+trap 'rm -f "$OMR_INSTALL_LOCK"' EXIT
+# A trap replaces the default action, so INT/TERM must exit explicitly (EXIT then cleans up)
+trap 'exit 130' INT
+trap 'exit 143' TERM
 umask 0022
 export LC_ALL=C
 export PATH=$PATH:/sbin
@@ -749,7 +752,11 @@ check_running_kernel() {
 	expected=""
 	running=""
 	running="$(uname -r)"
-	expected="$(ls -1 /boot/vmlinuz-*-omr /boot/vmlinuz-*-xanmod* /boot/vmlinuz-*-mptcp 2>/dev/null | sed -e 's@.*/vmlinuz-@@' | sort -V | tail -n 1)"
+	installed="$(ls -1 /boot/vmlinuz-*-omr /boot/vmlinuz-*-xanmod* /boot/vmlinuz-*-mptcp 2>/dev/null | sed -e 's@.*/vmlinuz-@@' | sort -V)"
+	# The highest one in /boot is not the one this run made the GRUB default when an
+	# older series was asked for (KERNEL=6.18 after a KERNEL=7.3 install keeps 7.3 in /boot)
+	expected="$(echo "$installed" | grep -F "${KERNEL_VERSION}-" | tail -n 1)"
+	[ -n "$expected" ] || expected="$(echo "$installed" | tail -n 1)"
 	echo " Running kernel                    : ${running}"
 	if [ -z "$expected" ]; then
 		echo ' OpenMPTCProuter kernel installed  : none found in /boot'

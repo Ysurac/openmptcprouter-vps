@@ -1044,7 +1044,10 @@ if [ "$IPERF" = "yes" ] && [ "$CHINA" != "yes" ]; then
 	[ "$ARCH" = "amd64" ] && apt-get -y remove omr-iperf3 omr-libiperf0 >/dev/null 2>&1
 	if [ "$SOURCES" = "yes" ]; then
 		apt-get -y remove iperf3 libiperf0
-		apt-get -y install xz-utils devscripts equivs
+		# build-essential first: mk-build-deps installs its dummy package with
+		# "apt-get -f install", whose resolver (apt 3.0, Debian 13) removed the
+		# dummy rather than install build-essential, and nothing was installed
+		apt-get -y install xz-utils devscripts equivs build-essential
 		# Upstream version, without the Debian revision
 		IPERF_SOURCE_VERSION="${IPERF_VERSION%-*}"
 		cd /tmp
@@ -1207,7 +1210,12 @@ if [ "$SHADOWSOCKS" = "yes" ]; then
 		#rm -rf /tmp/libbpf
 		rm -f /var/lib/dpkg/lock
 		rm -f /var/lib/dpkg/lock-frontend
-		apt-get -y install --no-install-recommends devscripts equivs apg libcap2-bin libpam-cap libc-ares2 libc-ares-dev libev4 haveged libpcre3-dev || true
+		# build-essential first: mk-build-deps installs its dummy package with
+		# "apt-get -f install", whose resolver (apt 3.0, Debian 13) removed the
+		# dummy rather than install build-essential, and the package was not
+		# built: a fresh install stopped at "ss-manager was not installed", an
+		# update kept the previous ss-manager (#4429)
+		apt-get -y install --no-install-recommends build-essential devscripts equivs apg libcap2-bin libpam-cap libc-ares2 libc-ares-dev libev4 haveged libpcre3-dev || true
 		apt-get -y install --no-install-recommends asciidoc-base asciidoc-common docbook-xml docbook-xsl libev-dev libmbedcrypto3 libmbedtls-dev libmbedtls12 libmbedx509-0 libxml2-utils libxslt1.1 pkg-config sgml-base sgml-data xml-core xmlto xsltproc || true
 		if [ "$ID" = "debian" ] && [ "$VERSION_ID" = "13" ]; then
 			apt-get -y --allow-downgrades install libmbedtls-dev=2.16.9-0.1 libmbedtls12=2.16.9-0.1 libmbedcrypto3=2.16.9-0.1 libmbedx509-0=2.16.9-0.1

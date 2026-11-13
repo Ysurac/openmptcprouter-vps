@@ -203,7 +203,10 @@ table inet omr {
 		# shorewall6/snat: MASQUERADE fe80::/10,fd00::/8 $NET_IFACE -- NAT66
 		# for the clients' ULA (and link-local) sources egressing the WAN.
 		# shorewall6's $NET_IFACE was the IPv6 WAN, hence $NET_IFACE6 (#3271).
-		ip6 saddr { fe80::/10, fd00::/8 } oifname $NET_IFACE6 masquerade
+		# All of fc00::/7, not only fd00::/8: /vpnips takes a router's ULA
+		# anywhere in it and omr-6in4-run routes it into the router's tunnel,
+		# so a ULA in fc00::/8 used to leave the WAN unmasqueraded.
+		ip6 saddr { fe80::/10, fc00::/7 } oifname $NET_IFACE6 masquerade
 
 		# shorewall4/snat's own commented-out example ("SNAT from VPN server
 		# for all VPN clients") -- disabled by default there too:

@@ -1,0 +1,1128 @@
+#!/bin/sh
+#
+# Copyright (C) 2026 Ycarus (Yannick Chabanois) <ycarus@zugaina.org> for OpenMPTCProuter
+# Released under GPL 3. See LICENSE for the full terms.
+#
+# omr-geoban - filter new connections arriving from the internet by the
+# country or the network (ASN) of their source address: accept them only from
+# the countries and networks you list (allow), or refuse them from those
+# (deny).
+#
+# WHAT IS FILTERED
+#
+# Every new connection (conntrack state other than established/related) that
+# arrives on an interface which is neither lo nor a tunnel ($VPN_IFACES and
+# $VPNCL_IFACES of /etc/nftables/omr-vars.nft): what reaches the VPS itself
+# (SSH, omr-admin, the proxies and VPNs the routers connect to) and what it
+# forwards to a router (port redirects), since the chain sits in prerouting,
+# before DNAT. Answers to the connections the VPS and the routers open are
+# established and never filtered, so a router behind an "allow fr" VPS still
+# reaches every country. Private and link-local sources, IPv6 neighbour
+# discovery/MLD, the EXEMPT addresses and the OPEN_PORTS are never filtered.
+#
+# The router's WAN addresses must themselves be allowed: every WAN joins the
+# MPTCP connection with a connection of its own (MP_JOIN), and a WAN whose
+# address is located outside the allowed countries (some mobile and satellite
+# providers) silently stops being aggregated. "allow" and "deny" refuse to
+# apply a list that would block a peer connected right now (a router WAN, your
+# SSH session) unless --force is given; put such addresses in EXEMPT.
+#
+# HOW
+#
+# Its own nftables table, inet omr_geoban, replaced in one transaction: a
+# filter chain on prerouting at priority mangle - 10, after conntrack and
+# before omr.nft's chains, whose drop is final. nftables.conf begins with
+# "flush ruleset", so nftables/omr-geoban-resync.conf starts omr-geoban.service
+# (omr-geoban apply) after every start and reload of nftables.service.
+#
+# The country of an address and its network come from one of two sources
+# (SOURCE), kept in /var/lib/omr-geoban so that "apply" never needs the
+# network; the ASN list is only fetched once a network is used:
+#   dbip     the default: DB-IP's "IP to Country Lite" and "IP to ASN Lite"
+#            (https://db-ip.com, CC BY 4.0: IP Geolocation by DB-IP), no
+#            account needed, a new edition each month.
+#   maxmind  MaxMind's GeoLite2 Country and ASN (https://www.maxmind.com,
+#            GeoLite2 End User License Agreement), twice a week. It needs a
+#            free MaxMind account and a license key made in it ("omr-geoban
+#            source maxmind <account ID> <license key>"), and unzip. Its CSVs
+#            are converted to DB-IP's format when downloaded: everything else
+#            works the same.
+# omr-geoban-update.timer checks for a new edition once a day and re-applies
+# when there is one. Geolocation is never exact: expect a few addresses in the
+# wrong country, and the two sources to disagree on some.
+#
+# Countries go in sets geo4/geo6, networks in net4/net6, and the networks
+# taken out ("-as16276") in except4/except6, checked first: "allow fr
+# -as16276" is France but OVH, "deny cn -as4134" China but China Telecom.
+#
+# Size: "allow europe" loads ~54,000 IPv4 and ~91,000 IPv6 ranges, about 15 MB
+# of kernel memory, and nft needs ~80 MB while loading them (~5 s in all on
+# the 1 GB test VPS; "allow fr", 20,000 ranges, takes 3 s).
+#
+# CONFIGURATION
+#
+#   /etc/openmptcprouter-vps-admin/omr-geoban.conf, KEY="value" lines, read
+#   (never sourced) by this script, which only rewrites the line of the key it
+#   changes, so comments stay:
+#     MODE        off, allow or deny
+#     COUNTRIES   ISO 3166 codes (fr de, GB not UK) and groups: eu (the 27
+#                 EU members and their outermost regions), europe, africa,
+#                 asia, north-america, south-america, oceania, antarctica.
+#                 A code or group preceded by - (or !) is taken out:
+#                 "europe -ru -by". "omr-geoban groups" lists them.
+#                 Networks by AS number: as3215 (Orange), as12322 (Free),
+#                 as15557 (SFR), as5410 (Bouygues Telecom); "-as16276" takes
+#                 one out of the countries. "omr-geoban asn <name>" finds them.
+#                 ("as" alone is American Samoa.)
+#     EXEMPT      addresses, prefixes or ranges never filtered
+#     OPEN_PORTS  ports open to every country, tcp/<port> or udp/<first>-<last>.
+#                 Without an OPEN_PORTS line, tcp/65222: SSH stays reachable
+#                 from everywhere; OPEN_PORTS="" closes it too.
+#     SOURCE      dbip or maxmind (set it with "omr-geoban source")
+#     MAXMIND_ACCOUNT_ID, MAXMIND_LICENSE_KEY  for maxmind; the file is then
+#                 kept readable by root only
+#   Edit it by hand then run "omr-geoban apply", or use the commands below.
+#
+# USAGE
+#
+#   omr-geoban allow <countries/ASNs...> [--force]  accept new connections only from those
+#   omr-geoban deny <countries/ASNs...> [--force]   refuse new connections from those
+#   omr-geoban off                              remove the filter
+#   omr-geoban exempt [add|del <address...>]    list, add or remove EXEMPT entries
+#   omr-geoban status                           what is applied, and what it dropped
+#   omr-geoban check <address...>               the country and network of an address, and the verdict
+#   omr-geoban asn <name|number...>             find networks: "omr-geoban asn orange free"
+#   omr-geoban ranges <countries/ASNs...>       print the ranges they cover
+#   omr-geoban groups                           the country groups
+#   omr-geoban apply                            (re)apply the configuration (omr-geoban.service)
+#   omr-geoban update [--force]                 fetch the newest lists, re-apply if new (the timer)
+#   omr-geoban source [dbip | maxmind [<account ID> <license key>]] [--force]
+#                                               show or switch the data source
+
+set -u
+# The configuration may hold a MaxMind license key.
+umask 077
+
+# Tests only: prefix for every file read or written, and the download URLs.
+ROOT="${OMR_GEOBAN_ROOT:-}"
+URL_BASE="${OMR_GEOBAN_URL:-https://download.db-ip.com/free}"
+MM_URL="${OMR_GEOBAN_MAXMIND_URL:-https://download.maxmind.com/geoip/databases}"
+
+CONF="${ROOT}/etc/openmptcprouter-vps-admin/omr-geoban.conf"
+VARS="${ROOT}/etc/nftables/omr-vars.nft"
+STATE="${ROOT}/var/lib/omr-geoban"
+LOCK="${ROOT}/run/omr-geoban.lock"
+TABLE="omr_geoban"
+
+# Never filtered: loopback, private, CGNAT, link-local and unspecified sources
+# (a provider's private network, DHCP, the DigitalOcean resolver on eth1...).
+PRIVATE4="0.0.0.0/8 10.0.0.0/8 100.64.0.0/10 127.0.0.0/8 169.254.0.0/16 172.16.0.0/12 192.168.0.0/16"
+PRIVATE6="::/128 ::1/128 fe80::/10 fc00::/7"
+
+GROUP_NAMES="eu europe africa asia north-america south-america oceania antarctica"
+
+log() { echo "omr-geoban: $*" >&2; }
+die() { log "$*"; exit 1; }
+
+group_members() {
+	case "$1" in
+	eu) echo "AT AX BE BG CY CZ DE DK EE ES FI FR GF GP GR HR HU IE IT LT LU LV MF MQ MT NL PL PT RE RO SE SI SK YT" ;;
+	europe) echo "AD AL AT AX BA BE BG BY CH CY CZ DE DK EE ES FI FO FR GB GG GI GR HR HU IE IM IS IT JE LI LT LU LV MC MD ME MK MT NL NO PL PT RO RS RU SE SI SJ SK SM UA VA XK" ;;
+	africa) echo "AO BF BI BJ BW CD CF CG CI CM CV DJ DZ EG EH ER ET GA GH GM GN GQ GW KE KM LR LS LY MA MG ML MR MU MW MZ NA NE NG RE RW SC SD SH SL SN SO SS ST SZ TD TG TN TZ UG YT ZA ZM ZW" ;;
+	asia) echo "AE AF AM AZ BD BH BN BT CC CN CX GE HK ID IL IN IO IQ IR JO JP KG KH KP KR KW KZ LA LB LK MM MN MO MV MY NP OM PH PK PS QA SA SG SY TH TJ TL TM TR TW UZ VN YE" ;;
+	north-america) echo "AG AI AW BB BL BM BQ BS BZ CA CR CU CW DM DO GD GL GP GT HN HT JM KN KY LC MF MQ MS MX NI PA PM PR SV SX TC TT US VC VG VI" ;;
+	south-america) echo "AR BO BR CL CO EC FK GF GY PE PY SR UY VE" ;;
+	oceania) echo "AS AU CK FJ FM GU KI MH MP NC NF NR NU NZ PF PG PN PW SB TK TO TV UM VU WF WS" ;;
+	antarctica) echo "AQ BV GS HM TF" ;;
+	*) return 1 ;;
+	esac
+}
+
+# ── awk helpers ──────────────────────────────────────────────────────────
+# IPv4 addresses are compared as numbers, IPv6 ones as 32 lowercase hex
+# digits (fixed width, so string order is address order). No gawk-only
+# feature: Debian's awk is mawk.
+AWK_LIB='
+function pad4(s) { return substr("0000", 1, 4 - length(s)) s }
+function x6(a,    i, n, k, h, t, nh, nt, g, hg, tg, out) {
+	a = tolower(a)
+	if (a ~ /\./) {
+		k = a; sub(/.*:/, "", k); split(k, g, ".")
+		sub(/[^:]*$/, "", a)
+		a = a sprintf("%x:%x", g[1] * 256 + g[2], g[3] * 256 + g[4])
+	}
+	out = ""
+	if (index(a, "::")) {
+		h = substr(a, 1, index(a, "::") - 1); t = substr(a, index(a, "::") + 2)
+		nh = (h == "") ? 0 : split(h, hg, ":")
+		nt = (t == "") ? 0 : split(t, tg, ":")
+		for (i = 1; i <= nh; i++) out = out pad4(hg[i])
+		for (i = nh + nt; i < 8; i++) out = out "0000"
+		for (i = 1; i <= nt; i++) out = out pad4(tg[i])
+	} else {
+		n = split(a, g, ":")
+		for (i = 1; i <= n; i++) out = out pad4(g[i])
+	}
+	return out
+}
+function c6(h,    i, out) { out = substr(h, 1, 4); for (i = 5; i < 32; i += 4) out = out ":" substr(h, i, 4); return out }
+function inc6(h,    i, d) {
+	for (i = 32; i >= 1; i--) {
+		d = index("0123456789abcdef", substr(h, i, 1))
+		if (d < 16) return substr(h, 1, i - 1) substr("0123456789abcdef", d + 1, 1) substr("0000000000000000000000000000000", 1, 32 - i)
+	}
+	return ""
+}
+function n4(a,    p) { split(a, p, "."); return ((p[1] * 256 + p[2]) * 256 + p[3]) * 256 + p[4] }
+function a4(n) { return int(n / 16777216) "." int(n / 65536) % 256 "." int(n / 256) % 256 "." n % 256 }
+function pow2(n,    r) { r = 1; while (n-- > 0) r *= 2; return r }
+# The first and last address of an address, prefix or range, in lo_ and hi_.
+function span(a,    q, pl, b, size, h, full, d, w) {
+	if (index(a, "-")) {
+		split(a, q, "-")
+		if (index(a, ":")) { lo_ = x6(q[1]); hi_ = x6(q[2]) } else { lo_ = n4(q[1]); hi_ = n4(q[2]) }
+		return
+	}
+	pl = -1
+	if (index(a, "/")) { split(a, q, "/"); a = q[1]; pl = q[2] + 0 }
+	if (index(a, ":")) {
+		h = x6(a); if (pl < 0) pl = 128
+		full = int(pl / 4); lo_ = substr(h, 1, full); hi_ = lo_
+		if (full < 32) {
+			d = index("0123456789abcdef", substr(h, full + 1, 1)) - 1
+			w = pow2(4 - pl % 4); d -= d % w
+			lo_ = lo_ substr("0123456789abcdef", d + 1, 1) substr("0000000000000000000000000000000", 1, 31 - full)
+			hi_ = hi_ substr("0123456789abcdef", d + w, 1) substr("fffffffffffffffffffffffffffffff", 1, 31 - full)
+		}
+	} else {
+		b = n4(a); if (pl < 0) pl = 32
+		size = pow2(32 - pl); lo_ = b - b % size; hi_ = lo_ + size - 1
+	}
+}
+'
+
+# ── configuration ────────────────────────────────────────────────────────
+
+get_conf() {
+	[ -f "$CONF" ] || { echo "${2:-}"; return; }
+	v="$(sed -n "s/^[[:space:]]*$1=//p" "$CONF" | tail -n 1)"
+	v="${v#\"}"; v="${v%\"}"
+	echo "${v:-${2:-}}"
+}
+
+write_default_conf() {
+	mkdir -p "$(dirname "$CONF")"
+	cat > "$CONF" <<-'EOF'
+	# omr-geoban: filter new connections from the internet by source country.
+	# See the top of /usr/local/bin/omr-geoban. After a hand edit, run
+	# "omr-geoban apply".
+	#
+	# off, allow (only COUNTRIES may connect) or deny (COUNTRIES may not).
+	MODE="off"
+	# ISO 3166 codes and groups (omr-geoban groups), "-xx" to take one out:
+	# "fr", "eu", "europe -ru -by". Networks by AS number (omr-geoban asn
+	# <name>): "as3215 as12322", "fr -as16276" (France but OVH).
+	COUNTRIES=""
+	# Addresses, prefixes or ranges never filtered (your router's WANs if
+	# their country is not allowed, your own IP for SSH...).
+	EXEMPT=""
+	# Ports open to every country, tcp/<port> or udp/<first>-<last>: SSH by
+	# default, "" to filter it too.
+	OPEN_PORTS="tcp/65222"
+	# Where countries and networks come from: dbip (no account) or maxmind
+	# (GeoLite2: omr-geoban source maxmind <account ID> <license key>).
+	SOURCE="dbip"
+	EOF
+}
+
+set_conf() {
+	[ -f "$CONF" ] || write_default_conf
+	tmp="$CONF.tmp.$$"
+	if grep -q "^[[:space:]]*$1=" "$CONF"; then
+		awk -v k="$1" -v v="$2" '
+			$0 ~ "^[[:space:]]*" k "=" { if (!done) print k "=\"" v "\""; done = 1; next }
+			{ print }' "$CONF" > "$tmp"
+	else
+		{ cat "$CONF"; printf '%s="%s"\n' "$1" "$2"; } > "$tmp"
+	fi
+	if [ $? -ne 0 ] || ! mv "$tmp" "$CONF"; then
+		rm -f "$tmp"
+		die "cannot write $CONF"
+	fi
+}
+
+# ── the lists ────────────────────────────────────────────────────────────
+# Two lists, by kind, in DB-IP's format whatever the source: country
+# (start,end,FR) and asn (start,end,3215,"Org"), IPv4 then IPv6, each sorted by
+# address.
+
+# The list of kind $1 of the source $2 (the current one by default), and the
+# edition stored (a month for DB-IP, a date for MaxMind).
+list_file() {
+	case "${2:-$SOURCE}" in
+	maxmind) echo "$STATE/maxmind-$1.csv.gz" ;;
+	*) echo "$STATE/dbip-$1-lite.csv.gz" ;;
+	esac
+}
+version_file() {
+	case "${2:-$SOURCE}" in
+	maxmind) echo "$STATE/maxmind-$1-version" ;;
+	*) echo "$STATE/dbip-$1-month" ;;
+	esac
+}
+list_version() { awk '{ print $1; exit }' "$(version_file "$1")" 2> /dev/null || true; }
+
+credit() {
+	case "$1" in
+	maxmind) echo "GeoLite2 data created by MaxMind, https://www.maxmind.com" ;;
+	*) echo "IP Geolocation by DB-IP, https://db-ip.com" ;;
+	esac
+}
+
+# Make $1 the source the lists are read from and downloaded from.
+use_source() {
+	case "$1" in dbip | maxmind) ;; *) die "SOURCE must be dbip or maxmind, not \"$1\"" ;; esac
+	SOURCE="$1"
+	LIST_COUNTRY="$(list_file country)"
+	LIST_ASN="$(list_file asn)"
+	MM_ACCOUNT="$(get_conf MAXMIND_ACCOUNT_ID)"
+	MM_KEY="$(get_conf MAXMIND_LICENSE_KEY)"
+}
+
+# Whether the gzip file $1 is a whole list of kind $2: a truncated download or
+# an HTML error page must never replace a good list, since an allow list
+# missing half a country locks it out.
+valid_list() {
+	case "$2" in
+	country) first='^[0-9.]+,[0-9.]+,[A-Z]{2}$' ;;
+	*) first='^[0-9.]+,[0-9.]+,[0-9]+,' ;;
+	esac
+	gzip -t "$1" 2> /dev/null &&
+		gzip -dc "$1" | head -n 1 | grep -Eq "$first" &&
+		[ "$(gzip -dc "$1" | wc -l)" -ge "${OMR_GEOBAN_MIN_ROWS:-100000}" ]
+}
+
+# Fetch the newest list of kind $1 from the current source ($2 = force: even
+# when the stored one is the newest). Returns 0 when a new list was stored, 2
+# when the stored one is already the newest, 1 on failure.
+download() {
+	case "$SOURCE" in
+	maxmind) download_maxmind "$@" ;;
+	*) download_dbip "$@" ;;
+	esac
+}
+
+# This month's list, or last month's while this month's isn't out (DB-IP
+# publishes at the start of the month).
+download_dbip() {
+	kind="$1"; force="${2:-}"
+	file="$(list_file "$kind")"
+	have="$(list_version "$kind")"
+	[ -f "$file" ] || have=""
+	cur="$(date -u +%Y-%m)"
+	prev="$(date -u -d "$(date -u +%Y-%m-15) -1 month" +%Y-%m)"
+	mkdir -p "$STATE"
+	for m in "$cur" "$prev"; do
+		[ "$m" = "$have" ] && [ -z "$force" ] && return 2
+		tmp="$STATE/download.tmp"
+		rm -f "$tmp"
+		if ! curl -fsSL --retry 2 --connect-timeout 20 --max-time 600 -o "$tmp" "$URL_BASE/dbip-$kind-lite-$m.csv.gz" 2> /dev/null; then
+			rm -f "$tmp"
+			continue
+		fi
+		if ! valid_list "$tmp" "$kind"; then
+			log "the $kind list of $m at $URL_BASE is not a DB-IP $kind list, ignored"
+			rm -f "$tmp"
+			continue
+		fi
+		mv "$tmp" "$file" && echo "$m" > "$(version_file "$kind")"
+		log "$kind list of $m stored ($(credit dbip))"
+		return 0
+	done
+	[ -n "$have" ] && [ -z "$force" ] && return 2
+	log "cannot download the $kind list from $URL_BASE"
+	return 1
+}
+
+# GET the edition $1 with the suffix $2 (zip, zip.sha256) into the file $3,
+# printing the HTTP status. The account ID and license key go to curl on its
+# standard input, never on a command line other users can read.
+mm_fetch() {
+	printf 'user = "%s:%s"\n' "$MM_ACCOUNT" "$MM_KEY" |
+		curl -fsSL -K - --retry 2 --connect-timeout 20 --max-time 600 -w '%{http_code}' -o "$3" "$MM_URL/$1/download?suffix=$2" 2> /dev/null
+}
+
+mm_failed() {
+	case "$2" in
+	401 | 403) log "MaxMind refused the account ID and license key (HTTP $2): check MAXMIND_ACCOUNT_ID and MAXMIND_LICENSE_KEY" ;;
+	429) log "MaxMind's daily download limit is reached (HTTP 429), try again tomorrow" ;;
+	000 | "") log "cannot download $1 from $MM_URL" ;;
+	*) log "cannot download $1 from $MM_URL (HTTP $2)" ;;
+	esac
+}
+
+# The GeoLite2 CSVs of kind $1 in the directory $2 -> the list $3, in DB-IP's
+# format and order. A range located to a continent only, or not at all
+# (anonymous proxies, satellite providers), takes the country it is registered
+# in, else ZZ, DB-IP's code for none.
+mm_convert() {
+	if [ "$1" = country ]; then
+		set -- "$1" "$2" "$3" "$2/GeoLite2-Country-Locations-en.csv" "$2/GeoLite2-Country-Blocks-IPv4.csv" "$2/GeoLite2-Country-Blocks-IPv6.csv"
+	else
+		set -- "$1" "$2" "$3" "$2/GeoLite2-ASN-Blocks-IPv4.csv" "$2/GeoLite2-ASN-Blocks-IPv6.csv"
+	fi
+	kind="$1"; dir="$2"; out="$3"; shift 3
+	awk -F, -v kind="$kind" "$AWK_LIB"'
+	{ sub(/\r$/, "") }
+	FNR == 1 { f++; next }
+	kind == "country" && f == 1 { if ($5 != "") cc[$1] = $5; next }
+	{
+		span($1)
+		if (index($1, ":")) { k = "6" lo_; r = c6(lo_) "," c6(hi_) }
+		else { k = sprintf("4%010.0f", lo_); r = a4(lo_) "," a4(hi_) }
+		if (kind == "country") {
+			print k "\t" r "," (($2 in cc) ? cc[$2] : (($3 in cc) ? cc[$3] : "ZZ"))
+		} else {
+			o = $0; sub(/^[^,]*,[^,]*,/, "", o); gsub(/"/, "", o)
+			print k "\t" r "," $2 ",\"" o "\""
+		}
+	}' "$@" | LC_ALL=C sort -T "$dir" | cut -f 2- | gzip -c > "$out"
+}
+
+# The newest GeoLite2 edition: its checksum first (a few bytes, the same until
+# MaxMind publishes the next one), the zip only when it changed.
+download_maxmind() {
+	kind="$1"; force="${2:-}"
+	file="$(list_file "$kind")"
+	case "$kind" in
+	country) edition="GeoLite2-Country-CSV"; members="GeoLite2-Country-Locations-en.csv GeoLite2-Country-Blocks-IPv4.csv GeoLite2-Country-Blocks-IPv6.csv" ;;
+	*) edition="GeoLite2-ASN-CSV"; members="GeoLite2-ASN-Blocks-IPv4.csv GeoLite2-ASN-Blocks-IPv6.csv" ;;
+	esac
+	if [ -z "$MM_ACCOUNT" ] || [ -z "$MM_KEY" ]; then
+		log "MaxMind needs an account ID and a license key: omr-geoban source maxmind <account ID> <license key>"
+		return 1
+	fi
+	command -v unzip > /dev/null 2>&1 || { log "MaxMind's lists are zip files: install unzip"; return 1; }
+	mkdir -p "$STATE"
+	tmp="$STATE/download.tmp"
+	rm -rf "$tmp" "$tmp.d" "$tmp.gz"
+	if ! code="$(mm_fetch "$edition" zip.sha256 "$tmp")"; then
+		rm -f "$tmp"
+		mm_failed "$edition" "$code"
+		return 1
+	fi
+	# "<sha256>  GeoLite2-Country-CSV_20261103.zip"
+	set -- $(head -c 200 "$tmp")
+	rm -f "$tmp"
+	sum="${1:-}"
+	version="$(echo "${2:-}" | sed -n 's/.*_\([0-9]\{4\}\)\([0-9]\{2\}\)\([0-9]\{2\}\)\.zip$/\1-\2-\3/p')"
+	if ! echo "$sum" | grep -Eq '^[0-9a-f]{64}$'; then
+		log "the checksum of $edition at $MM_URL is not one, ignored"
+		return 1
+	fi
+	[ -n "$version" ] || version="$(date -u +%Y-%m-%d)"
+	have="$(cat "$(version_file "$kind")" 2> /dev/null)"
+	[ -f "$file" ] || have=""
+	[ "$have" = "$version $sum" ] && [ -z "$force" ] && return 2
+	if ! code="$(mm_fetch "$edition" zip "$tmp")"; then
+		rm -f "$tmp"
+		mm_failed "$edition" "$code"
+		return 1
+	fi
+	ok=""
+	if [ "$(sha256sum < "$tmp" | cut -d ' ' -f 1)" != "$sum" ]; then
+		log "$edition of $version does not match its checksum, ignored"
+	else
+		mkdir "$tmp.d"
+		ok=1
+		for m in $members; do
+			unzip -p "$tmp" "*/$m" > "$tmp.d/$m" 2> /dev/null && [ -s "$tmp.d/$m" ] || ok=""
+		done
+		if [ -z "$ok" ]; then
+			log "$edition of $version is not a GeoLite2 CSV zip, ignored"
+		elif ! mm_convert "$kind" "$tmp.d" "$tmp.gz" || ! valid_list "$tmp.gz" "$kind"; then
+			log "$edition of $version cannot be read as a $kind list, ignored"
+			ok=""
+		fi
+	fi
+	rm -rf "$tmp" "$tmp.d"
+	[ -n "$ok" ] || { rm -f "$tmp.gz"; return 1; }
+	mv "$tmp.gz" "$file" && echo "$version $sum" > "$(version_file "$kind")"
+	log "$kind list of $version stored ($(credit maxmind))"
+	return 0
+}
+
+ensure_list() {
+	[ -f "$(list_file "$1")" ] && return 0
+	download "$1"
+	[ -f "$(list_file "$1")" ] || die "no $1 list, and it cannot be downloaded: nothing applied"
+}
+
+# The words of COUNTRIES, split: the country codes and groups in $cwords,
+# the networks in $asns, the networks taken out in $asx (numbers, sorted).
+split_words() {
+	cwords=""; asns=""; asx=""
+	for w in $(echo "$*" | tr ',' ' '); do
+		case "$w" in
+		[Aa][Ss][0-9]*) n="${w#??}"; x="" ;;
+		[-!][Aa][Ss][0-9]*) n="${w#???}"; x=1 ;;
+		*) cwords="$cwords $w"; continue ;;
+		esac
+		case "$n" in *[!0-9]*) die "not an AS number: $w" ;; esac
+		n="$(echo "$n" | sed 's/^0*//')"
+		if [ -n "$x" ]; then asx="$asx $n"; else asns="$asns $n"; fi
+	done
+	cwords="${cwords# }"
+	asns="$(for n in $asns; do echo "$n"; done | sort -un | tr '\n' ' ' | sed 's/ $//')"
+	asx="$(for n in $asx; do echo "$n"; done | sort -un | tr '\n' ' ' | sed 's/ $//')"
+}
+
+# The ones among the AS numbers $1 with no range in the list.
+missing_asns() {
+	gzip -dc "$LIST_ASN" | awk -F, -v want="$1" '
+	BEGIN { n = split(want, w, " "); for (i = 1; i <= n; i++) need[w[i]] = 1 }
+	$3 in need { found[$3] = 1 }
+	END { for (i = 1; i <= n; i++) if (!(w[i] in found)) printf "AS%s ", w[i] }'
+}
+
+# The words of COUNTRIES -> the sorted list of country codes, or an error
+# naming the word that is no code or group of the list.
+expand_codes() {
+	known=" $(gzip -dc "$LIST_COUNTRY" | awk -F, '{ print $3 }' | sort -u | tr '\n' ' ') "
+	inc=""
+	exc=""
+	for w in $(echo "$*" | tr ',' ' '); do
+		neg=""
+		case "$w" in -* | '!'*) neg=1; w="${w#?}" ;; esac
+		lw="$(echo "$w" | tr 'A-Z' 'a-z')"
+		if members="$(group_members "$lw")"; then
+			:
+		else
+			members="$(echo "$w" | tr 'a-z' 'A-Z')"
+			case "$known" in
+			*" $members "*) ;;
+			*)
+				[ "$members" = "UK" ] && die "unknown country code UK: the United Kingdom is GB"
+				die "unknown country code or group: $w (omr-geoban groups lists the groups)"
+				;;
+			esac
+		fi
+		if [ -n "$neg" ]; then exc="$exc $members"; else inc="$inc $members"; fi
+	done
+	for c in $inc; do
+		case " $exc " in *" $c "*) ;; *) echo "$c" ;; esac
+	done | sort -u | tr '\n' ' ' | sed 's/ $//'
+}
+
+# Write the merged ranges of the list $1 whose third column is one of the
+# keys $2 (country codes, AS numbers) into $3 and $4 (IPv4, IPv6), one element
+# per line, comma-terminated (nft takes a trailing comma). Adjacent ranges are
+# merged here: it halves what nft has to parse, and its memory. Prints
+# "<IPv4 ranges> <IPv6 ranges>".
+build_lists() {
+	: > "$3"; : > "$4"
+	[ -n "$2" ] || { echo 0 0; return 0; }
+	gzip -dc "$1" | awk -F, -v want=" $2 " -v out4="$3" -v out6="$4" "$AWK_LIB"'
+	function flush4() { if (have4) { print (s4 == e4 ? a4(s4) : a4(s4) "-" a4(e4)) "," > out4; cnt4++ } }
+	function flush6() { if (have6) { print (s6 == e6 ? c6(s6) : c6(s6) "-" c6(e6)) "," > out6; cnt6++ } }
+	BEGIN { printf "" > out4; printf "" > out6 }
+	index(want, " " $3 " ") == 0 { next }
+	index($1, ":") {
+		s = x6($1); e = x6($2)
+		if (have6 && s == inc6(e6)) { if (e > e6) e6 = e; next }
+		flush6(); s6 = s; e6 = e; have6 = 1; next
+	}
+	{
+		s = n4($1); e = n4($2)
+		if (have4 && s == e4 + 1) { if (e > e4) e4 = e; next }
+		flush4(); s4 = s; e4 = e; have4 = 1
+	}
+	END { flush4(); flush6(); close(out4); close(out6); print cnt4 + 0, cnt6 + 0 }'
+}
+
+# "<address> <key> <exempt> [<organisation>]" for each address after the
+# second argument, the key being the third column of the list $1 (country,
+# AS number), ?? when the list (or the list itself) has none; exempt 1 when it
+# is in one of the addresses, prefixes or ranges of the second argument.
+# Querying the nft sets instead costs half a second per address: nft reads
+# every set to answer. The list is sorted by address within each family: the
+# addresses are sorted the same way and walked along it, one pass whatever
+# their number.
+lookup() {
+	list="$1"; exempt="$2"; shift 2
+	{ gzip -dc "$list" 2> /dev/null || true; } | awk -F, -v ips="$*" -v exempt="$exempt" "$AWK_LIB"'
+	function insert(f, k, i,    j) {
+		j = ++m[f]
+		while (j > 1 && key[f, j - 1] > k) { key[f, j] = key[f, j - 1]; idx[f, j] = idx[f, j - 1]; j-- }
+		key[f, j] = k; idx[f, j] = i
+	}
+	BEGIN {
+		n = split(ips, ip, " "); m[4] = m[6] = 0; p[4] = p[6] = 1
+		ne = split(exempt, ex, " ")
+		for (j = 1; j <= ne; j++) { span(ex[j]); exf[j] = index(ex[j], ":") ? 6 : 4; exlo[j] = lo_; exhi[j] = hi_ }
+		for (i = 1; i <= n; i++) {
+			f = index(ip[i], ":") ? 6 : 4
+			k = f == 6 ? x6(ip[i]) : n4(ip[i]) + 0
+			insert(f, k, i)
+			isex[i] = 0
+			for (j = 1; j <= ne; j++) if (exf[j] == f && k >= exlo[j] && k <= exhi[j]) isex[i] = 1
+		}
+		if (n == 0) exit
+	}
+	{
+		f = index($1, ":") ? 6 : 4
+		if (p[f] > m[f]) { if (p[4] > m[4] && p[6] > m[6]) exit; next }
+		if (f == 6) { s = x6($1); e = x6($2) } else { s = n4($1); e = n4($2) }
+		while (p[f] <= m[f] && key[f, p[f]] < s) p[f]++
+		while (p[f] <= m[f] && key[f, p[f]] <= e) {
+			cc[idx[f, p[f]]] = $3
+			if (NF > 3) { o = $0; sub(/^[^,]*,[^,]*,[^,]*,/, "", o); gsub(/"/, "", o); org[idx[f, p[f]]] = o }
+			p[f]++
+		}
+	}
+	END { for (i = 1; i <= n; i++) print ip[i], (cc[i] == "" ? "??" : cc[i]), isex[i], org[i] }'
+}
+
+# "<address> <country> <AS number> <exempt> [<organisation>]" for each address
+# after the first argument (the exempt entries), from both lists.
+lookup_all() {
+	ex="$1"; shift
+	lt="$(mktemp -d)" || return 1
+	lookup "$LIST_COUNTRY" "$ex" "$@" > "$lt/c"
+	lookup "$LIST_ASN" "" "$@" > "$lt/a"
+	paste -d ' ' "$lt/c" "$lt/a" | awk '{ o = ""; for (i = 7; i <= NF; i++) o = o (o == "" ? "" : " ") $i; print $1, $2, $5, $3, o }'
+	rm -rf "$lt"
+}
+
+# Every entry never filtered: the private ranges and EXEMPT.
+exempt_entries() { echo $PRIVATE4 $PRIVATE6 $(get_conf EXEMPT | tr ',' ' '); }
+
+# "allowed..." or "blocked...": the verdict of $mode with $codes, $asns and
+# $asx for a source of country $1 and AS number $2, exempt or not ($3),
+# connecting to port $4 (if known). The order of the chain's rules.
+verdict() {
+	[ "$3" = 1 ] && { echo "allowed (exempt)"; return; }
+	[ -n "${4:-}" ] && port_open "$4" && { echo "allowed (open port)"; return; }
+	case " $asx " in
+	*" $2 "*) [ "$mode" = allow ] && echo "blocked (network taken out)" || echo "allowed (network taken out)"; return ;;
+	esac
+	listed=""
+	case " $codes " in *" $1 "*) listed=1 ;; esac
+	case " $asns " in *" $2 "*) listed=1 ;; esac
+	if [ -n "$listed" ]; then
+		[ "$mode" = allow ] && echo allowed || echo blocked
+	else
+		[ "$mode" = allow ] && echo blocked || echo allowed
+	fi
+}
+
+valid_addr() {
+	echo "$1" | grep -Eq '^([0-9]{1,3}(\.[0-9]{1,3}){3}|[0-9A-Fa-f:]*:[0-9A-Fa-f:.]*)$'
+}
+
+# ── the ruleset ──────────────────────────────────────────────────────────
+
+# EXEMPT and the private ranges, split by family, one element per line.
+write_exempt() {
+	: > "$1/exempt4"
+	: > "$1/exempt6"
+	for a in $(exempt_entries); do
+		case "$a" in
+		*:*) echo "$a," >> "$1/exempt6" ;;
+		*) echo "$a," >> "$1/exempt4" ;;
+		esac
+	done
+}
+
+emit_set() {
+	printf '\tset %s {\n\t\ttype %s\n\t\tflags interval\n\t\tauto-merge\n' "$1" "$2"
+	if [ -s "$3" ]; then
+		printf '\t\telements = {\n'
+		cat "$3"
+		printf '\t\t}\n'
+	fi
+	printf '\t}\n'
+}
+
+# OPEN_PORTS, tcp/65222 (SSH) when the configuration has no such line (none
+# yet, or one omr-admin made): an empty value is the only way to close it.
+DEFAULT_OPEN_PORTS="tcp/65222"
+conf_open_ports() {
+	if [ -f "$CONF" ] && grep -q "^[[:space:]]*OPEN_PORTS=" "$CONF"; then
+		get_conf OPEN_PORTS
+	else
+		echo "$DEFAULT_OPEN_PORTS"
+	fi
+}
+
+# OPEN_PORTS for one protocol: "65222, 8000-8100", or nothing.
+open_ports() {
+	for p in $(conf_open_ports | tr ',' ' '); do
+		case "$p" in
+		"$1"/*) echo "${p#*/}" ;;
+		esac
+	done | tr '\n' ',' | sed 's/,$//; s/,/, /g'
+}
+
+# The table for mode $2, with the sets of the directory $1. It replaces the
+# previous one in the same transaction: no moment without a filter.
+write_ruleset() {
+	if [ -f "$VARS" ]; then
+		printf 'include "%s"\n' "$VARS"
+	else
+		printf 'define VPN_IFACES = { "tun*", "wg*" }\ndefine VPNCL_IFACES = { "client-wg*" }\n'
+	fi
+	printf 'table inet %s\ndelete table inet %s\ntable inet %s {\n' "$TABLE" "$TABLE" "$TABLE"
+	emit_set exempt4 ipv4_addr "$1/exempt4"
+	emit_set exempt6 ipv6_addr "$1/exempt6"
+	for set in geo net except; do
+		emit_set ${set}4 ipv4_addr "$1/${set}4"
+		emit_set ${set}6 ipv6_addr "$1/${set}6"
+	done
+	tcp="$(open_ports tcp)"
+	udp="$(open_ports udp)"
+	printf '\tchain prerouting {\n'
+	printf '\t\ttype filter hook prerouting priority mangle - 10; policy accept;\n'
+	printf '\t\tiifname "lo" accept\n'
+	printf '\t\tiifname $VPN_IFACES accept\n'
+	printf '\t\tiifname $VPNCL_IFACES accept\n'
+	printf '\t\tct state established,related accept\n'
+	printf '\t\ticmpv6 type { nd-router-solicit, nd-router-advert, nd-neighbor-solicit, nd-neighbor-advert, nd-redirect, mld-listener-query, mld-listener-report, mld-listener-done, mld2-listener-report } accept\n'
+	printf '\t\tip saddr @exempt4 accept\n'
+	printf '\t\tip6 saddr @exempt6 accept\n'
+	[ -n "$tcp" ] && printf '\t\ttcp dport { %s } accept\n' "$tcp"
+	[ -n "$udp" ] && printf '\t\tudp dport { %s } accept\n' "$udp"
+	if [ "$2" = allow ]; then
+		printf '\t\tip saddr @except4 counter drop comment "omr-geoban: from a network taken out"\n'
+		printf '\t\tip6 saddr @except6 counter drop comment "omr-geoban: from a network taken out"\n'
+		printf '\t\tip saddr @geo4 accept\n'
+		printf '\t\tip6 saddr @geo6 accept\n'
+		printf '\t\tip saddr @net4 accept\n'
+		printf '\t\tip6 saddr @net6 accept\n'
+		printf '\t\tcounter drop comment "omr-geoban: not from an allowed country or network"\n'
+	else
+		printf '\t\tip saddr @except4 accept\n'
+		printf '\t\tip6 saddr @except6 accept\n'
+		printf '\t\tip saddr @geo4 counter drop comment "omr-geoban: from a denied country"\n'
+		printf '\t\tip6 saddr @geo6 counter drop comment "omr-geoban: from a denied country"\n'
+		printf '\t\tip saddr @net4 counter drop comment "omr-geoban: from a denied network"\n'
+		printf '\t\tip6 saddr @net6 counter drop comment "omr-geoban: from a denied network"\n'
+	fi
+	printf '\t}\n}\n'
+}
+
+# "<address> <local port>" of every connection established to a port the VPS
+# listens on: the routers' WANs (MPTCP subflows, the VPNs), SSH sessions,
+# and the like. ss sees the TCP ones; the UDP VPNs (MQVPN, Glorytun UDP,
+# WireGuard, OpenVPN) answer from unconnected sockets, so they come from the
+# conntrack table: what was addressed to this VPS, to one of those ports,
+# not opened by the VPS itself, and answered both ways (ASSURED: a router's
+# VPN is, a scanner's probe is not).
+current_peers() {
+	listen=" $({ ss -Htln; ss -Huln; } 2> /dev/null | awk '{ p = $4; sub(/.*:/, "", p); print p }' | sort -un | tr '\n' ' ') "
+	{ ss -Htn state established; ss -Hun state established; } 2> /dev/null | awk -v listen="$listen" '{
+		l = $(NF - 1); p = $NF
+		lp = l; sub(/.*:/, "", lp)
+		if (index(listen, " " lp " ") == 0) next
+		sub(/:[^:]*$/, "", p); gsub(/[][]/, "", p); sub(/%.*/, "", p); sub(/^::ffff:/, "", p)
+		if (p ~ /^[0-9.]+$/ || p ~ /:/) print p, lp
+	}' > "$work/peers"
+	locals=" $(ip -o addr show 2> /dev/null | awk '{ a = $4; sub(/\/.*/, "", a); print a }' | tr '\n' ' ') "
+	{ cat /proc/net/nf_conntrack 2> /dev/null || conntrack -L 2> /dev/null; } | awk -v listen="$listen" -v locals="$locals" '/\[ASSURED\]/ {
+		src = dst = dport = ""
+		for (i = 1; i <= NF; i++) {
+			if (src == "" && $i ~ /^src=/) src = substr($i, 5)
+			else if (dst == "" && $i ~ /^dst=/) dst = substr($i, 5)
+			else if (dport == "" && $i ~ /^dport=/) dport = substr($i, 7)
+		}
+		if (dport == "" || index(listen, " " dport " ") == 0) next
+		if (index(locals, " " dst " ") == 0 || index(locals, " " src " ")) next
+		print src, dport
+	}' >> "$work/peers"
+	sort -u "$work/peers"
+}
+
+# Whether the port $1 is in OPEN_PORTS (either protocol: the peers are
+# listed without theirs, and this only decides what to warn about).
+port_open() {
+	for p in $(conf_open_ports | tr ',' ' '); do
+		r="${p#*/}"
+		lo="${r%-*}"; hi="${r#*-}"
+		[ "$1" -ge "$lo" ] 2> /dev/null && [ "$1" -le "$hi" ] 2> /dev/null && return 0
+	done
+	return 1
+}
+
+# The current peers $mode would block, as
+# "<address> <country> AS<number> <port>[,<port>...] <organisation>".
+blocked_peers() {
+	peers="$(current_peers)"
+	[ -n "$peers" ] || return 0
+	lookup_all "$(exempt_entries)" $(echo "$peers" | awk '{ print $1 }' | sort -u) | while read -r addr cc asn ex org; do
+		ports=""
+		for port in $(echo "$peers" | awk -v a="$addr" '$1 == a { print $2 }'); do
+			case "$(verdict "$cc" "$asn" "$ex" "$port")" in blocked*) ports="$ports,$port" ;; esac
+		done
+		[ -n "$ports" ] && echo "$addr $cc AS$asn ${ports#,} $org"
+	done
+}
+
+# What a selection is, in words: "FR DE AS3215, but AS16276".
+describe() {
+	d="$codes"
+	for n in $asns; do d="$d AS$n"; done
+	d="${d# }"
+	[ -n "$asx" ] && d="$d, but$(for n in $asx; do printf ' AS%s' "$n"; done)"
+	echo "$d"
+}
+
+# Apply mode $1 for the COUNTRIES words $2. With $3 = check, refuse when a
+# peer connected now would be blocked; with $4 = force, warn only.
+apply_mode() {
+	mode="$1"; words="$2"; check="${3:-}"; force="${4:-}"
+	if [ "$mode" = off ]; then
+		nft delete table inet "$TABLE" > /dev/null 2>&1 || true
+		rm -f "$STATE/applied"
+		return 0
+	fi
+	case "$mode" in allow | deny) ;; *) die "MODE must be off, allow or deny, not \"$mode\"" ;; esac
+	split_words $words
+	codes=""
+	if [ -n "$cwords" ]; then
+		ensure_list country
+		codes="$(expand_codes $cwords)" || exit 1
+	fi
+	if [ -n "$asns$asx" ]; then
+		ensure_list asn
+		missing="$(missing_asns "$asns $asx")"
+		[ -z "$missing" ] || die "no address range for $missing(omr-geoban asn <name> finds the networks)"
+	fi
+	[ -n "$codes$asns" ] || die "no country or network to $mode (COUNTRIES=\"$words\")"
+	# The check names the country and network of a peer: both lists, whatever
+	# the selection uses (without one, its column says ??).
+	if [ -n "$check" ]; then
+		[ -f "$LIST_COUNTRY" ] || download country > /dev/null 2>&1
+		[ -f "$LIST_ASN" ] || download asn > /dev/null 2>&1
+	fi
+	work="$(mktemp -d "$STATE/work.XXXXXX")" || die "cannot create a work directory in $STATE"
+	trap 'rm -rf "$work"' EXIT
+	geo="$(build_lists "$LIST_COUNTRY" "$codes" "$work/geo4" "$work/geo6")" || die "cannot read the country list"
+	net="$(build_lists "$LIST_ASN" "$asns" "$work/net4" "$work/net6")" || die "cannot read the ASN list"
+	exc="$(build_lists "$LIST_ASN" "$asx" "$work/except4" "$work/except6")" || die "cannot read the ASN list"
+	counts="$(echo $geo $net $exc | awk '{ print $1 + $3 + $5, $2 + $4 + $6 }')"
+	write_exempt "$work"
+	if [ -n "$check" ]; then
+		blocked="$(blocked_peers "$mode" "$codes")"
+		if [ -n "$blocked" ]; then
+			log "these peers, connected now, would be blocked:"
+			echo "$blocked" | while read -r addr cc asn ports org; do
+				case "$ports" in *,*) to="ports" ;; *) to="port" ;; esac
+				[ "$asn" = "AS??" ] && asn="" || asn=", $asn${org:+ $org}"
+				log "  $addr ($cc$asn), to $to $ports"
+			done
+			if [ -z "$force" ]; then
+				log "nothing applied. Add them to EXEMPT (omr-geoban exempt add <address>), or run again with --force"
+				exit 1
+			fi
+			log "--force: applying anyway"
+		fi
+	fi
+	write_ruleset "$work" "$mode" > "$work/ruleset.nft"
+	nft -f "$work/ruleset.nft" || die "nft refused the ruleset, the previous one stays in place"
+	set -- $counts
+	cat > "$STATE/applied" <<-EOF
+	mode=$mode
+	countries=$words
+	codes=$codes
+	asns=$asns
+	asx=$asx
+	ranges4=$1
+	ranges6=$2
+	source=$SOURCE
+	list=$(list_version country) $(list_version asn)
+	time=$(date -u '+%Y-%m-%d %H:%M:%S UTC')
+	EOF
+	log "$mode: $(describe) ($1 IPv4 and $2 IPv6 ranges)"
+	rm -rf "$work"
+	trap - EXIT
+}
+
+# ── commands ─────────────────────────────────────────────────────────────
+
+lock() {
+	command -v flock > /dev/null 2>&1 || return 0
+	mkdir -p "$(dirname "$LOCK")"
+	exec 9>> "$LOCK"
+	flock 9 || die "cannot lock $LOCK"
+}
+
+cmd_set_mode() {
+	mode="$1"; shift
+	force=""
+	words=""
+	for a in "$@"; do
+		case "$a" in
+		--force) force=1 ;;
+		*) words="$words $a" ;;
+		esac
+	done
+	words="${words# }"
+	[ -n "$words" ] || die "usage: omr-geoban $mode <countries/ASNs...> [--force]"
+	apply_mode "$mode" "$words" check "$force"
+	set_conf COUNTRIES "$words"
+	set_conf MODE "$mode"
+}
+
+cmd_exempt() {
+	action="${1:-list}"
+	[ $# -gt 0 ] && shift
+	current="$(get_conf EXEMPT | tr ',' ' ')"
+	case "$action" in
+	list)
+		for a in $current; do echo "$a"; done
+		return 0
+		;;
+	add)
+		[ $# -gt 0 ] || die "usage: omr-geoban exempt add <address...>"
+		for a in "$@"; do
+			case "$a" in *:*) t=ipv6_addr ;; *) t=ipv4_addr ;; esac
+			printf 'table inet %s_syntax { set s { type %s; flags interval; elements = { %s }; }; }\n' "$TABLE" "$t" "$a" |
+				nft -c -f - > /dev/null 2>&1 || die "not an address, prefix or range: $a"
+			case " $current " in *" $a "*) ;; *) current="$current $a" ;; esac
+		done
+		;;
+	del)
+		[ $# -gt 0 ] || die "usage: omr-geoban exempt del <address...>"
+		for a in "$@"; do
+			case " $current " in *" $a "*) ;; *) log "$a is not in EXEMPT" ;; esac
+			current="$(for c in $current; do [ "$c" = "$a" ] || echo "$c"; done)"
+		done
+		;;
+	*) die "usage: omr-geoban exempt [add|del <address...>]" ;;
+	esac
+	set_conf EXEMPT "$(echo $current)"
+	mode="$(get_conf MODE off)"
+	[ "$mode" = off ] || apply_mode "$mode" "$(get_conf COUNTRIES)"
+}
+
+cmd_status() {
+	mode="$(get_conf MODE off)"
+	if [ "$mode" = off ]; then
+		echo "Configured: off"
+	else
+		echo "Configured: $mode $(get_conf COUNTRIES)"
+	fi
+	echo "Source: $SOURCE ($(credit "$SOURCE"))"
+	if chain="$(nft list chain inet "$TABLE" prerouting 2> /dev/null)"; then
+		dropped="$(echo "$chain" | awk '/counter packets/ { for (i = 1; i <= NF; i++) if ($i == "packets") n += $(i + 1) } END { print n + 0 }')"
+		if [ -f "$STATE/applied" ]; then
+			applied() { sed -n "s/^$1=//p" "$STATE/applied"; }
+			codes="$(applied codes)"; asns="$(applied asns)"; asx="$(applied asx)"
+			echo "Applied: $(applied mode) $(describe)"
+			echo "Ranges: $(applied ranges4) IPv4, $(applied ranges6) IPv6, lists of $(applied list) from $(applied source), applied $(applied time)"
+		else
+			echo "Applied: yes"
+		fi
+		echo "Dropped since applied: $dropped packets"
+	else
+		echo "Applied: no"
+		[ "$mode" = off ] || echo "Not in place although configured: run omr-geoban apply, or see journalctl -u omr-geoban"
+	fi
+	echo "Exempt: $(get_conf EXEMPT) (and private, link-local addresses)"
+	echo "Open ports: $(conf_open_ports)"
+}
+
+cmd_check() {
+	[ $# -gt 0 ] || die "usage: omr-geoban check <address...>"
+	addrs=""
+	for a in "$@"; do
+		valid_addr "$a" || die "not an address: $a"
+		# An IPv4-mapped address is IPv4 on the wire.
+		case "$a" in ::ffff:*.*) a="${a#::ffff:}" ;; esac
+		addrs="$addrs $a"
+	done
+	set -- $addrs
+	ensure_list country
+	[ -f "$LIST_ASN" ] || download asn > /dev/null 2>&1
+	mode="$(sed -n 's/^mode=//p' "$STATE/applied" 2> /dev/null)"
+	codes="$(sed -n 's/^codes=//p' "$STATE/applied" 2> /dev/null)"
+	asns="$(sed -n 's/^asns=//p' "$STATE/applied" 2> /dev/null)"
+	asx="$(sed -n 's/^asx=//p' "$STATE/applied" 2> /dev/null)"
+	nft list chain inet "$TABLE" prerouting > /dev/null 2>&1 || mode=""
+	lookup_all "$(exempt_entries)" "$@" | while read -r addr cc asn ex org; do
+		if [ -z "$mode" ]; then
+			v="not filtered (omr-geoban is not applied)"
+		else
+			v="$(verdict "$cc" "$asn" "$ex")"
+		fi
+		echo "$addr $cc AS$asn${org:+ ($org)} $v"
+	done
+}
+
+# The networks whose name contains one of the arguments (each one whole:
+# "bouygues telecom"), or whose number is one (3215, as3215):
+# "AS<number> <country> <IPv4 addresses> <organisation>", the largest first.
+# The country is that of the network's first range.
+cmd_asn() {
+	[ $# -gt 0 ] || die "usage: omr-geoban asn <name|number...>"
+	ensure_list asn
+	[ -f "$LIST_COUNTRY" ] || download country > /dev/null 2>&1
+	found="$(gzip -dc "$LIST_ASN" | awk -F, -v words="$(printf '%s\n' "$@")" "$AWK_LIB"'
+	BEGIN { n = split(tolower(words), w, "\n"); for (i = 1; i <= n; i++) if (w[i] ~ /^as[0-9]+$/) w[i] = substr(w[i], 3) }
+	{
+		if (!($3 in seen)) {
+			o = $0; sub(/^[^,]*,[^,]*,[^,]*,/, "", o); gsub(/"/, "", o); lo = tolower(o)
+			hit = 0
+			for (i = 1; i <= n; i++) if ((w[i] ~ /^[0-9]+$/) ? $3 == w[i] : index(lo, w[i])) hit = 1
+			seen[$3] = hit
+			if (hit) { org[$3] = o; first[$3] = $1 }
+		}
+		if (!seen[$3]) next
+		if (index($1, ":")) n6[$3]++; else addr[$3] += n4($2) - n4($1) + 1
+	}
+	END { for (a in org) print a, first[a], addr[a] + 0, org[a] }' | sort -k3,3nr)"
+	[ -n "$found" ] || die "no network matches: $*"
+	lookup "$LIST_COUNTRY" "" $(echo "$found" | awk '{ print $2 }') > "${TMPDIR:-/tmp}/omr-geoban-asn.$$"
+	echo "$found" | while read -r asn first count org; do
+		cc="$(awk -v a="$first" '$1 == a { print $2; exit }' "${TMPDIR:-/tmp}/omr-geoban-asn.$$")"
+		printf 'AS%-8s %-3s %12s IPv4  %s\n' "$asn" "${cc:-??}" "$count" "$org"
+	done
+	rm -f "${TMPDIR:-/tmp}/omr-geoban-asn.$$"
+}
+
+# The ranges of the countries and networks; the networks taken out are not
+# subtracted (the filter checks them first).
+cmd_ranges() {
+	[ $# -gt 0 ] || die "usage: omr-geoban ranges <countries/ASNs...>"
+	split_words "$@"
+	codes=""
+	if [ -n "$cwords" ]; then
+		ensure_list country
+		codes="$(expand_codes $cwords)" || exit 1
+	fi
+	[ -n "$asns" ] && ensure_list asn
+	work="$(mktemp -d)" || exit 1
+	build_lists "$LIST_COUNTRY" "$codes" "$work/geo4" "$work/geo6" > /dev/null
+	build_lists "$LIST_ASN" "$asns" "$work/net4" "$work/net6" > /dev/null
+	sed 's/,$//' "$work/geo4" "$work/net4" "$work/geo6" "$work/net6"
+	rm -rf "$work"
+}
+
+# Switch to the source $1. The lists the configuration uses are fetched from
+# it first, and the configuration applied from them, refused like allow and
+# deny when a peer connected now would be blocked: only then is SOURCE saved,
+# and the lists of the previous source deleted.
+cmd_source() {
+	if [ $# -eq 0 ]; then
+		echo "$SOURCE ($(credit "$SOURCE"))"
+		return 0
+	fi
+	usage="usage: omr-geoban source [dbip | maxmind [<account ID> <license key>]] [--force]"
+	new="$1"; shift
+	force=""
+	args=""
+	for a in "$@"; do
+		case "$a" in
+		--force) force=1 ;;
+		*) args="$args $a" ;;
+		esac
+	done
+	set -- $args
+	old="$SOURCE"
+	use_source "$new"
+	case "$new:$#" in
+	maxmind:2)
+		case "$1" in *[!0-9]*) die "not a MaxMind account ID (a number): $1" ;; esac
+		case "$2" in *[!A-Za-z0-9_]*) die "not a MaxMind license key: it holds letters, digits and _ only" ;; esac
+		MM_ACCOUNT="$1"; MM_KEY="$2"
+		;;
+	*:0) ;;
+	*) die "$usage" ;;
+	esac
+	mode="$(get_conf MODE off)"
+	words="$(get_conf COUNTRIES)"
+	split_words $words
+	kinds="country"
+	if [ -n "$asns$asx" ] || [ -f "$(list_file asn "$old")" ]; then kinds="country asn"; fi
+	for kind in $kinds; do
+		download "$kind"
+		[ $? -eq 1 ] && die "no $kind list from $new: still using $old"
+	done
+	[ "$mode" = off ] || apply_mode "$mode" "$words" check "$force"
+	if [ $# -eq 2 ]; then
+		set_conf MAXMIND_ACCOUNT_ID "$MM_ACCOUNT"
+		set_conf MAXMIND_LICENSE_KEY "$MM_KEY"
+	fi
+	set_conf SOURCE "$new"
+	if [ "$old" != "$new" ]; then
+		for kind in country asn; do
+			rm -f "$(list_file "$kind" "$old")" "$(version_file "$kind" "$old")"
+		done
+	fi
+	log "source: $new ($(credit "$new"))"
+}
+
+cmd_groups() {
+	for g in $GROUP_NAMES; do
+		echo "$g: $(group_members "$g")"
+	done
+}
+
+cmd="${1:-status}"
+[ $# -gt 0 ] && shift
+SOURCE="$(get_conf SOURCE dbip)"
+# A SOURCE nothing can read stops every command but the one that fixes it.
+case "$cmd" in
+source | groups | -h | --help | help) ;;
+*) use_source "$SOURCE" ;;
+esac
+case "$cmd" in
+allow | deny)
+	lock
+	cmd_set_mode "$cmd" "$@"
+	;;
+off)
+	lock
+	apply_mode off ""
+	[ -f "$CONF" ] && set_conf MODE off
+	log "off"
+	;;
+apply)
+	lock
+	apply_mode "$(get_conf MODE off)" "$(get_conf COUNTRIES)"
+	;;
+update)
+	lock
+	force=""
+	[ "${1:-}" = "--force" ] && force=1
+	mode="$(get_conf MODE off)"
+	if [ "$mode" = off ] && [ -z "$force" ]; then
+		exit 0
+	fi
+	split_words $(get_conf COUNTRIES)
+	kinds=""
+	[ -n "$cwords" ] || [ "$mode" = off ] && kinds="country"
+	[ -n "$asns$asx" ] && kinds="$kinds asn"
+	new=""
+	failed=""
+	for kind in $kinds; do
+		download "$kind" "$force"
+		case $? in
+		0) new=1 ;;
+		2) ;;
+		*) failed=1 ;;
+		esac
+	done
+	[ -n "$new" ] && [ "$mode" != off ] && apply_mode "$mode" "$(get_conf COUNTRIES)"
+	[ -z "$failed" ]
+	;;
+exempt) lock; cmd_exempt "$@" ;;
+source) lock; cmd_source "$@" ;;
+status) cmd_status ;;
+check) cmd_check "$@" ;;
+asn) cmd_asn "$@" ;;
+ranges) cmd_ranges "$@" ;;
+groups) cmd_groups ;;
+-h | --help | help) sed -n '/^# USAGE/,/^$/s/^# \{0,1\}//p' "$0" ;;
+*) die "unknown command: $cmd (omr-geoban help)" ;;
+esac

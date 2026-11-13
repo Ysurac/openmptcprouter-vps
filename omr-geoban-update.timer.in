@@ -1,0 +1,10 @@
+[Unit]
+Description=Timer for the OMR-GeoBan country list update
+
+[Timer]
+OnCalendar=daily
+RandomizedDelaySec=4h
+Persistent=true
+
+[Install]
+WantedBy=timers.target

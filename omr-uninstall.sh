@@ -293,7 +293,8 @@ echo "Stop OpenMPTCProuter services..."
 # being stopped here, and GET /update starts omr-update, which reinstalls all.
 stop_units omr-admin.service omr-admin-ipv6.service omr-update.service omr.service \
 	omr-bypass.timer omr-bypass.service omr-reserved-ports.path omr-reserved-ports.service \
-	omr-net-mem.service 'omr6in4@*' 'omr-vxlan@*' \
+	omr-net-mem.service omr-geoban-update.timer omr-geoban-update.service omr-geoban.service \
+	'omr6in4@*' 'omr-vxlan@*' \
 	'shadowsocks-libev-manager@*' 'shadowsocks-libev-server@*' shadowsocks-go.service \
 	v2ray.service xray.service 'mlvpn@*' mqvpn.service mqvpn-server.service 'dsvpn-server@*' \
 	'glorytun-tcp@*' 'glorytun-udp@*' openvpn@tun0.service openvpn@tun1.service 'openvpn@bonding*' \
@@ -328,7 +329,8 @@ echo "Reset the firewall..."
 # The OpenMPTCProuter ruleset only opens 65222 for SSH: it goes first, before
 # sshd moves back to 22. The installer overwrote /etc/nftables.conf without a
 # copy, this is the nftables package's own default (accept everything).
-rm -f /etc/systemd/system/nftables.service.d/omr-admin-resync.conf /etc/systemd/system/nftables.service.d/omr-bypass-resync.conf
+rm -f /etc/systemd/system/nftables.service.d/omr-admin-resync.conf /etc/systemd/system/nftables.service.d/omr-bypass-resync.conf \
+	/etc/systemd/system/nftables.service.d/omr-geoban-resync.conf
 rmdir_unowned /etc/systemd/system/nftables.service.d
 systemctl daemon-reload
 if [ -f /etc/nftables/omr.nft ] || grep -q 'OpenMPTCProuter' /etc/nftables.conf 2>/dev/null; then
@@ -403,15 +405,16 @@ echo "done"
 
 echo "Remove OpenMPTCProuter files..."
 rm_unowned /usr/local/bin/omr-service /usr/local/bin/omr-6in4-run /usr/local/bin/omr-vxlan-run \
-	/usr/local/bin/omr-bypass /usr/local/bin/omr-reserved-ports /usr/local/bin/omr-net-mem \
+	/usr/local/bin/omr-bypass /usr/local/bin/omr-reserved-ports /usr/local/bin/omr-net-mem /usr/local/bin/omr-geoban \
 	/usr/local/bin/omr-test-speed /usr/local/bin/multipath /usr/local/bin/glorytun-tcp \
 	/usr/local/bin/glorytun-tcp-run /usr/local/bin/glorytun-udp-run /usr/local/bin/dsvpn-run \
 	/usr/local/bin/v2ray-plugin /usr/local/bin/obfs-server \
 	/usr/bin/omr-update /usr/bin/omradmin.py /usr/share/omr-admin /usr/share/omr-server \
-	/usr/share/omr-server-git /var/lib/openmptcprouter-vps-debian /var/opt/openmptcprouter \
+	/usr/share/omr-server-git /var/lib/openmptcprouter-vps-debian /var/opt/openmptcprouter /var/lib/omr-geoban \
 	/var/log/omr-update.log
 for unit in omr.service omr6in4@.service omr-vxlan@.service omr-bypass.service omr-bypass.timer \
 	omr-reserved-ports.service omr-reserved-ports.path omr-net-mem.service omr-update.service \
+	omr-geoban.service omr-geoban-update.service omr-geoban-update.timer \
 	omr-admin.service omr-admin-ipv6.service glorytun-tcp@.service glorytun-udp@.service \
 	mlvpn@.service dsvpn-server@.service mqvpn.service shadowsocks-libev-manager@.service \
 	v2ray.service xray.service; do

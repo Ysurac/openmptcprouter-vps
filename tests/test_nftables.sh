@@ -267,6 +267,14 @@ if nft_body "$RULES" | grep -E 'ip6 saddr[^#]*masquerade' | grep -q 'oifname \$N
 else
     fail "the NAT66 masquerade is not on \$NET_IFACE6; with IPv6 on another NIC the LAN's ULA leaves unmasqueraded (#3271)"
 fi
+# omr-admin's /vpnips takes a router's ULA anywhere in fc00::/7 and
+# omr-6in4-run routes it into that router's tunnel: masquerading fd00::/8
+# only, an fc00::/8 one was routed in and left the WAN unmasqueraded.
+if nft_body "$RULES" | grep -E 'ip6 saddr[^#]*masquerade' | grep -q 'fc00::/7'; then
+    pass "the NAT66 masquerade covers every ULA /vpnips accepts (fc00::/7)"
+else
+    fail "the NAT66 masquerade misses part of fc00::/7: a ULA /vpnips accepts leaves the WAN unmasqueraded"
+fi
 
 # The installer's own sed lines, run against the shipped omr-vars.nft. The
 # second case is the trap: an IPv6 NIC named eth0 next to an IPv4 NIC with

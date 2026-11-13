@@ -88,8 +88,8 @@ MLVPN_VERSION="8aa1b16d843ea68734e2520e39a34cb7f3d61b2b"
 MLVPN_BINARY_VERSION="3.0.0+20211028.git.ddafba3"
 OBFS_VERSION="486bebd9208539058e57e23a12f23103016e09b4"
 OBFS_BINARY_VERSION="0.0.5-1"
-OMR_ADMIN_VERSION="dafd12657517731ac8b1a270b5affcb1eab65d3f"
-OMR_ADMIN_BINARY_VERSION="0.18+20261102"
+OMR_ADMIN_VERSION="aee208030982a3a8dc43a4fa2da067cdb345b8d4"
+OMR_ADMIN_BINARY_VERSION="0.18+20261111"
 DSVPN_VERSION="3b99d2ef6c02b2ef68b5784bec8adfdd55b29b1a"
 DSVPN_BINARY_VERSION="0.1.4-2"
 MQVPN_VERSION="0.19.0+20261101-1"
@@ -107,9 +107,9 @@ IPROUTE2_VERSION="29da83f89f6e1fe528c59131a01f5d43bcd0a000"
 SHADOWSOCKS_BINARY_VERSION="3.3.5-3"
 SHADOWSOCKS_GO_VERSION="1.14.0"
 DEFAULT_USER="openmptcprouter"
-VPS_DOMAIN=${VPS_DOMAIN:-$(wget -4 -qO- -T 2 http://hostname.openmptcprouter.com)}
+VPS_DOMAIN=${VPS_DOMAIN:-$(wget -4 -qO- -T 2 https://hostname.openmptcprouter.com)}
 VPSPATH="server-test"
-VPS_PUBLIC_IP=${VPS_PUBLIC_IP:-$(wget -4 -qO- -T 2 http://ip.openmptcprouter.com)}
+VPS_PUBLIC_IP=${VPS_PUBLIC_IP:-$(wget -4 -qO- -T 2 https://ip.openmptcprouter.com)}
 # Both come over plain HTTP and end up in acme.sh's arguments and in the
 # WireGuard client config: only a host name and an IPv4 address are kept
 printf '%s' "$VPS_DOMAIN" | grep -Eqx '[A-Za-z0-9]([A-Za-z0-9-]{0,62}[A-Za-z0-9])?(\.[A-Za-z0-9]([A-Za-z0-9-]{0,62}[A-Za-z0-9])?)+' || VPS_DOMAIN=""
@@ -118,7 +118,7 @@ VPSURL="https://www.openmptcprouter.com/"
 REPO="repo.openmptcprouter.com"
 CHINA=${CHINA:-no}
 
-OMR_VERSION="0.1097-rolling-test"
+OMR_VERSION="0.1098-rolling-test"
 
 DIR=$( pwd )
 #"
@@ -268,8 +268,8 @@ echo "Check user..."
 if [ "$(id -u)" -ne 0 ]; then echo 'Please run as root.' >&2; exit 1; fi
 
 # Check Kernel
-if [ "$KERNEL" != "5.4" ] && [ "$KERNEL" != "6.1" ] && [ "$KERNEL" != "6.6" ] && [ "$KERNEL" != "6.10" ] && [ "$KERNEL" != "6.11" ] && [ "$KERNEL" != "6.12" ] && [ "$KERNEL" != "6.18" ]; then
-	echo "Only kernels 5.4, 6.1, 6.6, 6.10, 6.11, 6.12  and 6.18 are currently supported"
+if [ "$KERNEL" != "5.4" ] && [ "$KERNEL" != "6.1" ] && [ "$KERNEL" != "6.6" ] && [ "$KERNEL" != "6.10" ] && [ "$KERNEL" != "6.11" ] && [ "$KERNEL" != "6.12" ] && [ "$KERNEL" != "6.18" ] && [ "$KERNEL" != "7.3" ]; then
+	echo "Only kernels 5.4, 6.1, 6.6, 6.10, 6.11, 6.12, 6.18 and 7.3 are currently supported"
 	exit 1
 fi
 
@@ -596,19 +596,19 @@ fi
 if [ "$ID" = "debian" ]; then
 	if [ "$VERSION_ID" = "9" ]; then
 		#echo 'deb http://dl.bintray.com/cpaasch/deb jessie main' >> /etc/apt/sources.list
-		echo 'deb http://deb.debian.org/debian stretch-backports main' > /etc/apt/sources.list.d/stretch-backports.list
+		echo 'deb https://deb.debian.org/debian stretch-backports main' > /etc/apt/sources.list.d/stretch-backports.list
 	fi
 	# Add buster-backports repo
-	echo 'deb http://archive.debian.org/debian buster-backports main' > /etc/apt/sources.list.d/buster-backports.list
+	echo 'deb https://archive.debian.org/debian buster-backports main' > /etc/apt/sources.list.d/buster-backports.list
 	if [ "$VERSION_ID" = "12" ] || [ "$VERSION_ID" = "13" ]; then
-		echo 'deb http://deb.debian.org/debian bullseye main' > /etc/apt/sources.list.d/bullseye.list
+		echo 'deb https://deb.debian.org/debian bullseye main' > /etc/apt/sources.list.d/bullseye.list
 	fi
 elif [ "$ID" = "ubuntu" ]; then
 	echo 'deb https://ports.ubuntu.com/ubuntu-ports bionic-backports main' > /etc/apt/sources.list.d/bionic-backports.list
 	echo 'deb https://ports.ubuntu.com/ubuntu-ports bionic universe' > /etc/apt/sources.list.d/bionic-universe.list
 	[ "$VERSION_ID" = "22.04" ] && {
 		apt-key adv --keyserver keyserver.ubuntu.com --recv-keys 3B4FE6ACC0B21F32
-		echo 'deb http://old-releases.ubuntu.com/ubuntu impish main universe' > /etc/apt/sources.list.d/impish-universe.list
+		echo 'deb https://old-releases.ubuntu.com/ubuntu impish main universe' > /etc/apt/sources.list.d/impish-universe.list
 	}
 fi
 # Install mptcp kernel and shadowsocks
@@ -738,7 +738,7 @@ set_grub_default_kernel() {
 # MPTCP is in every mainline kernel since 5.6, so a distribution kernel can
 # carry MPTCP too (Debian 13's own 6.12 does): what the OpenMPTCProuter kernel
 # adds on top is the MPTCP BPF schedulers (the mptcp-bpf-* packages installed
-# for KERNEL=6.18), which load on no other kernel. The out of tree 5.4 kernel
+# for KERNEL=6.18 and 7.3), which load on no other kernel. The out of tree 5.4 kernel
 # is the exception, its MPTCP is the multipath-tcp.org fork and no distribution
 # kernel has it.
 check_running_kernel() {
@@ -930,7 +930,7 @@ elif [ "$KERNEL" = "6.12" ] && [ "$ARCH" = "amd64" ]; then
 	# to set. Under set -e a bare call would end the install here.
 	set_grub_default_kernel "${KERNEL_VERSION}" "${PSABI}-xanmod" || true
 #elif [ "$KERNEL" = "6.18" ] && [ "$ARCH" = "amd64" ]; then
-elif [ "$KERNEL" = "6.18" ]; then
+elif [ "$KERNEL" = "6.18" ] || [ "$KERNEL" = "7.3" ]; then
 	if [ "$ARCH" = "amd64" ]; then
 		# awk command from xanmod website
 		PSABI=$(awk 'BEGIN { while (!/flags/) if (getline < "/proc/cpuinfo" != 1) exit 1; if (/lm/&&/cmov/&&/cx8/&&/fpu/&&/fxsr/&&/mmx/&&/syscall/&&/sse2/) level = 1; if (level == 1 && /cx16/&&/lahf/&&/popcnt/&&/sse4_1/&&/sse4_2/&&/ssse3/) level = 2; if (level == 2 && /avx/&&/avx2/&&/bmi1/&&/bmi2/&&/f16c/&&/fma/&&/abm/&&/movbe/&&/xsave/) level = 3; if (level == 3 && /avx512f/&&/avx512bw/&&/avx512cd/&&/avx512dq/&&/avx512vl/) level = 4; if (level > 0) { print "x64v" level; exit level + 1 }; exit 1;}' | tr -d "\n")
@@ -957,10 +957,17 @@ elif [ "$KERNEL" = "6.18" ]; then
 	#set_grub_default_kernel "${KERNEL_VERSION}" "${PSABI}-xanmod"
 	# 20260730 was built for x86-64-v3 under every name: its x64v1 and x64v2
 	# packages did not boot on a CPU without AVX2 (Ysurac/openmptcprouter#4407)
-	KERNEL_VERSION="6.18.59"
-	KERNEL_REV="20261028"
+	KERNEL_VERSION="6.18.63"
+	KERNEL_REV="20261111"
 	# The GitHub release of this build, for when ${VPSURL}kernel/ lacks it
-	KERNEL_RELEASE_URL="https://github.com/Ysurac/linux/releases/download/omr-kernel-20261028-33-a9675c9/"
+	KERNEL_RELEASE_URL="https://github.com/Ysurac/linux/releases/download/omr-kernel-20261111-36-d746a80/"
+	if [ "$KERNEL" = "7.3" ]; then
+		KERNEL_VERSION="7.3.4"
+		# Same release, but its x64v1 and x64v2 packages were built the day before
+		KERNEL_REV="20261112"
+		{ [ "$PSABI" = "x64v1" ] || [ "$PSABI" = "x64v2" ]; } && KERNEL_REV="20261111"
+		KERNEL_RELEASE_URL="https://github.com/Ysurac/linux/releases/download/omr-kernel-20261112-37-ad8bf19/"
+	fi
 	#if [ "$CHINA" = "yes" ]; then
 	#	wget -O /tmp/linux-image-${KERNEL_VERSION}-${PSABI}-xanmod1_${KERNEL_VERSION}-${PSABI}-xanmod1-${KERNEL_REV}_amd64.deb https://sourceforge.net/projects/xanmod/files/releases/lts/${KERNEL_VERSION}-xanmod1/${KERNEL_VERSION}-${PSABI}-xanmod1/linux-image-${KERNEL_VERSION}-${PSABI}-xanmod1_${KERNEL_VERSION}-${PSABI}-xanmod1-${KERNEL_REV}_amd64.deb
 	#	wget -O /tmp/linux-headers-${KERNEL_VERSION}-${PSABI}-xanmod1_${KERNEL_VERSION}-${PSABI}-xanmod1-${KERNEL_REV}_amd64.deb https://sourceforge.net/projects/xanmod/files/releases/lts/${KERNEL_VERSION}-xanmod1/${KERNEL_VERSION}-${PSABI}-xanmod1/linux-headers-${KERNEL_VERSION}-${PSABI}-xanmod1_${KERNEL_VERSION}-${PSABI}-xanmod1-${KERNEL_REV}_amd64.deb
@@ -979,7 +986,7 @@ elif [ "$KERNEL" = "6.18" ]; then
 	rm -f /tmp/linux-headers-${KERNEL_VERSION}-${KERNEL_REV}.${PSABI}-omr_${KERNEL_VERSION}-${KERNEL_REV}.${PSABI}-omr_${ARCH}.deb /tmp/linux-image-${KERNEL_VERSION}-${KERNEL_REV}.${PSABI}-omr_${KERNEL_VERSION}-${KERNEL_REV}.${PSABI}-omr_${ARCH}.deb
 	set_grub_default_kernel "${KERNEL_VERSION}" "${PSABI}-omr" || true
 elif [ "$KERNEL" = "6.6" ] && [ "$ID" = "debian" ]; then
-	echo 'deb http://deb.debian.org/debian bookworm-backports main' > /etc/apt/sources.list.d/bookworm-backports.list
+	echo 'deb https://deb.debian.org/debian bookworm-backports main' > /etc/apt/sources.list.d/bookworm-backports.list
 	apt-get update
 	latestkernel=$(apt-cache search linux-image-6.6 | grep -v headers | grep -v dbg | grep -v rt | tail -n 1 | cut -d" " -f1)
 	latestkernelheaders=$(echo $latestkernel | sed 's/image/headers/g')
@@ -1000,9 +1007,9 @@ else
 fi
 fi # IS_CONTAINER check
 
-if [ "$KERNEL" = "6.18" ]; then
+if [ "$KERNEL" = "6.18" ] || [ "$KERNEL" = "7.3" ]; then
 	
-	echo "Install MPTCP BPF schedulers for kernel 6.18..."
+	echo "Install MPTCP BPF schedulers for kernel ${KERNEL}..."
 	for pkg in mptcp-bpf-bkup mptcp-bpf-burst mptcp-bpf-first mptcp-bpf-red mptcp-bpf-rr mptcp-bpf-dscp mptcp-bpf-weight mptcp-bpf-weight-rr mptcp-bpf-ecf mptcp-bpf-blest mptcp-bpf-overflow; do
 		if ! apt-get -o Dpkg::Options::="--force-confold" -o Dpkg::Options::="--force-confdef" -o Dpkg::Options::="--force-overwrite" -y install ${pkg}=${MPTCP_BPF_VERSION}; then
 			wget -O /tmp/${pkg}_${MPTCP_BPF_VERSION}_${ARCH}.deb ${VPSURL}debian/${pkg}_${MPTCP_BPF_VERSION}_${ARCH}.deb
@@ -2809,6 +2816,10 @@ if [ "$LOCALFILES" = "no" ]; then
 	fetch_file ${VPSURL}${VPSPATH}/omr-reserved-ports.path.in /lib/systemd/system/omr-reserved-ports.path
 	fetch_file ${VPSURL}${VPSPATH}/omr-net-mem /usr/local/bin/omr-net-mem
 	fetch_file ${VPSURL}${VPSPATH}/omr-net-mem.service.in /lib/systemd/system/omr-net-mem.service
+	fetch_file ${VPSURL}${VPSPATH}/omr-geoban /usr/local/bin/omr-geoban
+	fetch_file ${VPSURL}${VPSPATH}/omr-geoban.service.in /lib/systemd/system/omr-geoban.service
+	fetch_file ${VPSURL}${VPSPATH}/omr-geoban-update.service.in /lib/systemd/system/omr-geoban-update.service
+	fetch_file ${VPSURL}${VPSPATH}/omr-geoban-update.timer.in /lib/systemd/system/omr-geoban-update.timer
 else
 	copy_file ${DIR}/omr-service /usr/local/bin/omr-service
 	cp ${DIR}/omr.service.in /lib/systemd/system/omr.service
@@ -2824,6 +2835,10 @@ else
 	cp ${DIR}/omr-reserved-ports.path.in /lib/systemd/system/omr-reserved-ports.path
 	copy_file ${DIR}/omr-net-mem /usr/local/bin/omr-net-mem
 	cp ${DIR}/omr-net-mem.service.in /lib/systemd/system/omr-net-mem.service
+	copy_file ${DIR}/omr-geoban /usr/local/bin/omr-geoban
+	cp ${DIR}/omr-geoban.service.in /lib/systemd/system/omr-geoban.service
+	cp ${DIR}/omr-geoban-update.service.in /lib/systemd/system/omr-geoban-update.service
+	cp ${DIR}/omr-geoban-update.timer.in /lib/systemd/system/omr-geoban-update.timer
 
 fi
 chmod 644 /lib/systemd/system/omr.service
@@ -2840,6 +2855,10 @@ chmod 644 /lib/systemd/system/omr-reserved-ports.service
 chmod 644 /lib/systemd/system/omr-reserved-ports.path
 chmod 755 /usr/local/bin/omr-net-mem
 chmod 644 /lib/systemd/system/omr-net-mem.service
+chmod 755 /usr/local/bin/omr-geoban
+chmod 644 /lib/systemd/system/omr-geoban.service
+chmod 644 /lib/systemd/system/omr-geoban-update.service
+chmod 644 /lib/systemd/system/omr-geoban-update.timer
 systemctl daemon-reload
 if systemctl -q is-active omr-6in4.service 2>/dev/null; then
 	systemctl -q stop omr-6in4 > /dev/null 2>&1 || true
@@ -2853,6 +2872,9 @@ systemctl enable omr-bypass.service
 systemctl enable omr-reserved-ports.service
 systemctl enable omr-reserved-ports.path
 systemctl enable omr-net-mem.service
+# Off until "omr-geoban allow|deny ...": with MODE off both only exit.
+systemctl enable omr-geoban.service
+systemctl enable omr-geoban-update.timer
 
 # Change SSH port to 65222. Only a "Port 22" line, commented or not, is
 # changed, matched whole: 's:Port 22:...:g' also turned "Port 2222" into
@@ -2900,7 +2922,8 @@ mkdir -p /etc/nftables/custom.d
 # dynamic chains from omr-admin-config.json whoever reloaded the firewall,
 # not only this script's update path (see nftables/omr-admin-resync.conf).
 # Another one runs omr-bypass, which puts its inet omr_bypass table back (see
-# nftables/omr-bypass-resync.conf).
+# nftables/omr-bypass-resync.conf), and a third omr-geoban, for its inet
+# omr_geoban table (see nftables/omr-geoban-resync.conf).
 mkdir -p /etc/systemd/system/nftables.service.d
 # Drop-in for the stock systemd-networkd-wait-online.service: it blocks the boot
 # until every managed link is up, so a VPS whose IPv6 never becomes routable
@@ -2913,6 +2936,7 @@ if [ "$LOCALFILES" = "no" ]; then
 	fetch_file ${VPSURL}${VPSPATH}/nftables/omr.nft /etc/nftables/omr.nft
 	fetch_file ${VPSURL}${VPSPATH}/nftables/omr-admin-resync.conf /etc/systemd/system/nftables.service.d/omr-admin-resync.conf
 	fetch_file ${VPSURL}${VPSPATH}/nftables/omr-bypass-resync.conf /etc/systemd/system/nftables.service.d/omr-bypass-resync.conf
+	fetch_file ${VPSURL}${VPSPATH}/nftables/omr-geoban-resync.conf /etc/systemd/system/nftables.service.d/omr-geoban-resync.conf
 	fetch_file ${VPSURL}${VPSPATH}/systemd/20-omr-wait-online-any.conf /etc/systemd/system/systemd-networkd-wait-online.service.d/20-omr-wait-online-any.conf
 else
 	cp ${DIR}/nftables.conf /etc/nftables.conf
@@ -2920,6 +2944,7 @@ else
 	cp ${DIR}/nftables/omr.nft /etc/nftables/omr.nft
 	cp ${DIR}/nftables/omr-admin-resync.conf /etc/systemd/system/nftables.service.d/omr-admin-resync.conf
 	cp ${DIR}/nftables/omr-bypass-resync.conf /etc/systemd/system/nftables.service.d/omr-bypass-resync.conf
+	cp ${DIR}/nftables/omr-geoban-resync.conf /etc/systemd/system/nftables.service.d/omr-geoban-resync.conf
 	cp ${DIR}/systemd/20-omr-wait-online-any.conf /etc/systemd/system/systemd-networkd-wait-online.service.d/20-omr-wait-online-any.conf
 fi
 [ -n "$INTERFACE" ] && sed -i "/^define NET_IFACE6 /!s:eth0:$INTERFACE:g" /etc/nftables/omr-vars.nft
@@ -3096,7 +3121,12 @@ if [ "$SOURCES" != "yes" ]; then
 	# debian/control that drifted, or a version never published) and apt being
 	# OOM-killed on a small VPS, which is what a kernel .deb left in the tmpfs
 	# /tmp used to cause.
-	if apt-cache madison omr-server 2>/dev/null | awk -F'|' -v v="$OMR_VERSION" '{gsub(/ /, "", $2)} $2 == v {f = 1} END {exit !f}'; then
+	if [ "$ARCH" != "amd64" ]; then
+		# omr-server (Architecture: all) pins omr-simple-obfs, omr-glorytun...
+		# which the repository only has for amd64: the arm64 binaries above come
+		# from source or a direct download, so apt can never resolve it (#4429).
+		echo "omr-server is only packaged for amd64, not installing it on $ARCH"
+	elif apt-cache madison omr-server 2>/dev/null | awk -F'|' -v v="$OMR_VERSION" '{gsub(/ /, "", $2)} $2 == v {f = 1} END {exit !f}'; then
 		omr_server_install="$(apt-get -y install omr-server=${OMR_VERSION} 2>&1)" || {
 			echo "WARNING: omr-server=${OMR_VERSION} was not installed, this VPS keeps no version marker:" >&2
 			printf '%s\n' "$omr_server_install" | tail -n 5 >&2

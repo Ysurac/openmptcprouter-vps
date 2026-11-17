@@ -1,0 +1,11 @@
+[Unit]
+Description=OMR-GeoBan (filter new connections by source country)
+After=network.target network-online.target nftables.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/bin/omr-geoban apply
+CapabilityBoundingSet=CAP_NET_ADMIN
+
+[Install]
+WantedBy=multi-user.target

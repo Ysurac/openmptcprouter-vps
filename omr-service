@@ -58,7 +58,11 @@ _multipath() {
 					_endpoint_mode "$intf"
 					[ "$endpoint_mode" != "signal" ] && {
 						multipath $intf signal >/dev/null 2>&1
-						ip mptcp limits set subflows 8 add_addr_accepted 8 >/dev/null 2>&1
+						# x86_64 routers aggregate up to 16 WANs, so up to
+						# 15 MP_JOIN per connection; a kernel without the
+						# 64 limits backport takes 8 at most
+						ip mptcp limits set subflows 16 add_addr_accepted 16 >/dev/null 2>&1 || \
+							ip mptcp limits set subflows 8 add_addr_accepted 8 >/dev/null 2>&1
 					}
 				fi
 			elif [ -f /proc/sys/net/mptcp/enabled ]; then

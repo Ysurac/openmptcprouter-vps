@@ -1,0 +1,9 @@
+[Unit]
+Description=OMR-GeoBan country list update
+After=network-online.target nftables.service
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/bin/omr-geoban update
+CapabilityBoundingSet=CAP_NET_ADMIN

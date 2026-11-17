@@ -1,0 +1,11 @@
+[Unit]
+Description=OMR traffic log (one JSON line per connection, with the user) for MQVPN, Glorytun, OpenVPN, Xray and V2Ray
+After=network-online.target mqvpn.service xray.service v2ray.service
+
+[Service]
+ExecStart=/usr/local/bin/omr-traffic-log
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

@@ -289,6 +289,9 @@ if [ -f /proc/sys/net/mptcp/enabled ]; then
                     "-4 route show default") echo "default via 192.0.2.1 dev eth0 proto static" ;;
                     "a show dev lo") printf "%s\n" "1: lo: <LOOPBACK,UP,LOWER_UP> mtu 65536" "    inet 127.0.0.1/8 scope host lo" "$lo_line" ;;
                     "mptcp endpoint show") [ -z "$endpoint_list" ] || printf "%s\n" "$endpoint_list" ;;
+                    "mptcp limits set subflows "*)
+                        echo "ip $*" >&3
+                        [ "$5" -le "${MPTCP_LIMITS_MAX:-64}" ] ;;
                     *) echo "ip $*" >&3 ;;
                 esac
             }
@@ -306,7 +309,14 @@ if [ -f /proc/sys/net/mptcp/enabled ]; then
     fi
     out="$(run_multipath '198.51.100.2 id 2 subflow fullmesh dev tun0')"
     assert_contains "the WAN is put in signal mode" "multipath eth0 signal" "$out"
-    assert_contains "the subflow limits are set with signal mode" "ip mptcp limits set subflows 8 add_addr_accepted 8" "$out"
+    assert_contains "the subflow limits are set with signal mode" "ip mptcp limits set subflows 16 add_addr_accepted 16" "$out"
+    if ! grep -q "ip mptcp limits set subflows 8" <<< "$out"; then
+        pass "no fallback to 8 when the kernel takes 16"
+    else
+        fail "no fallback to 8 when the kernel takes 16"
+    fi
+    out="$(MPTCP_LIMITS_MAX=8 run_multipath '198.51.100.2 id 2 subflow fullmesh dev tun0')"
+    assert_contains "a kernel that takes 8 at most gets 8" "ip mptcp limits set subflows 8 add_addr_accepted 8" "$out"
     assert_contains "an endpoint on another interface is removed" "multipath tun0 off" "$out"
     if ! grep -q -e "multipath gt-tun0" -e "multipath lo" <<< "$out"; then
         pass "interfaces without an endpoint are left alone"

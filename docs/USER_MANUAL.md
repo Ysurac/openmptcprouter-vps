@@ -24,7 +24,7 @@ You don't need to enable everything — most tunnel types are individually toggl
 
 - **OS**: Debian 9–13, 64-bit (amd64 or arm64)
 - **Kernel**: the installer manages this for you — supported MPTCP kernel lines are `5.4, 6.1, 6.6,
-  6.10, 6.11, 6.12, 6.18` (default `6.18`). MPTCP itself works on any 5.6 or later kernel, a
+  6.10, 6.11, 6.12, 6.18, 7.3` (default `6.18`). MPTCP itself works on any 5.6 or later kernel, a
   distribution kernel included (Debian 13's own 6.12 for instance); the OpenMPTCProuter `-omr`
   kernel is what the MPTCP BPF schedulers need, they load on no other kernel
 - Run as **root**
@@ -62,6 +62,7 @@ MQVPN=no WIREGUARD=no SOFTETHERVPN=yes wget -O - https://www.openmptcprouter.com
 | `DSVPN` | `yes` | Enable DSVPN |
 | `WIREGUARD` | `yes` | Enable WireGuard |
 | `FAIL2BAN` | `yes` | Install and configure fail2ban |
+| `TRAFFIC_LOG` | `no` | Log each user connection, with its username, to `/var/log/omr-traffic.log` (see section 9). Once on, it stays on across updates until you run the installer with `TRAFFIC_LOG=no` |
 | `OMR_ADMIN` | `yes` | Install the `omr-admin` API server (needed by the router's web UI) |
 | `OMR_METRICS` | `no` | Install the metrics collector |
 | `OMR_AI` | `no` | Install the AI-assisted forecasting/decision add-on |
@@ -180,6 +181,76 @@ chains is now enough — no `omr-admin-config.json` edits needed. After adding o
 there, apply it with `systemctl reload nftables` (or `restart`; no need to touch `omr-admin`, since
 these two chains are never among the ones it flushes/rebuilds).
 
+### Filtering by country or network (`omr-geoban`)
+
+`omr-geoban` accepts new connections from the internet only from the countries and networks you
+list, or refuses them from those. It is off until you turn it on:
+
+```sh
+omr-geoban allow fr              # only France
+omr-geoban allow eu              # the European Union
+omr-geoban allow europe -ru -by  # geographic Europe, without Russia and Belarus
+omr-geoban deny cn ru            # everyone but China and Russia
+omr-geoban asn orange free       # find networks (AS numbers) by name
+omr-geoban allow as3215 as12322 as51207 as15557 as5410   # only Orange, Free, Free Mobile, SFR, Bouygues
+omr-geoban allow fr -as16276     # France, but OVH
+omr-geoban status                # what is applied, how many packets it dropped
+omr-geoban check 203.0.113.7     # the country and network of an address, and whether it gets through
+omr-geoban off
+```
+
+Countries are ISO 3166 codes (`GB`, not `UK`); `omr-geoban groups` lists the groups (`eu`,
+`europe`, `africa`, `asia`, `north-america`, `south-america`, `oceania`, `antarctica`). A code or
+group after a `-` is taken out.
+
+Networks are AS numbers, written `as` followed by the number (`as` alone is American Samoa); find
+them with `omr-geoban asn <name>`, which lists the matching networks, largest first, with their
+country: an operator often has several (SFR is AS15557 but also AS35632, Free's mobile network is
+AS51207). Countries and networks mix: `allow fr as5410` is France and Bouygues Telecom wherever its
+addresses are located. A network after a `-` is taken out even of an allowed country: `allow fr
+-as16276 -as12876` is France without OVH and Scaleway; `deny cn -as4134` is China except Chinanet.
+
+What is filtered: every new connection arriving on an interface that is not a tunnel, to the VPS
+itself (SSH, the API, the proxies and VPNs) and to the ports it forwards to your router. Answers to
+connections the VPS or the router opened are never filtered, so the router still reaches every
+country. Private and link-local addresses are never filtered.
+
+**Your router's WAN addresses must be allowed too.** Each WAN joins the MPTCP connection with a
+connection of its own, so a WAN whose address is located elsewhere (some mobile and satellite
+providers), or that belongs to a network you did not list (a small local ISP), stops being
+aggregated. `allow` and `deny` refuse to apply a list that would block a
+peer connected at that moment (a router WAN, your SSH session) and name it; add it with
+`omr-geoban exempt add <address>`, or pass `--force`.
+
+The settings live in `/etc/openmptcprouter-vps-admin/omr-geoban.conf` (`MODE`, `COUNTRIES`,
+`EXEMPT`, and `OPEN_PORTS`, ports open to every country: `tcp/65222`, SSH, by default, `""` to
+filter it too); run `omr-geoban apply` after editing it. The filter is its own nftables table,
+`inet omr_geoban`, put back after every start or reload of `nftables.service`. The lists are
+DB-IP's monthly "IP to Country Lite" and "IP to ASN Lite" databases (IP Geolocation by
+[DB-IP](https://db-ip.com), CC BY 4.0), kept in `/var/lib/omr-geoban` and refreshed by `omr-geoban-update.timer`; the ASN list
+(7 MB) is only fetched once you use a network. Geolocation is never exact:
+expect a few addresses in the wrong country. A large selection costs memory: `allow europe` is
+~145,000 ranges, ~15 MB of kernel memory, and needs ~80 MB while loading.
+
+MaxMind's GeoLite2 Country and ASN databases can be used instead of DB-IP's. MaxMind updates them
+twice a week and some find them more accurate, but they need a free MaxMind account. Create one at
+[maxmind.com](https://www.maxmind.com/en/geolite2/signup), generate a license key under "Manage
+License Keys", then:
+
+```sh
+omr-geoban source maxmind 123456 AbCdEf_0123456789   # your account ID and license key
+omr-geoban source dbip                               # back to DB-IP
+omr-geoban source                                    # which one is in use
+```
+
+The switch downloads the new lists first and re-applies the filter from them. Like `allow`, it is
+refused when the new lists would block a peer connected now, unless you pass `--force`. Nothing
+changes when the download fails or is refused. The account ID and license key are stored in
+`omr-geoban.conf` (`MAXMIND_ACCOUNT_ID`, `MAXMIND_LICENSE_KEY`), which is then readable by root
+only, and they are never passed on a command line. The daily update first fetches a few bytes
+(MaxMind's checksum) and downloads the zip only when a new edition is out, well within MaxMind's
+daily download limit. The lists are converted to DB-IP's format, so every command works the same.
+
 ## 8. Fail2ban
 
 If `FAIL2BAN=yes` (default), fail2ban is configured to watch:
@@ -205,7 +276,35 @@ practice this matters less for these than for password-style logins: their share
 long random keys exchanged out of band, not something an attacker can meaningfully guess by
 repeated connection attempts.
 
-## 9. Troubleshooting
+## 9. Traffic log (`TRAFFIC_LOG=yes`)
+
+Off by default. With `TRAFFIC_LOG=yes`, the installer installs syslog-ng and the `omr-traffic-log`
+service, and `/var/log/omr-traffic.log` gets one JSON object per connection, with the username
+(rotated daily, 30 days kept):
+
+```
+{"server": "mqvpn", "network": "udp", "clientAddress": "10.255.220.2:63317", "username": "openmptcprouter", "targetAddress": "9.9.9.9:53", "nl2r": 86, "nr2l": 202}
+{"server": "ss-2022", "listener": 0, "listenAddress": "[::]:65280", "clientAddress": "[::ffff:203.0.113.7]:48524", "username": "openmptcprouter", "targetAddress": "1.1.1.1:80", "client": "direct", "nl2r": 72, "nr2l": 219}
+```
+
+`nl2r` and `nr2l` are the bytes sent and received, from the side that opened the connection.
+
+- **MQVPN, Glorytun TCP/UDP, OpenVPN (tun0, tun1)**: from the kernel connection tracking, one line
+  when each connection ends, external traffic only (not the router's own DNS or pings to the VPS).
+  `clientAddress` is the router's tunnel address: the router hides its LAN behind it.
+- **Shadowsocks-Go**: its own log, TCP connections; shadowsocks-go is switched to `info` logging
+  for this.
+- **Xray, V2Ray**: their own access log, one line when each connection opens, without byte counts
+  (they don't keep any per connection).
+
+Not covered: the OpenVPN bonding tunnels, and a router LAN that is routed rather than hidden behind
+the tunnel address. To also send it to a remote syslog server, see the example at the end of
+`/etc/syslog-ng/conf.d/omr-traffic.conf`.
+
+This log records every destination your users reach: check what your local privacy law (GDPR in
+the EU) requires before turning it on.
+
+## 10. Troubleshooting
 
 - **Tunnel keeps dropping**: check `journalctl -u omr-service` for restart log lines — the watchdog
   logs which tunnel it restarted and why (missing process vs. no ping response).
@@ -217,7 +316,7 @@ repeated connection attempts.
   current version — set `REINSTALL=yes` to force it.
 - **Wrong network interface detected**: set `INTERFACE`/`INTERFACE6` explicitly and re-run.
 
-## 10. Uninstalling
+## 11. Uninstalling
 
 There is no automated uninstaller. Removing the `omr-server` package removes the files this repo
 installs, but tunnel packages, the kernel, and the nftables configuration under `/etc/nftables.conf`

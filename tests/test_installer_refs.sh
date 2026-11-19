@@ -4,10 +4,10 @@
 # the class of breakage that only shows up halfway through an install on a
 # customer's machine is caught at commit time.
 #
-# The installer reads every one of its companion files twice over: once as a
-# URL under ${VPSURL}${VPSPATH}/ (a fresh install, LOCALFILES=no) and once as
-# a path under ${DIR}/ (LOCALFILES=yes, which SOURCES=yes forces on). Both
-# branches run under `set -e` with no guard of their own:
+# The installer puts every one of its companion files in place with
+# install_file NAME DEST, which downloads ${VPSURL}${VPSPATH}/NAME (a fresh
+# install, LOCALFILES=no) or copies ${DIR}/NAME (LOCALFILES=yes, which
+# SOURCES=yes forces on), under `set -e` with no guard of its own:
 #
 #   - a wget of a file that was renamed or deleted exits non-zero and ends the
 #     install right there, on a VPS that is now half configured
@@ -16,10 +16,10 @@
 #     in no package at all). Note that the packaged installer is not one of
 #     them today: debian/postinst rewrites its LOCALFILES/SOURCES defaults to
 #     plain "no", which beats the environment omr-update passes it
-#   - a file added to only one of the two branches installs on a fresh VPS and
-#     silently does not on an updated one, or the reverse (0.1080: the 6.18
-#     sysctl set was missing from the LOCALFILES branch, so every update
-#     re-installed the 6.1 set on a 6.18 kernel)
+#   - a file fetched or copied by hand, outside install_file, is back to the
+#     two branches that drifted apart (0.1080: the 6.18 sysctl set was missing
+#     from the LOCALFILES branch, so every update re-installed the 6.1 set on a
+#     6.18 kernel)
 #
 # and the package's dependency pins mirror the installer's own *_VERSION
 # constants, where a single stale pin makes the last step of the install,
@@ -59,24 +59,14 @@ assert_eq() {
 # (several wget lines are kept that way on purpose) and reference nothing.
 uncommented() { grep -vE '^[[:space:]]*#' "$INSTALLER"; }
 
-# A path still holding a $ is built from a variable at run time
-# (bin/v2ray-plugin-linux-amd64-v${V2RAY_PLUGIN_VERSION}.tar.gz); its name
-# cannot be resolved here, so it is left to the human.
-#
-# %40 is "@": the systemd template units are fetched URL-encoded
-# (glorytun-udp%40.service.in) and copied under their real name.
-refs_local() {
-    uncommented | grep -oE '\$\{DIR\}/[^[:space:];"'"'"'`)]+' \
-        | sed 's|\${DIR}/||' | grep -v '\$' | sort -u
-}
-refs_remote() {
-    uncommented | grep -oE '\$\{VPSURL\}\$\{VPSPATH\}/[^[:space:];"'"'"'`)]+' \
-        | sed 's|.*VPSPATH}/||; s/%40/@/g' | grep -v '\$' | sort -u
+# A name still holding a $ is built from a variable at run time; it cannot be
+# resolved here, so it is left to the human.
+refs() {
+    uncommented | grep -oE '(^|[[:space:];|&])install_file [^[:space:];"'"'"'`)]+' \
+        | sed 's|.*install_file ||' | grep -v '\$' | sort -u
 }
 
-refs_local  > "$TMPDIR/local"
-refs_remote > "$TMPDIR/remote"
-sort -u "$TMPDIR/local" "$TMPDIR/remote" > "$TMPDIR/all"
+refs > "$TMPDIR/all"
 
 # ── 1. every referenced file exists ────────────────────────────────────────
 
@@ -93,31 +83,23 @@ else
     printf '         %s\n' $missing
 fi
 
-# ── 2. the two branches install the same set of files ──────────────────────
-# update-grub.sh is the one legitimate asymmetry: the remote branch downloads
-# it to /tmp and cds there, the local branch just cds to ${DIR} and runs it by
-# bare name, so it never appears as a ${DIR}/ path.
+# ── 2. every companion file goes through install_file ────────────────────
+# Its own two lines are the only ${DIR}/ and ${VPSURL}${VPSPATH}/ paths
 
 echo
-echo "== fresh install (wget) and update (cp) install the same files =="
-ALLOWED_REMOTE_ONLY="update-grub.sh"
-remote_only="$(comm -13 "$TMPDIR/local" "$TMPDIR/remote")"
-for a in $ALLOWED_REMOTE_ONLY; do
-    remote_only="$(printf '%s\n' $remote_only | grep -vFx "$a")"
-done
-local_only="$(comm -23 "$TMPDIR/local" "$TMPDIR/remote")"
-
-if [ -z "$(printf '%s' "$remote_only" | tr -d '[:space:]')" ]; then
-    pass "nothing is downloaded on a fresh install that an update does not copy"
+echo "== fresh install (wget) and update (cp) can't install different files =="
+direct="$(uncommented | grep -nE '\$\{DIR\}/|\$\{VPSURL\}\$\{VPSPATH\}/' \
+    | grep -vF '"${DIR}/$1"' | grep -vF '"${VPSURL}${VPSPATH}/$(printf' || true)"
+if [ -z "$direct" ]; then
+    pass "every file of this repository is installed with install_file"
 else
-    fail "downloaded by the LOCALFILES=no branch only (an update will not install these):"
-    printf '         %s\n' $remote_only
+    fail "fetched or copied outside install_file (the other branch won't install it):"
+    printf '         %s\n' "$direct"
 fi
-if [ -z "$(printf '%s' "$local_only" | tr -d '[:space:]')" ]; then
-    pass "nothing is copied on an update that a fresh install does not download"
+if [ "$(wc -l < "$TMPDIR/all" | tr -d ' ')" -gt 50 ]; then
+    pass "install_file names $(wc -l < "$TMPDIR/all" | tr -d ' ') files"
 else
-    fail "copied by the LOCALFILES=yes branch only (a fresh install will not install these):"
-    printf '         %s\n' $local_only
+    fail "only $(wc -l < "$TMPDIR/all" | tr -d ' ') install_file names found: the parser above no longer reads the installer"
 fi
 
 # ── 3. what the installer reads out of a subdirectory must be packaged ─────

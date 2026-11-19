@@ -149,6 +149,29 @@ if command -v python3 > /dev/null; then
     assert_eq "every line is valid JSON" "ok" \
         "$(python3 -c 'import json,sys; [json.loads(l) for l in sys.stdin]; print("ok")' < "$OUT" 2>&1 | tail -1)"
 fi
+kill -- -"$PID" 2> /dev/null
+
+# The same events with room for one flow from NEW to DESTROY: the second NEW
+# starts the table over, the way leaked entries are cleared once there are more
+# than nf_conntrack_max. The flow it forgot is still logged, under the user its
+# IP has at DESTROY.
+echo
+echo "== flows remembered from NEW to DESTROY are capped =="
+export MARK="$TMPDIR/capped"
+mkdir -p "$MARK"
+OUT="$TMPDIR/out.capped"
+OMR_TRAFFIC_LOG_MAX_FLOWS=1 OMR_TRAFFIC_LOG_ETC="$ETC" PATH="$FAKE_BIN:$PATH" setsid sh "$SCRIPT" > "$OUT" 2>&1 &
+PID=$!
+for _ in $(seq 100); do
+    [ -e "$MARK/done" ] && [ "$(wc -l < "$OUT")" -ge 8 ] && break
+    "$REAL_SLEEP" 0.1
+done
+"$REAL_SLEEP" 0.3
+assert_line "a forgotten flow is still logged, with the user at DESTROY" \
+    '{"server": "mqvpn", "network": "udp", "clientAddress": "10.255.220.2:35891", "username": "carol", "targetAddress": "9.9.9.9:53", "nl2r": 60, "nr2l": 120}'
+assert_line "the flow stored after the reset keeps its user" \
+    '{"server": "mqvpn", "network": "tcp", "clientAddress": "198.51.100.7:40000", "username": "bob", "targetAddress": "10.255.220.3:8080", "nl2r": 400, "nr2l": 3000}'
+assert_eq "nothing lost" "8" "$(wc -l < "$OUT" | tr -d ' ')"
 
 printf '\n%d passed, %d failed\n' "$PASS" "$FAIL"
 [ "$FAIL" -eq 0 ]

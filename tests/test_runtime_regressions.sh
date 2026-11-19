@@ -549,6 +549,14 @@ OPENVPN_BINARY_VERSION="$openvpn_version" ARCH=amd64 sh -c "$deb_line"'; case "$
 grep -qxF '	if [ "$VERSION_ID" = "13" ] && [ "$ID" = "debian" ] && { [ "$ARCH" = "amd64" ] || [ "$ARCH" = "arm64" ]; }; then' debian9-x86_64.sh \
     && pass "the OMR openvpn build is installed on amd64 and arm64" || fail "the OMR openvpn build is not installed on both amd64 and arm64"
 
+# tun0 must do MPTCP, or it listens plain TCP and rides a single WAN (#4431).
+# The OMR build gets --mptcp from a drop-in: mptcpize edits the packaged unit,
+# which the next openvpn package update overwrites.
+grep -qxF '		mptcpize enable openvpn@tun0 >/dev/null 2>&1 || true' debian9-x86_64.sh \
+    && grep -qF 'install_file openvpn-tun0.override.conf /etc/systemd/system/openvpn@tun0.service.d/override.conf' debian9-x86_64.sh \
+    && grep -q '^ExecStart=/usr/sbin/openvpn .* --mptcp$' openvpn-tun0.override.conf \
+    && pass "openvpn@tun0 does MPTCP: --mptcp drop-in, mptcpize elsewhere" || fail "openvpn@tun0 is not MPTCP on every distribution"
+
 echo "== OpenVPN configs =="
 # OpenVPN 2.7 always persists keys and logs "DEPRECATED OPTION: --persist-key".
 for f in openvpn-*.conf; do

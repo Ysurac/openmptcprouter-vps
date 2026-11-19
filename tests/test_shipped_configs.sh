@@ -288,7 +288,10 @@ else
     fail "written in place, where omr-admin's sync can read it half-written:"
     printf '         %s\n' "$inplace"
 fi
-if uncommented | grep -q 'mv -f /etc/openvpn/\.tun0\.conf\.new /etc/openvpn/tun0\.conf'; then
+# install_file's fetch_file and copy_file write DEST.tmp.$$ and rename it
+if uncommented | grep -qE 'install_file [^ ]+ /etc/openvpn/tun0\.conf$' &&
+    grep -A4 '^fetch_file()' "$INSTALLER" | grep -q 'mv -f' &&
+    grep -A4 '^copy_file()' "$INSTALLER" | grep -q 'mv -f'; then
     pass "the new file is renamed into place"
 else
     fail "no rename of a temporary file onto /etc/openvpn/tun0.conf"

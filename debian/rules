@@ -24,5 +24,4 @@ override_dh_auto_install:
 	cp -r ./shorewall6 $(CURDIR)/debian/omr-server/usr/share/omr-server/
 	cp -r ./nftables $(CURDIR)/debian/omr-server/usr/share/omr-server/
 	cp -r ./systemd $(CURDIR)/debian/omr-server/usr/share/omr-server/
-	cp -r ./bin $(CURDIR)/debian/omr-server/usr/share/omr-server/
 

@@ -49,7 +49,8 @@ DROPINS = ['systemd/20-omr-wait-online-any.conf',
            'nftables/omr-admin-resync.conf',
            'nftables/omr-bypass-resync.conf',
            'nftables/omr-geoban-resync.conf',
-           'iperf3.override.conf']
+           'iperf3.override.conf',
+           'openvpn-tun0.override.conf']
 UNIT_SECTIONS = {'Unit', 'Service', 'Install', 'Timer', 'Socket', 'Path'}
 # systemd-networkd's own vocabulary; anything outside it is a typo that
 # networkd ignores in silence.
@@ -201,7 +202,7 @@ for key in ('ExecStartPost', 'ExecReload'):
 for unit, consequence in (('omr-bypass', "the bypass stays off until the next omr-bypass.timer run"),
                           ('omr-geoban', "the geographic filter stays off until the next reboot")):
     hooks = {'ExecStartPost': [], 'ExecReload': []}
-    for path in sorted(set(re.findall(r'\$\{DIR\}/(\S+) /etc/systemd/system/nftables\.service\.d/',
+    for path in sorted(set(re.findall(r'install_file (\S+) /etc/systemd/system/nftables\.service\.d/',
                                       live_text))):
         for (s_, k, v, n) in parse(path)[0]:
             if k in hooks and re.search(r'systemctl\b.*\bstart %s(\.service)?\b' % unit, v):
@@ -234,13 +235,9 @@ else:
 
 # ── 5. ordering that another file depends on ──────────────────────────────
 print("\n== ordering ==")
-admin = open('omr-admin.service.in').read()
-after = " ".join(l.split('=', 1)[1] for l in admin.splitlines() if l.startswith('After='))
-if 'nftables.service' in after:
-    ok("omr-admin.service is ordered After=nftables.service")
-else:
-    ko("omr-admin.service is no longer ordered after nftables.service, which the "
-       "--no-block restart hook in nftables/omr-admin-resync.conf relies on")
+# omr-admin.service comes from the openmptcprouter-vps-admin repository
+# (its After=nftables.service, which nftables/omr-admin-resync.conf relies
+# on, is that repository's to check).
 bypass = open('omr-bypass.service.in').read()
 after = " ".join(l.split('=', 1)[1] for l in bypass.splitlines() if l.startswith('After='))
 if 'nftables.service' in after:

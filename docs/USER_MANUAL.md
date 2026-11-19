@@ -73,6 +73,12 @@ MQVPN=no WIREGUARD=no SOFTETHERVPN=yes wget -O - https://www.openmptcprouter.com
 | `INTERFACE` / `INTERFACE6` | auto-detected | Force a specific network interface |
 | `VPS_DOMAIN` / `VPS_PUBLIC_IP` | auto-detected | Override if auto-detection picks the wrong address |
 
+The yes/no switches of this table (all but `KERNEL`, `SOURCES`, `REINSTALL` and the
+auto-detected values) are saved in `/etc/openmptcprouter-vps-admin/install-options` at the end
+of each run and reused by the next one, including the updates a router triggers, which pass no
+variables. A variable you set yourself always wins: run the installer with `OPENVPN=yes` to turn
+OpenVPN back on after installing with `OPENVPN=no`.
+
 Secrets (`SHADOWSOCKS_PASS`, `GLORYTUN_PASS`, `MQVPN_KEY`, `OMR_ADMIN_PASS`, `PSK`, etc.) are
 randomly generated if you don't set them — you normally don't need to.
 
@@ -298,8 +304,9 @@ service, and `/var/log/omr-traffic.log` gets one JSON object per connection, wit
   (they don't keep any per connection).
 
 Not covered: the OpenVPN bonding tunnels, and a router LAN that is routed rather than hidden behind
-the tunnel address. To also send it to a remote syslog server, see the example at the end of
-`/etc/syslog-ng/conf.d/omr-traffic.conf`.
+the tunnel address. Where the log goes is set in
+`/etc/syslog-ng/conf.d/omr-traffic-destinations.conf`: add or remove destinations there (a remote
+syslog server example is in it), then `systemctl reload syslog-ng`. Updates keep your edits.
 
 This log records every destination your users reach: check what your local privacy law (GDPR in
 the EU) requires before turning it on.

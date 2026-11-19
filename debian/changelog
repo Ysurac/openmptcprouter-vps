@@ -1,3 +1,20 @@
+omr-server (0.1100) unstable; urgency=medium
+
+    * Traffic log: where it goes is now in its own file, /etc/syslog-ng/conf.d/omr-traffic-destinations.conf (syslog-ng-omr-traffic-destinations.conf), one destination block holding one driver per line (the log file, and a commented remote syslog collector example), so destinations are added or removed without touching the filter and log path of omr-traffic.conf. The installer creates it only when it is missing, so local edits stay across updates; TRAFFIC_LOG=no and omr-uninstall.sh remove it. The user manual says so
+    * debian9-x86_64.sh: update KERNEL=7.3 to 7.3.5, build 20261117 (every PSABI from the same day, so the x64v1/x64v2 build date exception is gone)
+    * debian9-x86_64.sh: update the 6.18 kernel (the default) to 6.18.64, build 20261118
+    * debian9-x86_64.sh: the feature switches (OPENVPN, WIREGUARD, V2RAY, MLVPN, FAIL2BAN...) of a run are saved in /etc/openmptcprouter-vps-admin/install-options and reused by the next one: omr-update runs the installer with no variables, so every update a router triggered installed and enabled again what the admin had left out with FOO=no. A variable given to the installer still wins. Only known names and yes/no values are read; tests/test_install_options.sh. The user manual says so
+    * debian9-x86_64.sh: take Debian 11 (bullseye) from archive.debian.org on Debian 12 and 13
+    * debian9-x86_64.sh: every file of this repository is put in place by one install_file NAME DEST, which downloads it (LOCALFILES=no) or copies it from ${DIR} (LOCALFILES=yes): the 29 hand-written download/copy pairs could drift apart, and did (0.1080). A LOCALFILES=yes run now writes a temporary copy and renames it, as a download always did. tests/test_installer_refs.sh checks that nothing bypasses it
+    * debian9-x86_64.sh: SOURCES=yes installs omr-admin with omr_admin_from_github, the checked install the deb fallback uses, instead of its own copy of it; the existing passwords are read once for both paths. omr-admin.service.in, the same unit as the omr-vps-admin repository's, is no longer used and removed
+    * debian9-x86_64.sh: pip installs fastapi 0.115.11
+    * debian9-x86_64.sh: install omr-test-speedv6 next to omr-test-speed; omr-uninstall.sh removes it
+    * debian9-x86_64.sh: drop the amd64 branches nested in "if arm64" (shadowsocks-go, v2ray, xray), which never ran
+    * omr-traffic-log: a flow whose DESTROY event conntrack dropped under load (ENOBUFS) stayed in its memory for good. The flows it remembers from NEW to DESTROY are now capped at nf_conntrack_max, which no number of open flows can pass: beyond it the table starts over, and a flow still open is attributed when it ends, as one opened in the first second already was. tests/test_omr_traffic_log.sh covers it
+    * Remove files nothing installed nor read
+
+ -- OpenMPTCProuter <contact@openmptcprouter.com>  Tue, 17 Nov 2026 00:00:00 +0100
+
 omr-server (0.1099) unstable; urgency=medium
 
     * debian9-x86_64.sh: install build-essential before mk-build-deps where iperf3 (SOURCES=yes) and shadowsocks-libev (SOURCES=yes, or any non-amd64 VPS) are built from source: mk-build-deps installs its dummy package with "apt-get -f install", whose resolver (apt 3.0, Debian 13) removed the dummy rather than install build-essential, so the package was not built and a fresh install stopped at "ss-manager was not installed"

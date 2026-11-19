@@ -11,6 +11,20 @@ UPSTREAM=${UPSTREAM:-no}
 [ "$UPSTREAM" = "yes" ] && KERNEL="6.1"
 UPSTREAM6=${UPSTREAM6:-no}
 [ "$UPSTREAM6" = "yes" ] && KERNEL="6.1"
+# The feature switches of the last run, saved at its end: omr-update runs this
+# script with no environment, and the defaults below would turn a service the
+# admin left out (OPENVPN=no...) back on at every update a router triggers. A
+# switch given in the environment still wins. Only these names, only yes/no.
+OMR_INSTALL_OPTIONS=/etc/openmptcprouter-vps-admin/install-options
+OMR_OPTION_NAMES="OBFS V2RAY_PLUGIN V2RAY XRAY SHADOWSOCKS SHADOWSOCKS_GO TLS OMR_ADMIN OMR_METRICS OMR_AI MLVPN MQVPN OPENVPN OPENVPN_BONDING SOFTETHERVPN DSVPN WIREGUARD FAIL2BAN TRAFFIC_LOG BPFTUNE NOINTERNET GRETUNNELS LANROUTES SPEEDTEST IPERF GLORYTUN_UDP GLORYTUN_TCP"
+if [ -f "$OMR_INSTALL_OPTIONS" ]; then
+	while IFS='=' read -r _opt_name _opt_value; do
+		case "$_opt_name" in ""|*[!A-Z0-9_]*) continue ;; esac
+		case " $OMR_OPTION_NAMES " in *" $_opt_name "*) ;; *) continue ;; esac
+		case "$_opt_value" in yes|no) ;; *) continue ;; esac
+		eval "$_opt_name=\${$_opt_name:-$_opt_value}"
+	done < "$OMR_INSTALL_OPTIONS"
+fi
 SHADOWSOCKS_PASS=${SHADOWSOCKS_PASS:-$(head -c 32 /dev/urandom | base64 -w0)}
 GLORYTUN_PASS=${GLORYTUN_PASS:-$(od -vN "32" -An -tx1 /dev/urandom | tr '[:lower:]' '[:upper:]' | tr -d " \n")}
 DSVPN_PASS=${DSVPN_PASS:-$(od -vN "32" -An -tx1 /dev/urandom | tr '[:lower:]' '[:upper:]' | tr -d " \n")}
@@ -94,6 +108,8 @@ OBFS_VERSION="486bebd9208539058e57e23a12f23103016e09b4"
 OBFS_BINARY_VERSION="0.0.5-1"
 OMR_ADMIN_VERSION="aee208030982a3a8dc43a4fa2da067cdb345b8d4"
 OMR_ADMIN_BINARY_VERSION="0.18+20261111"
+# Debian 13's python3-fastapi: pip installs the same release elsewhere
+FASTAPI_VERSION="0.115.11"
 DSVPN_VERSION="3b99d2ef6c02b2ef68b5784bec8adfdd55b29b1a"
 DSVPN_BINARY_VERSION="0.1.4-2"
 MQVPN_VERSION="0.19.2+20261112-1"
@@ -122,7 +138,7 @@ VPSURL="https://www.openmptcprouter.com/"
 REPO="repo.openmptcprouter.com"
 CHINA=${CHINA:-no}
 
-OMR_VERSION="0.1099-rolling-test"
+OMR_VERSION="0.1100-rolling-test"
 
 DIR=$( pwd )
 #"
@@ -202,6 +218,20 @@ copy_file() {
 	else
 		rm -f "$_copy_tmp"
 		return 1
+	fi
+}
+
+# Put the file NAME of this repository at DEST: install_file NAME DEST
+# Downloaded from this release (LOCALFILES=no, the default) or copied from the
+# checkout in ${DIR} (LOCALFILES=yes). The choice is made here only, so a fresh
+# install and an update can't install different files. Returns 1, DEST left
+# as it was, when it can't.
+install_file() {
+	if [ "$LOCALFILES" = "no" ]; then
+		# The "@" of the systemd template units, URL-encoded
+		fetch_file "${VPSURL}${VPSPATH}/$(printf '%s' "$1" | sed 's/@/%40/g')" "$2"
+	else
+		copy_file "${DIR}/$1" "$2"
 	fi
 }
 
@@ -608,7 +638,11 @@ if [ "$ID" = "debian" ]; then
 	# Add buster-backports repo
 	echo 'deb https://archive.debian.org/debian buster-backports main' > /etc/apt/sources.list.d/buster-backports.list
 	if [ "$VERSION_ID" = "12" ] || [ "$VERSION_ID" = "13" ]; then
-		echo 'deb https://deb.debian.org/debian bullseye main' > /etc/apt/sources.list.d/bullseye.list
+		# The OMR debs still depend on libev4, libevent-2.1-7, libmbedcrypto3
+		# and libpcre3, which only bullseye has. From its permanent archive:
+		# its LTS ended in 2026-08, and once Debian drops it from deb.debian.org
+		# apt-get update fails and stops every install, as buster-backports did.
+		echo 'deb https://archive.debian.org/debian bullseye main' > /etc/apt/sources.list.d/bullseye.list
 	fi
 elif [ "$ID" = "ubuntu" ]; then
 	echo 'deb https://ports.ubuntu.com/ubuntu-ports bionic-backports main' > /etc/apt/sources.list.d/bionic-backports.list
@@ -819,12 +853,8 @@ if [ "$KERNEL" = "5.4" ] || [ "$KERNEL" = "5.15" ]; then
 
 	# Check if mptcp kernel is grub default kernel
 	echo "Set MPTCP kernel as grub default..."
-	if [ "$LOCALFILES" = "no" ]; then
-		fetch_file ${VPSURL}${VPSPATH}/update-grub.sh /tmp/update-grub.sh
-		cd /tmp
-	else
-		cd ${DIR}
-	fi
+	install_file update-grub.sh /tmp/update-grub.sh
+	cd /tmp
 	[ -f /boot/grub/grub.cfg ] && [ -z "$(grep ${KERNEL_VERSION}-mptcp /boot/grub/grub.cfg)" ] && [ -n "$(which grub-mkconfig)" ] && grub-mkconfig -o /boot/grub/grub.cfg
 	rm -f /etc/grub.d/30_os-prober
 	bash update-grub.sh ${KERNEL_VERSION}-mptcp
@@ -968,16 +998,14 @@ elif [ "$KERNEL" = "6.18" ] || [ "$KERNEL" = "7.3" ]; then
 	#set_grub_default_kernel "${KERNEL_VERSION}" "${PSABI}-xanmod"
 	# 20260730 was built for x86-64-v3 under every name: its x64v1 and x64v2
 	# packages did not boot on a CPU without AVX2 (Ysurac/openmptcprouter#4407)
-	KERNEL_VERSION="6.18.63"
-	KERNEL_REV="20261111"
+	KERNEL_VERSION="6.18.64"
+	KERNEL_REV="20261118"
 	# The GitHub release of this build, for when ${VPSURL}kernel/ lacks it
-	KERNEL_RELEASE_URL="https://github.com/Ysurac/linux/releases/download/omr-kernel-20261111-36-d746a80/"
+	KERNEL_RELEASE_URL="https://github.com/Ysurac/linux/releases/download/omr-kernel-20261118-39-8f02cdc/"
 	if [ "$KERNEL" = "7.3" ]; then
-		KERNEL_VERSION="7.3.4"
-		# Same release, but its x64v1 and x64v2 packages were built the day before
-		KERNEL_REV="20261112"
-		{ [ "$PSABI" = "x64v1" ] || [ "$PSABI" = "x64v2" ]; } && KERNEL_REV="20261111"
-		KERNEL_RELEASE_URL="https://github.com/Ysurac/linux/releases/download/omr-kernel-20261112-37-ad8bf19/"
+		KERNEL_VERSION="7.3.5"
+		KERNEL_REV="20261117"
+		KERNEL_RELEASE_URL="https://github.com/Ysurac/linux/releases/download/omr-kernel-20261117-38-3985ba3/"
 	fi
 	#if [ "$CHINA" = "yes" ]; then
 	#	wget -O /tmp/linux-image-${KERNEL_VERSION}-${PSABI}-xanmod1_${KERNEL_VERSION}-${PSABI}-xanmod1-${KERNEL_REV}_amd64.deb https://sourceforge.net/projects/xanmod/files/releases/lts/${KERNEL_VERSION}-xanmod1/${KERNEL_VERSION}-${PSABI}-xanmod1/linux-image-${KERNEL_VERSION}-${PSABI}-xanmod1_${KERNEL_VERSION}-${PSABI}-xanmod1-${KERNEL_REV}_amd64.deb
@@ -1112,11 +1140,7 @@ if [ "$IPERF" = "yes" ] && [ "$CHINA" != "yes" ]; then
 	chown -Rf iperf3 /etc/iperf3 || true
 	systemctl enable iperf3.service || true
 	mkdir -p /etc/systemd/system/iperf3.service.d
-	if [ "$LOCALFILES" = "no" ]; then
-		fetch_file ${VPSURL}${VPSPATH}/iperf3.override.conf /etc/systemd/system/iperf3.service.d/override.conf
-	else
-		cp ${DIR}/iperf3.override.conf /etc/systemd/system/iperf3.service.d/override.conf
-	fi
+	install_file iperf3.override.conf /etc/systemd/system/iperf3.service.d/override.conf
 	echo "iperf3 installed"
 fi
 
@@ -1403,22 +1427,18 @@ if [ "$OMR_ADMIN" = "yes" ]; then
 		apt-get -y install python3-jsonschema python3-fastapi python3-python-multipart python3-starlette
 	elif [ "$ID" = "debian" ] && [ "$VERSION_ID" = "12" ]; then
 		#pip3 -q install netjsonconfig --break-system-packages
-		pip3 -q install fastapi -U --break-system-packages
+		pip3 -q install "fastapi==${FASTAPI_VERSION}" --break-system-packages
 		pip3 -q install jsonschema -U --break-system-packages
 		pip3 -q install python-multipart jinja2 -U --break-system-packages
 		pip3 -q install starlette --break-system-packages
-		pip3 -q install starlette --break-system-packages
 	else
 		#pip3 -q install netjsonconfig
-		if [ "$ID" = "ubuntu" ] || ([ "$ID" = "debian" ] && [ "$VERSION_ID" = "10" ]); then
-			pip3 -q install fastapi==0.99.1 -U
-		else
-			pip3 -q install fastapi -U
-		fi
-		pip3 -q install fastapi -U
+		# Python 3.7 (Debian 10) has no such release: the newest it can take,
+		# 0.103. Not the 0.99.1 pinned here before: below 0.100 Query()
+		# ignores the pattern= checks omradmin.py validates its input with.
+		pip3 -q install "fastapi==${FASTAPI_VERSION}" || pip3 -q install fastapi -U
 		pip3 -q install jsonschema -U
 		pip3 -q install python-multipart jinja2 -U
-		pip3 -q install starlette
 		pip3 -q install starlette
 	fi
 	mkdir -p /etc/openmptcprouter-vps-admin/omr-6in4
@@ -1427,69 +1447,46 @@ if [ "$OMR_ADMIN" = "yes" ]; then
 	#[ ! -f "/etc/openmptcprouter-vps-admin/current-vpn" ] && echo "glorytun_tcp" > /etc/openmptcprouter-vps-admin/current-vpn
 	[ ! -f "/etc/openmptcprouter-vps-admin/current-vpn" ] && echo "openvpn" > /etc/openmptcprouter-vps-admin/current-vpn
 	mkdir -p /var/opt/openmptcprouter
+	# Keep the passwords the routers already have
+	if [ -f /etc/openmptcprouter-vps-admin/omr-admin-config.json ]; then
+		OMR_ADMIN_PASS2=$(grep -Po '"'"pass"'"\s*:\s*"\K([^"]*)' /etc/openmptcprouter-vps-admin/omr-admin-config.json | tr -d  "\n")
+		[ -z "$OMR_ADMIN_PASS2" ] && OMR_ADMIN_PASS2=$(cat /etc/openmptcprouter-vps-admin/omr-admin-config.json | jq -r .users[0].openmptcprouter.user_password | tr -d "\n")
+		# Not the template's MySecretKey: sed would put it back in place of itself
+		[ -n "$OMR_ADMIN_PASS2" ] && [ "$OMR_ADMIN_PASS2" != "null" ] && [ "$OMR_ADMIN_PASS2" != "MySecretKey" ] && OMR_ADMIN_PASS=$OMR_ADMIN_PASS2
+		OMR_ADMIN_PASS_ADMIN2=$(cat /etc/openmptcprouter-vps-admin/omr-admin-config.json | jq -r .users[0].admin.user_password | tr -d "\n")
+		[ -n "$OMR_ADMIN_PASS_ADMIN2" ] && [ "$OMR_ADMIN_PASS_ADMIN2" != "null" ] && [ "$OMR_ADMIN_PASS_ADMIN2" != "AdminMySecretKey" ] && OMR_ADMIN_PASS_ADMIN=$OMR_ADMIN_PASS_ADMIN2
+	fi
 	if [ "$SOURCES" = "yes" ]; then
-		if [ "$LOCALFILES" = "no" ]; then
-			fetch_file ${VPSURL}${VPSPATH}/omr-admin.service.in /lib/systemd/system/omr-admin.service
-			#wget -O /lib/systemd/system/omr-admin-ipv6.service ${VPSURL}${VPSPATH}/omr-admin-ipv6.service.in
+		# The OMR_ADMIN_VERSION commit, what the deb is built from
+		if ! omr_admin_from_github; then
+			echo "ERROR: omr-admin ${OMR_ADMIN_VERSION} could not be installed from GitHub" >&2
+			exit 1
+		fi
+	elif ! apt-get -o Dpkg::Options::="--force-confold" -o Dpkg::Options::="--force-confdef" -o Dpkg::Options::="--force-overwrite" -y --allow-downgrades install omr-vps-admin=${OMR_ADMIN_BINARY_VERSION}; then
+		if wget -O /tmp/omr-vps-admin_${OMR_ADMIN_BINARY_VERSION}_all.deb ${VPSURL}debian/omr-vps-admin_${OMR_ADMIN_BINARY_VERSION}_all.deb; then
+			# Unlike the apt call above, dpkg resolves no dependency: pull
+			# anything the deb needs and is missing (nftables, python3-*)
+			# instead of leaving the package unconfigured
+			dpkg --force-confold --force-confdef --force-overwrite -i /tmp/omr-vps-admin_${OMR_ADMIN_BINARY_VERSION}_all.deb || apt-get -y --fix-broken install
 		else
-			cp ${DIR}/omr-admin.service.in /lib/systemd/system/omr-admin.service
-		fi
-		wget -O /tmp/openmptcprouter-vps-admin.zip https://github.com/Ysurac/openmptcprouter-vps-admin/archive/${OMR_ADMIN_VERSION}.zip
-		cd /tmp
-		unzip -q -o openmptcprouter-vps-admin.zip
-		rm -f /tmp/openmptcprouter-vps-admin.zip
-		# Installed where the omr-vps-admin deb puts it, which is where
-		# omr-admin.service runs it from
-		cp /tmp/openmptcprouter-vps-admin-${OMR_ADMIN_VERSION}/omradmin.py /usr/bin/omradmin.py
-		if [ -f /etc/openmptcprouter-vps-admin/omr-admin-config.json ]; then
-			OMR_ADMIN_PASS2=$(grep -Po '"'"pass"'"\s*:\s*"\K([^"]*)' /etc/openmptcprouter-vps-admin/omr-admin-config.json | tr -d  "\n")
-			[ -z "$OMR_ADMIN_PASS2" ] && OMR_ADMIN_PASS2=$(cat /etc/openmptcprouter-vps-admin/omr-admin-config.json | jq -r .users[0].openmptcprouter.user_password | tr -d "\n")
-			# Not the template's MySecretKey: sed would put it back in place of itself
-			[ -n "$OMR_ADMIN_PASS2" ] && [ "$OMR_ADMIN_PASS2" != "null" ] && [ "$OMR_ADMIN_PASS2" != "MySecretKey" ] && OMR_ADMIN_PASS=$OMR_ADMIN_PASS2
-			OMR_ADMIN_PASS_ADMIN2=$(cat /etc/openmptcprouter-vps-admin/omr-admin-config.json | jq -r .users[0].admin.user_password | tr -d "\n")
-			[ -n "$OMR_ADMIN_PASS_ADMIN2" ] && [ "$OMR_ADMIN_PASS_ADMIN2" != "null" ] && [ "$OMR_ADMIN_PASS_ADMIN2" != "AdminMySecretKey" ] && OMR_ADMIN_PASS_ADMIN=$OMR_ADMIN_PASS_ADMIN2
-		fi
-		if [ ! -f /etc/openmptcprouter-vps-admin/omr-admin-config.json ] || [ "$(grep user_password /etc/openmptcprouter-vps-admin/omr-admin-config.json)" = "" ]; then
-			cp /tmp/openmptcprouter-vps-admin-${OMR_ADMIN_VERSION}/omr-admin-config.json /etc/openmptcprouter-vps-admin/
-		fi
-		rm -rf /tmp/openmptcprouter-vps-admin-${OMR_ADMIN_VERSION}
-		chmod u+x /usr/bin/omradmin.py
-	else
-		if [ -f /etc/openmptcprouter-vps-admin/omr-admin-config.json ]; then
-			OMR_ADMIN_PASS2=$(grep -Po '"'"pass"'"\s*:\s*"\K([^"]*)' /etc/openmptcprouter-vps-admin/omr-admin-config.json | tr -d  "\n")
-			[ -z "$OMR_ADMIN_PASS2" ] && OMR_ADMIN_PASS2=$(cat /etc/openmptcprouter-vps-admin/omr-admin-config.json | jq -r .users[0].openmptcprouter.user_password | tr -d "\n")
-			[ -n "$OMR_ADMIN_PASS2" ] && [ "$OMR_ADMIN_PASS2" != "null" ] && [ "$OMR_ADMIN_PASS2" != "MySecretKey" ] && OMR_ADMIN_PASS=$OMR_ADMIN_PASS2
-			OMR_ADMIN_PASS_ADMIN2=$(cat /etc/openmptcprouter-vps-admin/omr-admin-config.json | jq -r .users[0].admin.user_password | tr -d "\n")
-			[ -n "$OMR_ADMIN_PASS_ADMIN2" ] && [ "$OMR_ADMIN_PASS_ADMIN2" != "null" ] && [ "$OMR_ADMIN_PASS_ADMIN2" != "AdminMySecretKey" ] && OMR_ADMIN_PASS_ADMIN=$OMR_ADMIN_PASS_ADMIN2
-		fi
-		if ! apt-get -o Dpkg::Options::="--force-confold" -o Dpkg::Options::="--force-confdef" -o Dpkg::Options::="--force-overwrite" -y --allow-downgrades install omr-vps-admin=${OMR_ADMIN_BINARY_VERSION}; then
-			if wget -O /tmp/omr-vps-admin_${OMR_ADMIN_BINARY_VERSION}_all.deb ${VPSURL}debian/omr-vps-admin_${OMR_ADMIN_BINARY_VERSION}_all.deb; then
-				# Unlike the apt call above, dpkg resolves no dependency: pull
-				# anything the deb needs and is missing (nftables, python3-*)
-				# instead of leaving the package unconfigured
-				dpkg --force-confold --force-confdef --force-overwrite -i /tmp/omr-vps-admin_${OMR_ADMIN_BINARY_VERSION}_all.deb || apt-get -y --fix-broken install
-			else
-				# The pinned deb is not published yet (the version is bumped
-				# here before it is uploaded): install the same commit from
-				# GitHub. Never another version: the rest of this script is
-				# written against OMR_ADMIN_VERSION.
-				echo "WARNING: omr-vps-admin ${OMR_ADMIN_BINARY_VERSION} is not available, installing omr-admin ${OMR_ADMIN_VERSION} from GitHub instead" >&2
-				if ! omr_admin_from_github; then
-					if [ -f /usr/bin/omradmin.py ] && [ -f /usr/share/omr-admin/omr-admin-config.json ]; then
-						echo "WARNING: omr-admin ${OMR_ADMIN_VERSION} could not be installed, keeping the installed one" >&2
-					else
-						echo "ERROR: omr-admin ${OMR_ADMIN_VERSION} could not be installed, neither as omr-vps-admin ${OMR_ADMIN_BINARY_VERSION} nor from GitHub" >&2
-						exit 1
-					fi
+			# The pinned deb is not published yet (the version is bumped
+			# here before it is uploaded): install the same commit from
+			# GitHub. Never another version: the rest of this script is
+			# written against OMR_ADMIN_VERSION.
+			echo "WARNING: omr-vps-admin ${OMR_ADMIN_BINARY_VERSION} is not available, installing omr-admin ${OMR_ADMIN_VERSION} from GitHub instead" >&2
+			if ! omr_admin_from_github; then
+				if [ -f /usr/bin/omradmin.py ] && [ -f /usr/share/omr-admin/omr-admin-config.json ]; then
+					echo "WARNING: omr-admin ${OMR_ADMIN_VERSION} could not be installed, keeping the installed one" >&2
+				else
+					echo "ERROR: omr-admin ${OMR_ADMIN_VERSION} could not be installed, neither as omr-vps-admin ${OMR_ADMIN_BINARY_VERSION} nor from GitHub" >&2
+					exit 1
 				fi
 			fi
-			rm -f /tmp/omr-vps-admin_${OMR_ADMIN_BINARY_VERSION}_all.deb
 		fi
-		if [ ! -f /etc/openmptcprouter-vps-admin/omr-admin-config.json ]; then
-			cp /usr/share/omr-admin/omr-admin-config.json /etc/openmptcprouter-vps-admin/
-		fi
-		#OMR_ADMIN_PASS=$(cat /etc/openmptcprouter-vps-admin/omr-admin-config.json | jq -r .users[0].openmptcprouter.user_password | tr -d "\n")
-		#OMR_ADMIN_PASS_ADMIN=$(cat /etc/openmptcprouter-vps-admin/omr-admin-config.json | jq -r .users[0].admin.user_password | tr -d "\n")
+		rm -f /tmp/omr-vps-admin_${OMR_ADMIN_BINARY_VERSION}_all.deb
+	fi
+	if [ ! -f /etc/openmptcprouter-vps-admin/omr-admin-config.json ]; then
+		cp /usr/share/omr-admin/omr-admin-config.json /etc/openmptcprouter-vps-admin/
 	fi
 	# Owner-only before the passwords go in: a copy of the template is
 	# created 0644, and sed -i and jq_rewrite keep the mode they find
@@ -1551,29 +1548,12 @@ if [ "$OMR_ADMIN" = "yes" ]; then
 fi
 
 # Get shadowsocks optimization
-if [ "$LOCALFILES" = "no" ]; then
-	if [ "$KERNEL" != "5.4" ]; then
-		if [ "$KERNEL" != "6.12" ] && [ "$KERNEL" != "6.6" ]; then
-			fetch_file ${VPSURL}${VPSPATH}/shadowsocks.6.18.conf /etc/sysctl.d/90-shadowsocks.conf
-		else
-			fetch_file ${VPSURL}${VPSPATH}/shadowsocks.6.1.conf /etc/sysctl.d/90-shadowsocks.conf
-		fi
-	else
-		fetch_file ${VPSURL}${VPSPATH}/shadowsocks.conf /etc/sysctl.d/90-shadowsocks.conf
-	fi
+if [ "$KERNEL" = "5.4" ]; then
+	install_file shadowsocks.conf /etc/sysctl.d/90-shadowsocks.conf
+elif [ "$KERNEL" = "6.12" ] || [ "$KERNEL" = "6.6" ]; then
+	install_file shadowsocks.6.1.conf /etc/sysctl.d/90-shadowsocks.conf
 else
-	# Same kernel split as the download branch above -- without the 6.18 case
-	# here, every LOCALFILES=yes run (which is every SOURCES=yes run, see
-	# above) installed the 6.1 sysctl set on a 6.18 kernel
-	if [ "$KERNEL" != "5.4" ]; then
-		if [ "$KERNEL" != "6.12" ] && [ "$KERNEL" != "6.6" ]; then
-			cp ${DIR}/shadowsocks.6.18.conf /etc/sysctl.d/90-shadowsocks.conf
-		else
-			cp ${DIR}/shadowsocks.6.1.conf /etc/sysctl.d/90-shadowsocks.conf
-		fi
-	else
-		cp ${DIR}/shadowsocks.conf /etc/sysctl.d/90-shadowsocks.conf
-	fi
+	install_file shadowsocks.6.18.conf /etc/sysctl.d/90-shadowsocks.conf
 fi
 
 if [ "$SHADOWSOCKS" = "yes" ]; then
@@ -1592,11 +1572,7 @@ if [ "$SHADOWSOCKS" = "yes" ]; then
 	# Install shadowsocks config and add a shadowsocks by CPU
 	if [ "$update" = "0" ] || [ ! -f /etc/shadowsocks-libev/manager.json ]; then
 		mkdir -p /etc/shadowsocks-libev
-		if [ "$LOCALFILES" = "no" ]; then
-			fetch_file ${VPSURL}${VPSPATH}/manager.json /etc/shadowsocks-libev/manager.json
-		else
-			cp ${DIR}/manager.json /etc/shadowsocks-libev/manager.json
-		fi
+		install_file manager.json /etc/shadowsocks-libev/manager.json
 		SHADOWSOCKS_PASS_JSON=$(echo $SHADOWSOCKS_PASS | sed 's/+/-/g; s/\//_/g;')
 		#sed -i "s:MySecretKey:$SHADOWSOCKS_PASS_JSON:g" /etc/shadowsocks-libev/config.json
 		sed -i "s:MySecretKey:$SHADOWSOCKS_PASS_JSON:g" /etc/shadowsocks-libev/manager.json
@@ -1607,11 +1583,7 @@ if [ "$SHADOWSOCKS" = "yes" ]; then
 	[ ! -f /etc/shadowsocks-libev/local.acl ] && touch /etc/shadowsocks-libev/local.acl
 	#sed -i 's:aes-256-cfb:chacha20:g' /etc/shadowsocks-libev/config.json
 	#sed -i 's:json:json --no-delay:g' /lib/systemd/system/shadowsocks-libev-server@.service
-	if [ "$LOCALFILES" = "no" ]; then
-		fetch_file ${VPSURL}${VPSPATH}/shadowsocks-libev-manager@.service.in /lib/systemd/system/shadowsocks-libev-manager@.service
-	else
-		cp ${DIR}/shadowsocks-libev-manager@.service.in /lib/systemd/system/shadowsocks-libev-manager@.service
-	fi
+	install_file shadowsocks-libev-manager@.service.in /lib/systemd/system/shadowsocks-libev-manager@.service
 	if systemctl -q is-enabled shadowsocks-libev 2>/dev/null; then
 		systemctl -q disable --now shadowsocks-libev || true
 	fi
@@ -1630,15 +1602,9 @@ if ! grep -q 'DefaultLimitNOFILE=65536' /etc/systemd/system.conf ; then
 	echo 'DefaultLimitNOFILE=65536' >> /etc/systemd/system.conf
 fi
 
-if [ "$LOCALFILES" = "no" ]; then
-	fetch_file ${VPSURL}${VPSPATH}/omr-update.service.in /lib/systemd/system/omr-update.service
-	fetch_file ${VPSURL}${VPSPATH}/omr-update /usr/bin/omr-update
-	chmod 755 /usr/bin/omr-update
-else
-	cp ${DIR}/omr-update.service.in /lib/systemd/system/omr-update.service
-	copy_file ${DIR}/omr-update /usr/bin/omr-update
-	chmod 755 /usr/bin/omr-update
-fi
+install_file omr-update.service.in /lib/systemd/system/omr-update.service
+install_file omr-update /usr/bin/omr-update
+chmod 755 /usr/bin/omr-update
 chmod 644 /lib/systemd/system/omr-update.service
 
 # Install simple-obfs
@@ -1679,7 +1645,6 @@ if [ "$V2RAY_PLUGIN" = "yes" ]; then
 	if [ "$SOURCES" = "yes" ] && [ "$ARCH" = "amd64" ]; then
 		rm -rf /tmp/v2ray-plugin-linux-amd64-v${V2RAY_PLUGIN_VERSION}.tar.gz
 		#wget -O /tmp/v2ray-plugin-linux-amd64-v${V2RAY_PLUGIN_VERSION}.tar.gz https://github.com/shadowsocks/v2ray-plugin/releases/download/${V2RAY_PLUGIN_VERSION}/v2ray-plugin-linux-amd64-v${V2RAY_PLUGIN_VERSION}.tar.gz
-		#wget -O /tmp/v2ray-plugin-linux-amd64-v${V2RAY_PLUGIN_VERSION}.tar.gz ${VPSURL}${VPSPATH}/bin/v2ray-plugin-linux-amd64-v${V2RAY_PLUGIN_VERSION}.tar.gz
 		wget -O /tmp/v2ray-plugin-linux-amd64-v${V2RAY_PLUGIN_VERSION}.tar.gz https://github.com/teddysun/v2ray-plugin/releases/download/v${V2RAY_PLUGIN_VERSION}/v2ray-plugin-linux-amd64-v${V2RAY_PLUGIN_VERSION}.tar.gz
 		cd /tmp
 		tar xzvf v2ray-plugin-linux-amd64-v${V2RAY_PLUGIN_VERSION}.tar.gz
@@ -1719,19 +1684,11 @@ fi
 if [ "$SHADOWSOCKS_GO" = "yes" ]; then
 	#if [ "$SOURCES" = "yes" ] || [ "$ARCH" = "arm64" ]; then
 	if [ "$ARCH" = "arm64" ]; then
-		if [ "$ARCH" = "amd64" ]; then
-			wget -O /tmp/shadowsocks-go-${SHADOWSOCKS_GO_VERSION}-amd64.deb ${VPSURL}/debian/shadowsocks-go-${SHADOWSOCKS_GO_VERSION}-amd64.deb
-			rm -f /var/lib/dpkg/lock
-			rm -f /var/lib/dpkg/lock-frontend
-			dpkg --force-all -i -B /tmp/shadowsocks-go-${SHADOWSOCKS_GO_VERSION}-amd64.deb
-			rm -f /tmp/shadowsocks-go-${SHADOWSOCKS_GO_VERSION}-amd64.deb
-		elif [ "$ARCH" = "arm64" ]; then
-			wget -O /tmp/shadowsocks-go-${SHADOWSOCKS_GO_VERSION}-arm64.deb ${VPSURL}/debian/shadowsocks-go-${SHADOWSOCKS_GO_VERSION}-arm64.deb
-			rm -f /var/lib/dpkg/lock
-			rm -f /var/lib/dpkg/lock-frontend
-			dpkg --force-all -i -B /tmp/shadowsocks-go-${SHADOWSOCKS_GO_VERSION}-arm64.deb
-			rm -f /tmp/shadowsocks-go-${SHADOWSOCKS_GO_VERSION}-arm64.deb
-		fi
+		wget -O /tmp/shadowsocks-go-${SHADOWSOCKS_GO_VERSION}-arm64.deb ${VPSURL}/debian/shadowsocks-go-${SHADOWSOCKS_GO_VERSION}-arm64.deb
+		rm -f /var/lib/dpkg/lock
+		rm -f /var/lib/dpkg/lock-frontend
+		dpkg --force-all -i -B /tmp/shadowsocks-go-${SHADOWSOCKS_GO_VERSION}-arm64.deb
+		rm -f /tmp/shadowsocks-go-${SHADOWSOCKS_GO_VERSION}-arm64.deb
 	else
 		if ! apt-get -o Dpkg::Options::="--force-confold" -o Dpkg::Options::="--force-confdef" -o Dpkg::Options::="--force-overwrite" -y install shadowsocks-go=${SHADOWSOCKS_GO_VERSION}; then
 			wget -O /tmp/shadowsocks-go-${SHADOWSOCKS_GO_VERSION}-${ARCH}.deb ${VPSURL}debian/shadowsocks-go-${SHADOWSOCKS_GO_VERSION}-${ARCH}.deb
@@ -1745,11 +1702,7 @@ if [ "$SHADOWSOCKS_GO" = "yes" ]; then
 		UPSK2=$(grep -Po '"'"openmptcprouter"'"\s*:\s*"\K([^"]*)' /etc/shadowsocks-go/upsks.json | head -n 1 | tr -d "\n")
 		[ -n "$UPSK2" ] && [ "$UPSK2" != "UPSK" ] && [ "$UPSK2" != "null" ] && UPSK="$UPSK2"
 	fi
-	if [ "$LOCALFILES" = "no" ]; then
-		fetch_file ${VPSURL}${VPSPATH}/shadowsocks-go.server.json /etc/shadowsocks-go/server.json
-	else
-		cp ${DIR}/shadowsocks-go.server.json /etc/shadowsocks-go/server.json
-	fi
+	install_file shadowsocks-go.server.json /etc/shadowsocks-go/server.json
 	sed -i "s:\"PSK\":\"$PSK\":g" /etc/shadowsocks-go/server.json
 	sed -i "s:UPSK:$UPSK:g" /etc/shadowsocks-go/upsks.json
 	# Not there with OMR_ADMIN=no
@@ -1773,19 +1726,11 @@ if [ "$V2RAY" = "yes" ]; then
 	#apt-get -y -o Dpkg::Options::="--force-overwrite" install v2ray
 	#if [ "$SOURCES" = "yes" ] || [ "$ARCH" = "arm64" ]; then
 	if [ "$ARCH" = "arm64" ]; then
-		if [ "$ARCH" = "amd64" ]; then
-			wget -O /tmp/v2ray-${V2RAY_VERSION}-amd64.deb ${VPSURL}/debian/v2ray-${V2RAY_VERSION}-amd64.deb
-			rm -f /var/lib/dpkg/lock
-			rm -f /var/lib/dpkg/lock-frontend
-			dpkg --force-all -i -B /tmp/v2ray-${V2RAY_VERSION}-amd64.deb
-			rm -f /tmp/v2ray-${V2RAY_VERSION}-amd64.deb
-		elif [ "$ARCH" = "arm64" ]; then
-			wget -O /tmp/v2ray-${V2RAY_VERSION}-arm64.deb ${VPSURL}/debian/v2ray-${V2RAY_VERSION}-arm64.deb
-			rm -f /var/lib/dpkg/lock
-			rm -f /var/lib/dpkg/lock-frontend
-			dpkg --force-all -i -B /tmp/v2ray-${V2RAY_VERSION}-arm64.deb
-			rm -f /tmp/v2ray-${V2RAY_VERSION}-arm64.deb
-		fi
+		wget -O /tmp/v2ray-${V2RAY_VERSION}-arm64.deb ${VPSURL}/debian/v2ray-${V2RAY_VERSION}-arm64.deb
+		rm -f /var/lib/dpkg/lock
+		rm -f /var/lib/dpkg/lock-frontend
+		dpkg --force-all -i -B /tmp/v2ray-${V2RAY_VERSION}-arm64.deb
+		rm -f /tmp/v2ray-${V2RAY_VERSION}-arm64.deb
 #		else
 #			[ "$ARCH" = "i386" ] && V2RAY_FILENAME="v2ray-linux-32.zip"
 #			[ "$ARCH" = "amd64" ] && V2RAY_FILENAME="v2ray-linux-64.zip"
@@ -1823,11 +1768,7 @@ if [ "$V2RAY" = "yes" ]; then
 	# template inbounds and outbounds it lacks, and the rules that keep proxy
 	# users off the VPS's loopback services when it has none.
 	V2RAY_TEMPLATE="$(mktemp)"
-	if [ "$LOCALFILES" = "no" ]; then
-		wget -O "$V2RAY_TEMPLATE" ${VPSURL}${VPSPATH}/v2ray-server.json
-	else
-		cp ${DIR}/v2ray-server.json "$V2RAY_TEMPLATE"
-	fi
+	install_file v2ray-server.json "$V2RAY_TEMPLATE"
 	sed -i "s:V2RAY_UUID:$V2RAY_UUID:g" "$V2RAY_TEMPLATE"
 	if [ ! -f /etc/v2ray/v2ray-server.json ]; then
 		cp "$V2RAY_TEMPLATE" /etc/v2ray/v2ray-server.json
@@ -1843,11 +1784,7 @@ if [ "$V2RAY" = "yes" ]; then
 	#if [ -f /etc/systemd/system/v2ray.service.dpkg-dist ]; then
 	#	mv -f /etc/systemd/system/v2ray.service.dpkg-dist /etc/systemd/system/v2ray.service
 	#fi
-	if [ "$LOCALFILES" = "no" ]; then
-		fetch_file ${VPSURL}${VPSPATH}/v2ray.service /lib/systemd/system/v2ray.service
-	else
-		cp ${DIR}/v2ray.service /lib/systemd/system/v2ray.service
-	fi
+	install_file v2ray.service /lib/systemd/system/v2ray.service
 	chmod 644 /lib/systemd/system/v2ray.service
 	systemctl daemon-reload
 	systemctl enable v2ray.service
@@ -1865,19 +1802,11 @@ if [ "$XRAY" = "yes" ]; then
 	#apt-get -y -o Dpkg::Options::="--force-overwrite" install xray
 	#if [ "$SOURCES" = "yes" ] || [ "$ARCH" = "arm64" ]; then
 	if [ "$ARCH" = "arm64" ]; then
-		if [ "$ARCH" = "amd64" ]; then
-			wget -O /tmp/xray-${XRAY_VERSION}-amd64.deb ${VPSURL}/debian/xray-${XRAY_VERSION}-amd64.deb
-			rm -f /var/lib/dpkg/lock
-			rm -f /var/lib/dpkg/lock-frontend
-			dpkg --force-all -i -B /tmp/xray-${XRAY_VERSION}-amd64.deb
-			rm -f /tmp/xray-${XRAY_VERSION}-amd64.deb
-		elif [ "$ARCH" = "arm64" ]; then
-			wget -O /tmp/xray-${XRAY_VERSION}-arm64.deb ${VPSURL}/debian/xray-${XRAY_VERSION}-arm64.deb
-			rm -f /var/lib/dpkg/lock
-			rm -f /var/lib/dpkg/lock-frontend
-			dpkg --force-all -i -B /tmp/xray-${XRAY_VERSION}-arm64.deb
-			rm -f /tmp/xray-${XRAY_VERSION}-arm64.deb
-		fi
+		wget -O /tmp/xray-${XRAY_VERSION}-arm64.deb ${VPSURL}/debian/xray-${XRAY_VERSION}-arm64.deb
+		rm -f /var/lib/dpkg/lock
+		rm -f /var/lib/dpkg/lock-frontend
+		dpkg --force-all -i -B /tmp/xray-${XRAY_VERSION}-arm64.deb
+		rm -f /tmp/xray-${XRAY_VERSION}-arm64.deb
 	else
 		if ! apt-get -o Dpkg::Options::="--force-confold" -o Dpkg::Options::="--force-confdef" -o Dpkg::Options::="--force-overwrite" -y --allow-downgrades install xray=${XRAY_VERSION}; then
 			wget -O /tmp/xray-${XRAY_VERSION}-${ARCH}.deb ${VPSURL}debian/xray-${XRAY_VERSION}-${ARCH}.deb
@@ -1951,21 +1880,13 @@ if [ "$XRAY" = "yes" ]; then
 			XRAY_OLD_CONFIG=/etc/xray/xray-server.json.old
 			cp -pf /etc/xray/xray-server.json "$XRAY_OLD_CONFIG"
 		fi
-		if [ "$LOCALFILES" = "no" ]; then
-			fetch_file ${VPSURL}${VPSPATH}/xray-server.json /etc/xray/xray-server.json
-		else
-			cp ${DIR}/xray-server.json /etc/xray/xray-server.json
-		fi
+		install_file xray-server.json /etc/xray/xray-server.json
 		sed -i "s:V2RAY_UUID:$XRAY_UUID:g" /etc/xray/xray-server.json
 		sed -i "s:XRAY_PSK:$PSK:g" /etc/xray/xray-server.json
 		sed -i "s:XRAY_UPSK:$UPSK:g" /etc/xray/xray-server.json
 		[ -z "$XRAY_REVERSE_UUID" ] && XRAY_REVERSE_UUID=$(/usr/bin/xray uuid | tr -d "\n")
 		sed -i "s:XRAY_REVERSE_UUID:$XRAY_REVERSE_UUID:g" /etc/xray/xray-server.json
-		if [ "$LOCALFILES" = "no" ]; then
-			fetch_file ${VPSURL}${VPSPATH}/xray-vless-reality.json /etc/xray/xray-vless-reality.json
-		else
-			cp ${DIR}/xray-vless-reality.json /etc/xray/xray-vless-reality.json
-		fi
+		install_file xray-vless-reality.json /etc/xray/xray-vless-reality.json
 		if [ -z "$XRAY_X25519_PRIVATE_KEY" ]; then
 			XRAY_X25519_KEYS=$(/usr/bin/xray x25519)
 			# output format depends on xray version:
@@ -2000,11 +1921,7 @@ if [ "$XRAY" = "yes" ]; then
 		[ -n "$XRAY_OLD_CONFIG" ] && rm -f "$XRAY_OLD_CONFIG"
 	else
 		XRAY_TEMPLATE="$(mktemp)"
-		if [ "$LOCALFILES" = "no" ]; then
-			wget -O "$XRAY_TEMPLATE" ${VPSURL}${VPSPATH}/xray-server.json
-		else
-			cp ${DIR}/xray-server.json "$XRAY_TEMPLATE"
-		fi
+		install_file xray-server.json "$XRAY_TEMPLATE"
 		sed -i "s:V2RAY_UUID:$XRAY_UUID:g; s:XRAY_PSK:$PSK:g; s:XRAY_UPSK:$UPSK:g" "$XRAY_TEMPLATE"
 		[ -z "$XRAY_REVERSE_UUID" ] && XRAY_REVERSE_UUID=$(/usr/bin/xray uuid | tr -d "\n")
 		sed -i "s:XRAY_REVERSE_UUID:$XRAY_REVERSE_UUID:g" "$XRAY_TEMPLATE"
@@ -2035,11 +1952,7 @@ if [ "$XRAY" = "yes" ]; then
 	#if [ -f /etc/systemd/system/xray.service.dpkg-dist ]; then
 	#	mv -f /etc/systemd/system/xray.service.dpkg-dist /etc/systemd/system/xray.service
 	#fi
-	if [ "$LOCALFILES" = "no" ]; then
-		fetch_file ${VPSURL}${VPSPATH}/xray.service /lib/systemd/system/xray.service
-	else
-		cp ${DIR}/xray.service /lib/systemd/system/xray.service
-	fi
+	install_file xray.service /lib/systemd/system/xray.service
 	chmod 644 /lib/systemd/system/xray.service
 	systemctl daemon-reload
 	systemctl enable xray.service
@@ -2080,19 +1993,10 @@ if [ "$MLVPN" = "yes" ]; then
 		make install
 		cd /tmp
 		rm -rf /tmp/mlvpn
-		if [ "$LOCALFILES" = "no" ]; then
-			fetch_file ${VPSURL}${VPSPATH}/mlvpn.network /lib/systemd/network/mlvpn.network
-			fetch_file ${VPSURL}${VPSPATH}/mlvpn@.service.in /lib/systemd/system/mlvpn@.service
-		else
-			cp ${DIR}/mlvpn.network /lib/systemd/network/mlvpn.network
-			cp ${DIR}/mlvpn@.service.in /lib/systemd/system/mlvpn@.service
-		fi
+		install_file mlvpn.network /lib/systemd/network/mlvpn.network
+		install_file mlvpn@.service.in /lib/systemd/system/mlvpn@.service
 		if [ "$mlvpnupdate" = "0" ]; then
-			if [ "$LOCALFILES" = "no" ]; then
-				fetch_file ${VPSURL}${VPSPATH}/mlvpn0.conf /etc/mlvpn/mlvpn0.conf
-			else
-				cp ${DIR}/mlvpn0.conf /etc/mlvpn/mlvpn0.conf
-			fi
+			install_file mlvpn0.conf /etc/mlvpn/mlvpn0.conf
 			# Right here, not only in the chmod further down: mlvpn exits with
 			# "[CRIT/config] file is group/other accessible" and the omr-mlvpn
 			# deb installed below starts it before that later chmod runs
@@ -2227,13 +2131,8 @@ if [ "$MQVPN" = "yes" ]; then
 		[ -n "$MQVPN_KEY2" ] && [ "$MQVPN_KEY2" != "PSK" ] && [ "$MQVPN_KEY2" != "null" ] && MQVPN_KEY="$MQVPN_KEY2"
 		MQVPN_USERS=$(jq -c '.users // empty' /etc/mqvpn/server.json 2>/dev/null)
 	fi
-	if [ "$LOCALFILES" = "no" ]; then
-		fetch_file ${VPSURL}${VPSPATH}/mqvpn-server.json /etc/mqvpn/server.json
-		fetch_file ${VPSURL}${VPSPATH}/mqvpn-server.service /lib/systemd/system/mqvpn.service
-	else
-		cp ${DIR}/mqvpn-server.json /etc/mqvpn/server.json
-		cp ${DIR}/mqvpn-server.service /lib/systemd/system/mqvpn.service
-	fi
+	install_file mqvpn-server.json /etc/mqvpn/server.json
+	install_file mqvpn-server.service /lib/systemd/system/mqvpn.service
 	sed -i "s:PSK:$MQVPN_KEY:g" /etc/mqvpn/server.json
 	if [ -n "$MQVPN_USERS" ] && [ "$MQVPN_USERS" != "null" ] && [ "$MQVPN_USERS" != "[]" ]; then
 		jq_rewrite /etc/mqvpn/server.json --argjson users "$MQVPN_USERS" '.users = ($users + [.users[] | select(.name as $n | ($users | map(.name) | index($n)) == null)])' || true
@@ -2255,21 +2154,12 @@ if [ "$FAIL2BAN" = "yes" ]; then
 	rm -f /var/lib/dpkg/lock-frontend
 	apt-get -y install fail2ban python3-systemd
 	systemctl enable fail2ban
-	if [ "$LOCALFILES" = "no" ]; then
-		fetch_file ${VPSURL}${VPSPATH}/fail2ban-jail-openmptcprouter.conf /etc/fail2ban/jail.d/openmptcprouter.conf
-		fetch_file ${VPSURL}${VPSPATH}/fail2ban-filter-openvpn.conf /etc/fail2ban/filter.d/openvpn.conf
-		fetch_file ${VPSURL}${VPSPATH}/fail2ban-filter-omradmin.conf /etc/fail2ban/filter.d/omradmin.conf
-		fetch_file ${VPSURL}${VPSPATH}/fail2ban-filter-xray.conf /etc/fail2ban/filter.d/xray.conf
-		fetch_file ${VPSURL}${VPSPATH}/fail2ban-filter-v2ray.conf /etc/fail2ban/filter.d/v2ray.conf
-		fetch_file ${VPSURL}${VPSPATH}/fail2ban-filter-shadowsocks-go.conf /etc/fail2ban/filter.d/shadowsocks-go.conf
-	else
-		cp ${DIR}/fail2ban-jail-openmptcprouter.conf /etc/fail2ban/jail.d/openmptcprouter.conf
-		cp ${DIR}/fail2ban-filter-openvpn.conf /etc/fail2ban/filter.d/openvpn.conf
-		cp ${DIR}/fail2ban-filter-omradmin.conf /etc/fail2ban/filter.d/omradmin.conf
-		cp ${DIR}/fail2ban-filter-xray.conf /etc/fail2ban/filter.d/xray.conf
-		cp ${DIR}/fail2ban-filter-v2ray.conf /etc/fail2ban/filter.d/v2ray.conf
-		cp ${DIR}/fail2ban-filter-shadowsocks-go.conf /etc/fail2ban/filter.d/shadowsocks-go.conf
-	fi
+	install_file fail2ban-jail-openmptcprouter.conf /etc/fail2ban/jail.d/openmptcprouter.conf
+	install_file fail2ban-filter-openvpn.conf /etc/fail2ban/filter.d/openvpn.conf
+	install_file fail2ban-filter-omradmin.conf /etc/fail2ban/filter.d/omradmin.conf
+	install_file fail2ban-filter-xray.conf /etc/fail2ban/filter.d/xray.conf
+	install_file fail2ban-filter-v2ray.conf /etc/fail2ban/filter.d/v2ray.conf
+	install_file fail2ban-filter-shadowsocks-go.conf /etc/fail2ban/filter.d/shadowsocks-go.conf
 	echo "Install Fail2ban done"
 fi
 
@@ -2282,21 +2172,16 @@ if [ "$TRAFFIC_LOG" = "yes" ]; then
 	rm -f /var/lib/dpkg/lock-frontend
 	apt-get -y install syslog-ng-core conntrack
 	mkdir -p /etc/syslog-ng/conf.d /etc/systemd/system/shadowsocks-go.service.d
-	if [ "$LOCALFILES" = "no" ]; then
-		fetch_file ${VPSURL}${VPSPATH}/omr-traffic-log /usr/local/bin/omr-traffic-log
-		fetch_file ${VPSURL}${VPSPATH}/omr-traffic-log.service.in /lib/systemd/system/omr-traffic-log.service
-		fetch_file ${VPSURL}${VPSPATH}/syslog-ng-omr-traffic.conf /etc/syslog-ng/conf.d/omr-traffic.conf
-		fetch_file ${VPSURL}${VPSPATH}/omr-traffic.logrotate /etc/logrotate.d/omr-traffic
-		fetch_file ${VPSURL}${VPSPATH}/shadowsocks-go-traffic-log.conf /etc/systemd/system/shadowsocks-go.service.d/omr-traffic-log.conf
-	else
-		copy_file ${DIR}/omr-traffic-log /usr/local/bin/omr-traffic-log
-		cp ${DIR}/omr-traffic-log.service.in /lib/systemd/system/omr-traffic-log.service
-		cp ${DIR}/syslog-ng-omr-traffic.conf /etc/syslog-ng/conf.d/omr-traffic.conf
-		cp ${DIR}/omr-traffic.logrotate /etc/logrotate.d/omr-traffic
-		cp ${DIR}/shadowsocks-go-traffic-log.conf /etc/systemd/system/shadowsocks-go.service.d/omr-traffic-log.conf
-	fi
+	install_file omr-traffic-log /usr/local/bin/omr-traffic-log
+	install_file omr-traffic-log.service.in /lib/systemd/system/omr-traffic-log.service
+	install_file syslog-ng-omr-traffic.conf /etc/syslog-ng/conf.d/omr-traffic.conf
+	# Destinations are the user's to edit: only installed when missing
+	[ -e /etc/syslog-ng/conf.d/omr-traffic-destinations.conf ] || install_file syslog-ng-omr-traffic-destinations.conf /etc/syslog-ng/conf.d/omr-traffic-destinations.conf
+	install_file omr-traffic.logrotate /etc/logrotate.d/omr-traffic
+	install_file shadowsocks-go-traffic-log.conf /etc/systemd/system/shadowsocks-go.service.d/omr-traffic-log.conf
 	chmod 755 /usr/local/bin/omr-traffic-log
 	chmod 644 /lib/systemd/system/omr-traffic-log.service /etc/syslog-ng/conf.d/omr-traffic.conf \
+		/etc/syslog-ng/conf.d/omr-traffic-destinations.conf \
 		/etc/logrotate.d/omr-traffic /etc/systemd/system/shadowsocks-go.service.d/omr-traffic-log.conf
 	systemctl daemon-reload
 	systemctl enable syslog-ng.service omr-traffic-log.service
@@ -2307,8 +2192,8 @@ elif [ -e /lib/systemd/system/omr-traffic-log.service ]; then
 	echo "Remove the traffic log"
 	systemctl -q disable --now omr-traffic-log.service > /dev/null 2>&1 || true
 	rm -f /usr/local/bin/omr-traffic-log /lib/systemd/system/omr-traffic-log.service \
-		/etc/syslog-ng/conf.d/omr-traffic.conf /etc/logrotate.d/omr-traffic \
-		/etc/systemd/system/shadowsocks-go.service.d/omr-traffic-log.conf
+		/etc/syslog-ng/conf.d/omr-traffic.conf /etc/syslog-ng/conf.d/omr-traffic-destinations.conf \
+		/etc/logrotate.d/omr-traffic /etc/systemd/system/shadowsocks-go.service.d/omr-traffic-log.conf
 	rmdir /etc/systemd/system/shadowsocks-go.service.d 2> /dev/null || true
 	systemctl daemon-reload
 	systemctl -q reload syslog-ng > /dev/null 2>&1 || true
@@ -2341,7 +2226,6 @@ if [ "$OPENVPN" = "yes" ]; then
 		# release and apt failed on "Invalid operation openvpn"
 		apt-get -y install openvpn easy-rsa
 	fi
-	#wget -O /lib/systemd/network/openvpn.network ${VPSURL}${VPSPATH}/openvpn.network
 	rm -f /lib/systemd/network/openvpn.network
 	#if [ ! -f "/etc/openvpn/server/static.key" ]; then
 	#	wget -O /etc/openvpn/tun0.conf ${VPSURL}${VPSPATH}/openvpn-tun0.conf
@@ -2419,44 +2303,24 @@ if [ "$OPENVPN" = "yes" ]; then
 	# "'/etc/openvpn/tun0.conf' saved [770/770]" at 14:08:29 and omr-admin's
 	# sync, one second later, left the file 0 bytes -- after which openvpn@tun0
 	# only says "Options error: You must define TUN/TAP device (--dev)" and the
-	# tunnel is down until someone looks. A rename is atomic, so omr-admin sees
-	# either the old file or the new one, never a half-written one.
-	if [ "$LOCALFILES" = "no" ]; then
-		if [ "$KERNEL" != "5.4" ]; then
-			wget -O /etc/openvpn/.tun0.conf.new ${VPSURL}${VPSPATH}/openvpn-tun0.6.1.conf && mv -f /etc/openvpn/.tun0.conf.new /etc/openvpn/tun0.conf
-			fetch_file ${VPSURL}${VPSPATH}/openvpn-tun1.6.1.conf /etc/openvpn/tun1.conf
-		else
-			wget -O /etc/openvpn/.tun0.conf.new ${VPSURL}${VPSPATH}/openvpn-tun0.conf && mv -f /etc/openvpn/.tun0.conf.new /etc/openvpn/tun0.conf
-			fetch_file ${VPSURL}${VPSPATH}/openvpn-tun1.conf /etc/openvpn/tun1.conf
-		fi
-		if [ "$OPENVPN_BONDING" = "yes" ]; then
-			fetch_file ${VPSURL}${VPSPATH}/openvpn-bonding1.conf /etc/openvpn/bonding1.conf
-			fetch_file ${VPSURL}${VPSPATH}/openvpn-bonding2.conf /etc/openvpn/bonding2.conf
-			fetch_file ${VPSURL}${VPSPATH}/openvpn-bonding3.conf /etc/openvpn/bonding3.conf
-			fetch_file ${VPSURL}${VPSPATH}/openvpn-bonding4.conf /etc/openvpn/bonding4.conf
-			fetch_file ${VPSURL}${VPSPATH}/openvpn-bonding5.conf /etc/openvpn/bonding5.conf
-			fetch_file ${VPSURL}${VPSPATH}/openvpn-bonding6.conf /etc/openvpn/bonding6.conf
-			fetch_file ${VPSURL}${VPSPATH}/openvpn-bonding7.conf /etc/openvpn/bonding7.conf
-			fetch_file ${VPSURL}${VPSPATH}/openvpn-bonding8.conf /etc/openvpn/bonding8.conf
-		fi
+	# tunnel is down until someone looks. install_file writes a temporary copy
+	# and renames it: omr-admin sees the old file or the new one, never half.
+	if [ "$KERNEL" != "5.4" ]; then
+		install_file openvpn-tun0.6.1.conf /etc/openvpn/tun0.conf
+		install_file openvpn-tun1.6.1.conf /etc/openvpn/tun1.conf
 	else
-		if [ "$KERNEL" != "5.4" ]; then
-			cp ${DIR}/openvpn-tun0.6.1.conf /etc/openvpn/.tun0.conf.new && mv -f /etc/openvpn/.tun0.conf.new /etc/openvpn/tun0.conf
-			cp ${DIR}/openvpn-tun1.6.1.conf /etc/openvpn/tun1.conf
-		else
-			cp ${DIR}/openvpn-tun0.conf /etc/openvpn/.tun0.conf.new && mv -f /etc/openvpn/.tun0.conf.new /etc/openvpn/tun0.conf
-			cp ${DIR}/openvpn-tun1.conf /etc/openvpn/tun1.conf
-		fi
-		if [ "$OPENVPN_BONDING" = "yes" ]; then
-			cp ${DIR}/openvpn-bonding1.conf /etc/openvpn/bonding1.conf
-			cp ${DIR}/openvpn-bonding2.conf /etc/openvpn/bonding2.conf
-			cp ${DIR}/openvpn-bonding3.conf /etc/openvpn/bonding3.conf
-			cp ${DIR}/openvpn-bonding4.conf /etc/openvpn/bonding4.conf
-			cp ${DIR}/openvpn-bonding5.conf /etc/openvpn/bonding5.conf
-			cp ${DIR}/openvpn-bonding6.conf /etc/openvpn/bonding6.conf
-			cp ${DIR}/openvpn-bonding7.conf /etc/openvpn/bonding7.conf
-			cp ${DIR}/openvpn-bonding8.conf /etc/openvpn/bonding8.conf
-		fi
+		install_file openvpn-tun0.conf /etc/openvpn/tun0.conf
+		install_file openvpn-tun1.conf /etc/openvpn/tun1.conf
+	fi
+	if [ "$OPENVPN_BONDING" = "yes" ]; then
+		install_file openvpn-bonding1.conf /etc/openvpn/bonding1.conf
+		install_file openvpn-bonding2.conf /etc/openvpn/bonding2.conf
+		install_file openvpn-bonding3.conf /etc/openvpn/bonding3.conf
+		install_file openvpn-bonding4.conf /etc/openvpn/bonding4.conf
+		install_file openvpn-bonding5.conf /etc/openvpn/bonding5.conf
+		install_file openvpn-bonding6.conf /etc/openvpn/bonding6.conf
+		install_file openvpn-bonding7.conf /etc/openvpn/bonding7.conf
+		install_file openvpn-bonding8.conf /etc/openvpn/bonding8.conf
 	fi
 	if [ "$(ip -6 a 2>/dev/null)" = "" ]; then
 		sed -i 's/proto tcp6-server//' /etc/openvpn/tun0.conf
@@ -2491,11 +2355,15 @@ if [ "$OPENVPN" = "yes" ]; then
 	chmod 644 /lib/systemd/system/openvpn*.service
 	systemctl enable openvpn@tun0.service
 	systemctl enable openvpn@tun1.service
-	if [ "$KERNEL" != "5.4" ]; then
-		# Everywhere but Debian 13, whose OpenMPTCProuter openvpn package has MPTCP
-		if [ "$VERSION_ID" != "13" ] || [ "$ID" != "debian" ]; then
-			mptcpize enable openvpn@tun0 >/dev/null 2>&1 || true
-		fi
+	if [ "$VERSION_ID" = "13" ] && [ "$ID" = "debian" ] && /usr/sbin/openvpn --help 2>&1 | grep -q -- '--mptcp'; then
+		# OMR's openvpn build does MPTCP itself: a drop-in survives package
+		# updates, mptcpize edits the packaged openvpn@.service in place
+		mptcpize disable openvpn@tun0 >/dev/null 2>&1 || true
+		mkdir -p /etc/systemd/system/openvpn@tun0.service.d
+		install_file openvpn-tun0.override.conf /etc/systemd/system/openvpn@tun0.service.d/override.conf
+	elif [ "$KERNEL" != "5.4" ]; then
+		# Stock openvpn has no --mptcp, so tun0 would listen plain TCP
+		mptcpize enable openvpn@tun0 >/dev/null 2>&1 || true
 	fi
 	if [ "$OPENVPN_BONDING" = "yes" ]; then
 		systemctl enable openvpn@bonding1.service
@@ -2531,28 +2399,14 @@ if [ "$GLORYTUN_UDP" = "yes" ]; then
 		sed -i 's:EmitDNS=yes:EmitDNS=no:g' /lib/systemd/network/glorytun.network || true
 		rm -f /lib/systemd/system/glorytun*
 		rm -f /lib/systemd/network/glorytun*
-		if [ "$LOCALFILES" = "no" ]; then
-			fetch_file ${VPSURL}${VPSPATH}/glorytun-udp-run /usr/local/bin/glorytun-udp-run
-		else
-			copy_file ${DIR}/glorytun-udp-run /usr/local/bin/glorytun-udp-run
-		fi
+		install_file glorytun-udp-run /usr/local/bin/glorytun-udp-run
 		chmod 755 /usr/local/bin/glorytun-udp-run
-		if [ "$LOCALFILES" = "no" ]; then
-			fetch_file ${VPSURL}${VPSPATH}/glorytun-udp%40.service.in /lib/systemd/system/glorytun-udp@.service
-		else
-			cp ${DIR}/glorytun-udp@.service.in /lib/systemd/system/glorytun-udp@.service
-		fi
+		install_file glorytun-udp@.service.in /lib/systemd/system/glorytun-udp@.service
 		chmod 644 /lib/systemd/system/glorytun-udp@.service
-		#wget -O /lib/systemd/network/glorytun-udp.network ${VPSURL}${VPSPATH}/glorytun-udp.network
 		rm -f /lib/systemd/network/glorytun-udp.network
 		mkdir -p /etc/glorytun-udp
-		if [ "$LOCALFILES" = "no" ]; then
-			fetch_file ${VPSURL}${VPSPATH}/glorytun-udp-post.sh /etc/glorytun-udp/post.sh
-			fetch_file ${VPSURL}${VPSPATH}/tun0.glorytun-udp /etc/glorytun-udp/tun0
-		else
-			cp ${DIR}/glorytun-udp-post.sh /etc/glorytun-udp/post.sh
-			cp ${DIR}/tun0.glorytun-udp /etc/glorytun-udp/tun0
-		fi
+		install_file glorytun-udp-post.sh /etc/glorytun-udp/post.sh
+		install_file tun0.glorytun-udp /etc/glorytun-udp/tun0
 		chmod 755 /etc/glorytun-udp/post.sh
 		# On an update that enables UDP, the key the router has is the TCP one:
 		# test that first, the "no UDP key" case caught it before
@@ -2604,15 +2458,9 @@ if [ "$DSVPN" = "yes" ]; then
 		make install
 		rm -f /lib/systemd/system/dsvpn/*
 		mkdir -p /etc/dsvpn
-		if [ "$LOCALFILES" = "no" ]; then
-			fetch_file ${VPSURL}${VPSPATH}/dsvpn-run /usr/local/bin/dsvpn-run
-			fetch_file ${VPSURL}${VPSPATH}/dsvpn-server%40.service.in /lib/systemd/system/dsvpn-server@.service
-			fetch_file ${VPSURL}${VPSPATH}/dsvpn0-config /etc/dsvpn/dsvpn0
-		else
-			copy_file ${DIR}/dsvpn-run /usr/local/bin/dsvpn-run
-			cp ${DIR}/dsvpn-server@.service.in /lib/systemd/system/dsvpn-server@.service
-			cp ${DIR}/dsvpn0-config /etc/dsvpn/dsvpn0
-		fi
+		install_file dsvpn-run /usr/local/bin/dsvpn-run
+		install_file dsvpn-server@.service.in /lib/systemd/system/dsvpn-server@.service
+		install_file dsvpn0-config /etc/dsvpn/dsvpn0
 		chmod 755 /usr/local/bin/dsvpn-run
 		chmod 644 /lib/systemd/system/dsvpn-server@.service
 		if [ -f /etc/dsvpn/dsvpn.key ]; then
@@ -2693,17 +2541,10 @@ if [ "$GLORYTUN_TCP" = "yes" ]; then
 		make
 		cp glorytun /usr/local/bin/glorytun-tcp
 		mkdir -p /etc/glorytun-tcp
-		if [ "$LOCALFILES" = "no" ]; then
-			fetch_file ${VPSURL}${VPSPATH}/glorytun-tcp-run /usr/local/bin/glorytun-tcp-run
-			fetch_file ${VPSURL}${VPSPATH}/glorytun-tcp%40.service.in /lib/systemd/system/glorytun-tcp@.service
-			fetch_file ${VPSURL}${VPSPATH}/glorytun-tcp-post.sh /etc/glorytun-tcp/post.sh
-			fetch_file ${VPSURL}${VPSPATH}/tun0.glorytun /etc/glorytun-tcp/tun0
-		else
-			copy_file ${DIR}/glorytun-tcp-run /usr/local/bin/glorytun-tcp-run
-			cp ${DIR}/glorytun-tcp@.service.in /lib/systemd/system/glorytun-tcp@.service
-			cp ${DIR}/glorytun-tcp-post.sh /etc/glorytun-tcp/post.sh
-			cp ${DIR}/tun0.glorytun /etc/glorytun-tcp/tun0
-		fi
+		install_file glorytun-tcp-run /usr/local/bin/glorytun-tcp-run
+		install_file glorytun-tcp@.service.in /lib/systemd/system/glorytun-tcp@.service
+		install_file glorytun-tcp-post.sh /etc/glorytun-tcp/post.sh
+		install_file tun0.glorytun /etc/glorytun-tcp/tun0
 		chmod 755 /usr/local/bin/glorytun-tcp-run
 		chmod 644 /lib/systemd/system/glorytun-tcp@.service
 		rm -f /lib/systemd/network/glorytun-tcp.network
@@ -2845,62 +2686,33 @@ if ! grep -q tun /etc/modules ; then
 fi
 
 # Add multipath utility
-if [ "$LOCALFILES" = "no" ]; then
-	fetch_file ${VPSURL}${VPSPATH}/multipath /usr/local/bin/multipath
-else
-	copy_file ${DIR}/multipath /usr/local/bin/multipath
-fi
+install_file multipath /usr/local/bin/multipath
 chmod 755 /usr/local/bin/multipath
 
-# Add omr-test-speed utility
-if [ "$LOCALFILES" = "no" ]; then
-	fetch_file ${VPSURL}${VPSPATH}/omr-test-speed /usr/local/bin/omr-test-speed
-else
-	copy_file ${DIR}/omr-test-speed /usr/local/bin/omr-test-speed
-fi
-chmod 755 /usr/local/bin/omr-test-speed
+# Add omr-test-speed utilities
+install_file omr-test-speed /usr/local/bin/omr-test-speed
+install_file omr-test-speedv6 /usr/local/bin/omr-test-speedv6
+chmod 755 /usr/local/bin/omr-test-speed /usr/local/bin/omr-test-speedv6
 
 # Add OpenMPTCProuter service
-if [ "$LOCALFILES" = "no" ]; then
-	fetch_file ${VPSURL}${VPSPATH}/omr-service /usr/local/bin/omr-service
-	fetch_file ${VPSURL}${VPSPATH}/omr.service.in /lib/systemd/system/omr.service
-	fetch_file ${VPSURL}${VPSPATH}/omr-6in4-run /usr/local/bin/omr-6in4-run
-	fetch_file ${VPSURL}${VPSPATH}/omr6in4%40.service.in /lib/systemd/system/omr6in4@.service
-	fetch_file ${VPSURL}${VPSPATH}/omr-vxlan-run /usr/local/bin/omr-vxlan-run
-	fetch_file ${VPSURL}${VPSPATH}/omr-vxlan%40.service.in /lib/systemd/system/omr-vxlan@.service
-	fetch_file ${VPSURL}${VPSPATH}/omr-bypass /usr/local/bin/omr-bypass
-	fetch_file ${VPSURL}${VPSPATH}/omr-bypass.service.in /lib/systemd/system/omr-bypass.service
-	fetch_file ${VPSURL}${VPSPATH}/omr-bypass.timer.in /lib/systemd/system/omr-bypass.timer
-	fetch_file ${VPSURL}${VPSPATH}/omr-reserved-ports /usr/local/bin/omr-reserved-ports
-	fetch_file ${VPSURL}${VPSPATH}/omr-reserved-ports.service.in /lib/systemd/system/omr-reserved-ports.service
-	fetch_file ${VPSURL}${VPSPATH}/omr-reserved-ports.path.in /lib/systemd/system/omr-reserved-ports.path
-	fetch_file ${VPSURL}${VPSPATH}/omr-net-mem /usr/local/bin/omr-net-mem
-	fetch_file ${VPSURL}${VPSPATH}/omr-net-mem.service.in /lib/systemd/system/omr-net-mem.service
-	fetch_file ${VPSURL}${VPSPATH}/omr-geoban /usr/local/bin/omr-geoban
-	fetch_file ${VPSURL}${VPSPATH}/omr-geoban.service.in /lib/systemd/system/omr-geoban.service
-	fetch_file ${VPSURL}${VPSPATH}/omr-geoban-update.service.in /lib/systemd/system/omr-geoban-update.service
-	fetch_file ${VPSURL}${VPSPATH}/omr-geoban-update.timer.in /lib/systemd/system/omr-geoban-update.timer
-else
-	copy_file ${DIR}/omr-service /usr/local/bin/omr-service
-	cp ${DIR}/omr.service.in /lib/systemd/system/omr.service
-	copy_file ${DIR}/omr-6in4-run /usr/local/bin/omr-6in4-run
-	cp ${DIR}/omr6in4@.service.in /lib/systemd/system/omr6in4@.service
-	copy_file ${DIR}/omr-vxlan-run /usr/local/bin/omr-vxlan-run
-	cp ${DIR}/omr-vxlan@.service.in /lib/systemd/system/omr-vxlan@.service
-	copy_file ${DIR}/omr-bypass /usr/local/bin/omr-bypass
-	cp ${DIR}/omr-bypass.service.in /lib/systemd/system/omr-bypass.service
-	cp ${DIR}/omr-bypass.timer.in /lib/systemd/system/omr-bypass.timer
-	copy_file ${DIR}/omr-reserved-ports /usr/local/bin/omr-reserved-ports
-	cp ${DIR}/omr-reserved-ports.service.in /lib/systemd/system/omr-reserved-ports.service
-	cp ${DIR}/omr-reserved-ports.path.in /lib/systemd/system/omr-reserved-ports.path
-	copy_file ${DIR}/omr-net-mem /usr/local/bin/omr-net-mem
-	cp ${DIR}/omr-net-mem.service.in /lib/systemd/system/omr-net-mem.service
-	copy_file ${DIR}/omr-geoban /usr/local/bin/omr-geoban
-	cp ${DIR}/omr-geoban.service.in /lib/systemd/system/omr-geoban.service
-	cp ${DIR}/omr-geoban-update.service.in /lib/systemd/system/omr-geoban-update.service
-	cp ${DIR}/omr-geoban-update.timer.in /lib/systemd/system/omr-geoban-update.timer
-
-fi
+install_file omr-service /usr/local/bin/omr-service
+install_file omr.service.in /lib/systemd/system/omr.service
+install_file omr-6in4-run /usr/local/bin/omr-6in4-run
+install_file omr6in4@.service.in /lib/systemd/system/omr6in4@.service
+install_file omr-vxlan-run /usr/local/bin/omr-vxlan-run
+install_file omr-vxlan@.service.in /lib/systemd/system/omr-vxlan@.service
+install_file omr-bypass /usr/local/bin/omr-bypass
+install_file omr-bypass.service.in /lib/systemd/system/omr-bypass.service
+install_file omr-bypass.timer.in /lib/systemd/system/omr-bypass.timer
+install_file omr-reserved-ports /usr/local/bin/omr-reserved-ports
+install_file omr-reserved-ports.service.in /lib/systemd/system/omr-reserved-ports.service
+install_file omr-reserved-ports.path.in /lib/systemd/system/omr-reserved-ports.path
+install_file omr-net-mem /usr/local/bin/omr-net-mem
+install_file omr-net-mem.service.in /lib/systemd/system/omr-net-mem.service
+install_file omr-geoban /usr/local/bin/omr-geoban
+install_file omr-geoban.service.in /lib/systemd/system/omr-geoban.service
+install_file omr-geoban-update.service.in /lib/systemd/system/omr-geoban-update.service
+install_file omr-geoban-update.timer.in /lib/systemd/system/omr-geoban-update.timer
 chmod 644 /lib/systemd/system/omr.service
 chmod 644 /lib/systemd/system/omr6in4@.service
 chmod 644 /lib/systemd/system/omr-vxlan@.service
@@ -2990,23 +2802,13 @@ mkdir -p /etc/systemd/system/nftables.service.d
 # waits out the full 90s unit timeout on every boot (see
 # systemd/20-omr-wait-online-any.conf).
 mkdir -p /etc/systemd/system/systemd-networkd-wait-online.service.d
-if [ "$LOCALFILES" = "no" ]; then
-	fetch_file ${VPSURL}${VPSPATH}/nftables.conf /etc/nftables.conf
-	fetch_file ${VPSURL}${VPSPATH}/nftables/omr-vars.nft /etc/nftables/omr-vars.nft
-	fetch_file ${VPSURL}${VPSPATH}/nftables/omr.nft /etc/nftables/omr.nft
-	fetch_file ${VPSURL}${VPSPATH}/nftables/omr-admin-resync.conf /etc/systemd/system/nftables.service.d/omr-admin-resync.conf
-	fetch_file ${VPSURL}${VPSPATH}/nftables/omr-bypass-resync.conf /etc/systemd/system/nftables.service.d/omr-bypass-resync.conf
-	fetch_file ${VPSURL}${VPSPATH}/nftables/omr-geoban-resync.conf /etc/systemd/system/nftables.service.d/omr-geoban-resync.conf
-	fetch_file ${VPSURL}${VPSPATH}/systemd/20-omr-wait-online-any.conf /etc/systemd/system/systemd-networkd-wait-online.service.d/20-omr-wait-online-any.conf
-else
-	cp ${DIR}/nftables.conf /etc/nftables.conf
-	cp ${DIR}/nftables/omr-vars.nft /etc/nftables/omr-vars.nft
-	cp ${DIR}/nftables/omr.nft /etc/nftables/omr.nft
-	cp ${DIR}/nftables/omr-admin-resync.conf /etc/systemd/system/nftables.service.d/omr-admin-resync.conf
-	cp ${DIR}/nftables/omr-bypass-resync.conf /etc/systemd/system/nftables.service.d/omr-bypass-resync.conf
-	cp ${DIR}/nftables/omr-geoban-resync.conf /etc/systemd/system/nftables.service.d/omr-geoban-resync.conf
-	cp ${DIR}/systemd/20-omr-wait-online-any.conf /etc/systemd/system/systemd-networkd-wait-online.service.d/20-omr-wait-online-any.conf
-fi
+install_file nftables.conf /etc/nftables.conf
+install_file nftables/omr-vars.nft /etc/nftables/omr-vars.nft
+install_file nftables/omr.nft /etc/nftables/omr.nft
+install_file nftables/omr-admin-resync.conf /etc/systemd/system/nftables.service.d/omr-admin-resync.conf
+install_file nftables/omr-bypass-resync.conf /etc/systemd/system/nftables.service.d/omr-bypass-resync.conf
+install_file nftables/omr-geoban-resync.conf /etc/systemd/system/nftables.service.d/omr-geoban-resync.conf
+install_file systemd/20-omr-wait-online-any.conf /etc/systemd/system/systemd-networkd-wait-online.service.d/20-omr-wait-online-any.conf
 [ -n "$INTERFACE" ] && sed -i "/^define NET_IFACE6 /!s:eth0:$INTERFACE:g" /etc/nftables/omr-vars.nft
 # The IPv6 WAN can be another NIC (openmptcprouter#3271); INTERFACE6 falls back to $INTERFACE.
 [ -n "$INTERFACE6" ] && sed -i "/^define NET_IFACE6 /s:eth0:$INTERFACE6:" /etc/nftables/omr-vars.nft
@@ -3173,6 +2975,10 @@ fi
 # published), and the VPS went to the stable channel.
 mkdir -p /etc/openmptcprouter-vps-admin
 echo "$VPSPATH" > /etc/openmptcprouter-vps-admin/vpspath
+# The switches this run used, for the next one (read at the top)
+for _opt_name in $OMR_OPTION_NAMES; do
+	eval "printf '%s=%s\n' $_opt_name \"\$$_opt_name\""
+done > "$OMR_INSTALL_OPTIONS"
 
 if [ "$SOURCES" != "yes" ]; then
 	# Not silent any more: when this does not install, the VPS is left with no

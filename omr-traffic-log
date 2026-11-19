@@ -28,6 +28,13 @@ ETC=${OMR_TRAFFIC_LOG_ETC:-/etc}
 # Without accounting, DESTROY events carry no packets=/bytes= fields.
 sysctl -qw net.netfilter.nf_conntrack_acct=1
 
+# The flows remembered from NEW to DESTROY can't outnumber the ones conntrack
+# holds at once: past that, they are flows whose DESTROY event conntrack
+# dropped (ENOBUFS under load), which would stay in memory for good.
+# OMR_TRAFFIC_LOG_MAX_FLOWS is for tests only.
+MAX_FLOWS=${OMR_TRAFFIC_LOG_MAX_FLOWS:-$(sysctl -n net.netfilter.nf_conntrack_max 2> /dev/null)}
+case "$MAX_FLOWS" in '' | *[!0-9]*) MAX_FLOWS=262144 ;; esac
+
 # Debian's awk is mawk, which otherwise waits for a full input buffer before
 # reading a line: on a quiet VPS nothing would be logged for minutes.
 AWK=awk
@@ -64,7 +71,7 @@ glorytun_map() {
 	# arrive; flows opened in the first second are attributed at DESTROY instead.
 	sleep 1
 	exec stdbuf -oL conntrack -E -e NEW,DESTROY -o extended,id -b 8388608
-} | exec $AWK '
+} | exec $AWK -v maxflows="$MAX_FLOWS" '
 # The VPS own addresses. Reloaded at each new tunnel address, as a tunnel
 # interface only gets its address once its daemon is up.
 function load_local(   cmd, l, a) {
@@ -152,8 +159,14 @@ $1 == "MAP" { learn($2, $3, $4); next }
 		if (f["src"] in loc) next
 	} else next
 	id = $NF
-	if ($1 ~ /NEW/) { byid[id] = user[tip]; bysrv[id] = srv[tip]; next }
-	if (id in byid) { u = byid[id]; server = bysrv[id]; delete byid[id]; delete bysrv[id] }
+	if ($1 ~ /NEW/) {
+		# More than conntrack can hold: start over. A flow still open is
+		# then attributed at DESTROY, like one opened in the first second.
+		if (++nflows > maxflows) { delete byid; delete bysrv; nflows = 1 }
+		byid[id] = user[tip]; bysrv[id] = srv[tip]
+		next
+	}
+	if (id in byid) { u = byid[id]; server = bysrv[id]; delete byid[id]; delete bysrv[id]; nflows-- }
 	else { u = user[tip]; server = srv[tip] }
 	# reply source = the real target, after DNAT for a port forward. Byte
 	# counts stay strings: old mawk clamps %d at 2^31.

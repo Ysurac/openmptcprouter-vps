@@ -59,13 +59,12 @@ installed_filters="$(printf '%s\n' $installed_filters | sort -u | tr '\n' ' ')"
 
 for f in fail2ban-filter-*.conf; do
     name="${f#fail2ban-filter-}"; name="${name%.conf}"
-    # wget -O DEST URL, or the installer's fetch_file URL DEST wrapper.
-    wget_count=$(uncommented | grep -cE "(wget -O /etc/fail2ban/filter\.d/$name\.conf .*$f|fetch_file .*/$f /etc/fail2ban/filter\.d/$name\.conf)\$")
-    cp_count=$(uncommented | grep -cE "cp \\\$\{DIR\}/$f /etc/fail2ban/filter\.d/$name\.conf\$")
-    if [ "$wget_count" -ge 1 ] && [ "$cp_count" -ge 1 ]; then
-        pass "$f is installed as filter.d/$name.conf by both branches"
+    # install_file NAME DEST, which a fresh install and an update share
+    count=$(uncommented | grep -cE "install_file $f /etc/fail2ban/filter\.d/$name\.conf\$")
+    if [ "$count" -eq 1 ]; then
+        pass "$f is installed as filter.d/$name.conf"
     else
-        fail "$f: fresh install installs it $wget_count time(s), an update $cp_count time(s) (both must be 1)"
+        fail "$f: installed $count time(s) as filter.d/$name.conf (must be 1)"
     fi
 done
 

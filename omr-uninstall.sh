@@ -407,7 +407,7 @@ echo "Remove OpenMPTCProuter files..."
 rm_unowned /usr/local/bin/omr-service /usr/local/bin/omr-6in4-run /usr/local/bin/omr-vxlan-run \
 	/usr/local/bin/omr-bypass /usr/local/bin/omr-reserved-ports /usr/local/bin/omr-net-mem /usr/local/bin/omr-geoban \
 	/usr/local/bin/omr-traffic-log \
-	/usr/local/bin/omr-test-speed /usr/local/bin/multipath /usr/local/bin/glorytun-tcp \
+	/usr/local/bin/omr-test-speed /usr/local/bin/omr-test-speedv6 /usr/local/bin/multipath /usr/local/bin/glorytun-tcp \
 	/usr/local/bin/glorytun-tcp-run /usr/local/bin/glorytun-udp-run /usr/local/bin/dsvpn-run \
 	/usr/local/bin/v2ray-plugin /usr/local/bin/obfs-server \
 	/usr/bin/omr-update /usr/bin/omradmin.py /usr/share/omr-admin /usr/share/omr-server \
@@ -424,11 +424,12 @@ done
 rm_unowned /lib/systemd/network/mlvpn.network /lib/systemd/network/glorytun.network \
 	/lib/systemd/network/glorytun-udp.network /lib/systemd/network/glorytun-tcp.network \
 	/lib/systemd/network/openvpn.network
-rm -f /etc/systemd/system/iperf3.service.d/override.conf \
+rm -f /etc/systemd/system/iperf3.service.d/override.conf /etc/systemd/system/openvpn@tun0.service.d/override.conf \
 	/etc/systemd/system/systemd-networkd-wait-online.service.d/20-omr-wait-online-any.conf \
 	/etc/systemd/system/shadowsocks-go.service.d/omr-traffic-log.conf \
-	/etc/syslog-ng/conf.d/omr-traffic.conf /etc/logrotate.d/omr-traffic
-rmdir_unowned /etc/systemd/system/iperf3.service.d /etc/systemd/system/systemd-networkd-wait-online.service.d \
+	/etc/syslog-ng/conf.d/omr-traffic.conf /etc/syslog-ng/conf.d/omr-traffic-destinations.conf \
+	/etc/logrotate.d/omr-traffic
+rmdir_unowned /etc/systemd/system/iperf3.service.d /etc/systemd/system/openvpn@tun0.service.d /etc/systemd/system/systemd-networkd-wait-online.service.d \
 	/etc/systemd/system/shadowsocks-go.service.d
 
 rm_unowned /etc/openmptcprouter-vps-admin /etc/shadowsocks-libev /etc/shadowsocks-go /etc/v2ray /etc/xray \

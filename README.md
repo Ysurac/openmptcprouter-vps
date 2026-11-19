@@ -13,16 +13,13 @@ This is the VPS part of [OpenMPTCProuter](https://www.openmptcprouter.com/), a s
 * ```/shorewall4```, ```/shorewall6```: legacy Shorewall configuration, kept for reference/rollback -- no longer installed by debian9-x86_64.sh
 * ```glorytun-tcp-run```: script to run glorytun with configuration parameters
 * ```glorytun-tcp@.service.in```: glorytun systemd service
-* ```glorytun.network```: glorytun systemd network (for DHCP)
 * ```glorytun-udp-run```: script to run glorytun UDP with configuration parameters
-* ```glorytun-udp.network```: glorytun UDP systemd network (for DHCP)
 * ```glorytun-udp@.service.in```: glorytun UDP systemd service
 * ```mlvpn.network```: MLVPN systemd network (for DHCP)
 * ```mlvpn0.conf```: MLVPN default config
 * ```omr-6in4-service```: Script used to make 6in4 tunnel always up and detect ip used by OpenMPTCProuter to config Shorewall
 * ```omr-6in4.service.in```: Systemd service to run the script
 * ```openvpn-tun0.cnf```: OpenVPN default config
-* ```openvpn.network```: OpenVPN systemd network (for DHCP)
 * ```shadowsocks.conf```: shadowsocks sysctl.d optimization and mptcp config
 * ```tun0.glorytun```: glorytun default configuration
 * ```tun0.glorytun-udp```: glorytun default configuration

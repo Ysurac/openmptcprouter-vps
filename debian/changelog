@@ -1,3 +1,10 @@
+omr-server (0.1101) unstable; urgency=medium
+
+    * debian9-x86_64.sh: update the 6.18 kernel (the default) to 6.18.64 build 20261122; its x64v2 packages are dated 20261123 (that build ran past midnight), so KERNEL_REV is set apart for that PSABI
+    * debian9-x86_64.sh: update KERNEL=7.3 to 7.3.5 build 20261122 (every PSABI from the same day)
+
+ -- OpenMPTCProuter <contact@openmptcprouter.com>  Mon, 23 Nov 2026 00:00:00 +0100
+
 omr-server (0.1100) unstable; urgency=medium
 
     * Traffic log: where it goes is now in its own file, /etc/syslog-ng/conf.d/omr-traffic-destinations.conf (syslog-ng-omr-traffic-destinations.conf), one destination block holding one driver per line (the log file, and a commented remote syslog collector example), so destinations are added or removed without touching the filter and log path of omr-traffic.conf. The installer creates it only when it is missing, so local edits stay across updates; TRAFFIC_LOG=no and omr-uninstall.sh remove it. The user manual says so

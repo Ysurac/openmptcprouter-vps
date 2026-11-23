@@ -138,7 +138,7 @@ VPSURL="https://www.openmptcprouter.com/"
 REPO="repo.openmptcprouter.com"
 CHINA=${CHINA:-no}
 
-OMR_VERSION="0.1100-rolling-test"
+OMR_VERSION="0.1101-rolling-test"
 
 DIR=$( pwd )
 #"
@@ -999,13 +999,15 @@ elif [ "$KERNEL" = "6.18" ] || [ "$KERNEL" = "7.3" ]; then
 	# 20260730 was built for x86-64-v3 under every name: its x64v1 and x64v2
 	# packages did not boot on a CPU without AVX2 (Ysurac/openmptcprouter#4407)
 	KERNEL_VERSION="6.18.64"
-	KERNEL_REV="20261118"
+	KERNEL_REV="20261122"
+	# This run built x64v2 after midnight, so only its packages carry the next day's date
+	[ "$PSABI" = "x64v2" ] && KERNEL_REV="20261123"
 	# The GitHub release of this build, for when ${VPSURL}kernel/ lacks it
-	KERNEL_RELEASE_URL="https://github.com/Ysurac/linux/releases/download/omr-kernel-20261118-39-8f02cdc/"
+	KERNEL_RELEASE_URL="https://github.com/Ysurac/linux/releases/download/omr-kernel-20261123-40-8f02cdc/"
 	if [ "$KERNEL" = "7.3" ]; then
 		KERNEL_VERSION="7.3.5"
-		KERNEL_REV="20261117"
-		KERNEL_RELEASE_URL="https://github.com/Ysurac/linux/releases/download/omr-kernel-20261117-38-3985ba3/"
+		KERNEL_REV="20261122"
+		KERNEL_RELEASE_URL="https://github.com/Ysurac/linux/releases/download/omr-kernel-20261123-41-3985ba3/"
 	fi
 	#if [ "$CHINA" = "yes" ]; then
 	#	wget -O /tmp/linux-image-${KERNEL_VERSION}-${PSABI}-xanmod1_${KERNEL_VERSION}-${PSABI}-xanmod1-${KERNEL_REV}_amd64.deb https://sourceforge.net/projects/xanmod/files/releases/lts/${KERNEL_VERSION}-xanmod1/${KERNEL_VERSION}-${PSABI}-xanmod1/linux-image-${KERNEL_VERSION}-${PSABI}-xanmod1_${KERNEL_VERSION}-${PSABI}-xanmod1-${KERNEL_REV}_amd64.deb

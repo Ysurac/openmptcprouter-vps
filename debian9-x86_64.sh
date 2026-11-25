@@ -106,8 +106,8 @@ MLVPN_VERSION="8aa1b16d843ea68734e2520e39a34cb7f3d61b2b"
 MLVPN_BINARY_VERSION="3.0.0+20211028.git.ddafba3"
 OBFS_VERSION="486bebd9208539058e57e23a12f23103016e09b4"
 OBFS_BINARY_VERSION="0.0.5-1"
-OMR_ADMIN_VERSION="aee208030982a3a8dc43a4fa2da067cdb345b8d4"
-OMR_ADMIN_BINARY_VERSION="0.18+20261111"
+OMR_ADMIN_VERSION="5ad607914109ab839bcc8ea5225e73355c4abf86"
+OMR_ADMIN_BINARY_VERSION="0.19+20261125"
 # Debian 13's python3-fastapi: pip installs the same release elsewhere
 FASTAPI_VERSION="0.115.11"
 DSVPN_VERSION="3b99d2ef6c02b2ef68b5784bec8adfdd55b29b1a"
@@ -117,7 +117,7 @@ OPENVPN_BINARY_VERSION="2.7.8+mptcp.20261015.g5f3fa84~trixie"
 IPERF_VERSION="3.22-0.1"
 V2RAY_VERSION="5.54.2"
 V2RAY_PLUGIN_VERSION="4.43.0"
-XRAY_VERSION="26.7.11"
+XRAY_VERSION="26.11.9"
 EASYRSA_VERSION="3.2.2"
 #SHADOWSOCKS_VERSION="7407b214f335f0e2068a8622ef3674d868218e17"
 #if [ "$UPSTREAM" = "yes" ] || [ "$UPSTREAM6" = "yes" ]; then
@@ -138,7 +138,7 @@ VPSURL="https://www.openmptcprouter.com/"
 REPO="repo.openmptcprouter.com"
 CHINA=${CHINA:-no}
 
-OMR_VERSION="0.1101-rolling-test"
+OMR_VERSION="0.1102-rolling-test"
 
 DIR=$( pwd )
 #"
@@ -383,7 +383,9 @@ if [ "$UPDATE" = "yes" ]; then
 	elif [ -f /root/openmptcprouter_config.txt ]; then
 		update="1"
 	fi
-	echo "Update mode"
+	if [ "$update" = "1" ]; then
+		echo "Update mode"
+	fi
 fi
 # Force update key
 #[ -f /etc/apt/sources.list.d/openmptcprouter.list ] && {
@@ -998,16 +1000,14 @@ elif [ "$KERNEL" = "6.18" ] || [ "$KERNEL" = "7.3" ]; then
 	#set_grub_default_kernel "${KERNEL_VERSION}" "${PSABI}-xanmod"
 	# 20260730 was built for x86-64-v3 under every name: its x64v1 and x64v2
 	# packages did not boot on a CPU without AVX2 (Ysurac/openmptcprouter#4407)
-	KERNEL_VERSION="6.18.64"
-	KERNEL_REV="20261122"
-	# This run built x64v2 after midnight, so only its packages carry the next day's date
-	[ "$PSABI" = "x64v2" ] && KERNEL_REV="20261123"
+	KERNEL_VERSION="6.18.65"
+	KERNEL_REV="20261124"
 	# The GitHub release of this build, for when ${VPSURL}kernel/ lacks it
-	KERNEL_RELEASE_URL="https://github.com/Ysurac/linux/releases/download/omr-kernel-20261123-40-8f02cdc/"
+	KERNEL_RELEASE_URL="https://github.com/Ysurac/linux/releases/download/omr-kernel-20261124-42-c0afa79/"
 	if [ "$KERNEL" = "7.3" ]; then
-		KERNEL_VERSION="7.3.5"
-		KERNEL_REV="20261122"
-		KERNEL_RELEASE_URL="https://github.com/Ysurac/linux/releases/download/omr-kernel-20261123-41-3985ba3/"
+		KERNEL_VERSION="7.3.6"
+		KERNEL_REV="20261124"
+		KERNEL_RELEASE_URL="https://github.com/Ysurac/linux/releases/download/omr-kernel-20261124-43-7936341/"
 	fi
 	#if [ "$CHINA" = "yes" ]; then
 	#	wget -O /tmp/linux-image-${KERNEL_VERSION}-${PSABI}-xanmod1_${KERNEL_VERSION}-${PSABI}-xanmod1-${KERNEL_REV}_amd64.deb https://sourceforge.net/projects/xanmod/files/releases/lts/${KERNEL_VERSION}-xanmod1/${KERNEL_VERSION}-${PSABI}-xanmod1/linux-image-${KERNEL_VERSION}-${PSABI}-xanmod1_${KERNEL_VERSION}-${PSABI}-xanmod1-${KERNEL_REV}_amd64.deb
@@ -1422,7 +1422,6 @@ if [ "$OMR_ADMIN" = "yes" ]; then
 	fi
 	apt-get -y --allow-downgrades install python3-uvicorn jq ipcalc python3-netifaces python3-aiofiles python3-psutil python3-requests pwgen conntrack
 	echo '-- pip3 install needed python modules'
-	echo "If you see any error here, I really don't care: it's about a module not used for home users"
 	#pip3 install pyjwt passlib uvicorn fastapi netjsonconfig python-multipart netaddr
 	#pip3 -q install fastapi netjsonconfig python-multipart uvicorn -U
 	if [ "$ID" = "debian" ] && [ "$VERSION_ID" = "13" ]; then
@@ -2081,7 +2080,9 @@ if [ "$WIREGUARD" = "yes" ]; then
 		AllowedIPs = 10.255.246.2/32
 		EOF
 	fi
-	if [ ! -f /root/wireguard-client.conf ]; then
+	# Not without the VPS address (ip.openmptcprouter.com did not answer):
+	# one written without it ("Endpoint = :65312") is written again here.
+	if [ -n "$VPS_PUBLIC_IP" ] && { [ ! -f /root/wireguard-client.conf ] || grep -q '^Endpoint = :' /root/wireguard-client.conf; }; then
 		cat > /root/wireguard-client.conf <<-EOF
 		[Interface]
 		Address = 10.255.246.2/24

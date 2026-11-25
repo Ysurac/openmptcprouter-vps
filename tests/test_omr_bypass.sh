@@ -199,12 +199,12 @@ fake_tests() {
 echo "== omr-bypass against fakes =="
 
 setup
-set_list '{"vpn1":{"ipv4":["8.8.8.8","1.1.1.0/24","9.9.9.1-9.9.9.9","5.5.5.5 6.6.6.6","1.1.1.1; flush ruleset","x{y}",null,7],"ipv6":["2606:4700::1111","2a00::/16"]}}'
+set_list '{"vpn1":{"ipv4":["8.8.8.8","1.1.1.0/24","9.9.9.1-9.9.9.9","5.5.5.5 6.6.6.6","1.1.1.1; flush ruleset","x{y}",null,7,"2a00::1"],"ipv6":["2606:4700::1111","2a00::/16","1.2.3.4"]}}'
 run_bypass
 assert_eq "applies a list with neither iptables nor ipset installed (was exit 127)" 0 "$RC"
 assert_eq "no command outside the expected ones" "" "$(unexpected)"
 check "the table is loaded in one nft -f" grep -q '^table inet omr_bypass {' "$T/st/table"
-assert_eq "only the words that can be an address, a prefix or a range reach nft" \
+assert_eq "only the words that can be an address, a prefix or a range of the set's family reach nft" \
     "$(printf '%s\n' 'dst4 1.1.1.0/24' 'dst4 5.5.5.5' 'dst4 6.6.6.6' 'dst4 8.8.8.8' 'dst4 9.9.9.1-9.9.9.9' 'dst6 2606:4700::1111' 'dst6 2a00::/16' | sort)" \
     "$(elements)"
 assert_eq "each set is filled by one nft call" 2 "$(grep -c '^nft -f -$' "$T/log" | awk '{print $1 - 1}')"
@@ -474,10 +474,11 @@ e2e() {
     ip -n $vps -6 route add 2001:db8:98::/48 via 2001:db8:99::1 dev vpn1
     ip -n $peer addr add 8.8.8.8/32 dev lo; ip -n $peer -6 addr add 2606:4700::1111/128 dev lo
     ip -n $inet addr add 8.8.4.4/32 dev lo; ip -n $inet -6 addr add 2606:4700::1001/128 dev lo
+    ip -n $inet addr add 198.51.100.7/32 dev lo
 
     mkdir -p "$T/cfg" "$T/fw"
     echo '{"users":[],"bypass_intf":"vpn1"}' > "$T/cfg/omr-admin-config.json"
-    set_list '{"vpn1":{"ipv4":["8.8.8.8"],"ipv6":["2606:4700::1111"]}}'
+    set_list '{"vpn1":{"ipv4":["8.8.8.8","198.51.100.7"],"ipv6":["2606:4700::1111"]}}'
     load_rules() {
         cp nftables/omr-vars.nft "$T/fw/"
         sed "s|/etc/nftables/|$T/fw/|" nftables.conf > "$T/fw/nftables.conf"
@@ -494,6 +495,10 @@ e2e() {
     check "the router's IPv6 to any other address still gets one through eth0" replies $router 2606:4700::1001
     check "the VPS's own IPv4 to a bypassed address gets an answer through vpn1" replies $vps 8.8.8.8
     check "the VPS's own IPv6 to a bypassed address gets an answer through vpn1" replies $vps 2606:4700::1111
+    # An admin's SSH from an address in the list: the reply was marked and
+    # sent out vpn1, where nothing routes it back.
+    check "a bypassed address that connects to the VPS through eth0 gets its replies through eth0" \
+        ip netns exec $inet ping -c 2 -i 0.2 -W 1 -q -I 198.51.100.7 192.0.2.2
 
     # Without omr.nft's two bypass rules, the same checks have to fail, or
     # they prove nothing.

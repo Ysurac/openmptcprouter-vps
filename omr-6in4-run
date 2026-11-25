@@ -38,9 +38,13 @@ fi
 
 read_conf "$(readlink -f "$2")" LOCALIP REMOTEIP LOCALIP6 REMOTEIP6 ULA
 
-DEV="omr-6in4-$(basename "$2")"
+# 15 characters at most (IFNAMSIZ): "omr-6in4-user100" had 16, so users 100 and
+# up got no tunnel. OLD is that former name, taken away where it is still up.
+DEV="6in4-$(basename "$2")"
+OLD="omr-6in4-$(basename "$2")"
 
 if [ "$1" = "start" ]; then
+        ip tunnel del ${OLD} > /dev/null 2>&1 || true
         [ -n "$(ip tunnel show ${DEV})" ] && ip tunnel del ${DEV} 2>&1 >/dev/null
         ip tunnel add ${DEV} mode sit remote ${REMOTEIP} local ${LOCALIP}
         ip -6 addr add ${LOCALIP6} dev ${DEV}
@@ -48,5 +52,5 @@ if [ "$1" = "start" ]; then
         [ -n "$ULA" ] && [ "$ULA" != "auto" ] && ip route replace ${ULA} via $(echo ${REMOTEIP6} | cut -d/ -f1) dev ${DEV}
 fi
 if [ "$1" = "stop" ]; then
-        ip tunnel del ${DEV}
+        ip tunnel del ${OLD} > /dev/null 2>&1 || ip tunnel del ${DEV}
 fi

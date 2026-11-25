@@ -173,5 +173,21 @@ assert_line "the flow stored after the reset keeps its user" \
     '{"server": "mqvpn", "network": "tcp", "clientAddress": "198.51.100.7:40000", "username": "bob", "targetAddress": "10.255.220.3:8080", "nl2r": 400, "nr2l": 3000}'
 assert_eq "nothing lost" "8" "$(wc -l < "$OUT" | tr -d ' ')"
 
+kill -- -"$PID" 2> /dev/null
+
+# conntrack -E gone (killed when memory ran out): the journal readers kept the
+# pipe open, so the unit stayed active without logging a flow, and was never
+# restarted. The whole script has to end, for systemd to start it again.
+echo
+echo "== the script ends with conntrack =="
+printf '#!/bin/sh\nexit 1\n' > "$FAKE_BIN/conntrack"
+OMR_TRAFFIC_LOG_ETC="$ETC" PATH="$FAKE_BIN:$PATH" setsid sh "$SCRIPT" > /dev/null 2>&1 &
+PID=$!
+for _ in $(seq 50); do
+    kill -0 "$PID" 2> /dev/null || break
+    "$REAL_SLEEP" 0.1
+done
+assert_eq "a dead conntrack ends the script" "ended" "$(kill -0 "$PID" 2> /dev/null && echo running || echo ended)"
+
 printf '\n%d passed, %d failed\n' "$PASS" "$FAIL"
 [ "$FAIL" -eq 0 ]

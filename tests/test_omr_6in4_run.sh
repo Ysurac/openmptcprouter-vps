@@ -80,10 +80,22 @@ test_start_sets_tunnel_address_and_ula_route() {
         'LOCALIP6=fd00::a00:1/126' 'REMOTEIP6=fd00::a00:2/126' 'ULA=fd12:3456:789a::/48')
     calls=$(_run start "$cfg")
     assert_calls_contain "sit tunnel created" "$calls" \
-        "ip tunnel add omr-6in4-user0 mode sit remote 10.255.255.2 local 10.255.255.1"
-    assert_calls_contain "tunnel address set" "$calls" "ip -6 addr add fd00::a00:1/126 dev omr-6in4-user0"
+        "ip tunnel add 6in4-user0 mode sit remote 10.255.255.2 local 10.255.255.1"
+    assert_calls_contain "tunnel address set" "$calls" "ip -6 addr add fd00::a00:1/126 dev 6in4-user0"
     assert_calls_contain "ULA routed to the router" "$calls" \
-        "ip route replace fd12:3456:789a::/48 via fd00::a00:2 dev omr-6in4-user0"
+        "ip route replace fd12:3456:789a::/48 via fd00::a00:2 dev 6in4-user0"
+}
+
+# Linux names are 15 characters at most: "omr-6in4-user100" was refused.
+test_user_100_and_up_fit_the_name_limit() {
+    local cfg calls dev
+    cfg=$(_write_cfg user253 'LOCALIP=10.255.252.1' 'REMOTEIP=10.255.252.2' \
+        'LOCALIP6=fd00::afd:1/126' 'REMOTEIP6=fd00::afd:2/126' 'ULA=auto')
+    calls=$(_run start "$cfg")
+    dev=$(sed -n 's/^ip tunnel add \([^ ]*\) .*/\1/p' "$calls")
+    assert_eq "user253's device name" "6in4-user253" "$dev"
+    assert_eq "within 15 characters" "yes" "$([ ${#dev} -le 15 ] && echo yes)"
+    assert_calls_contain "the former name is taken away" "$calls" "ip tunnel del omr-6in4-user253"
 }
 
 test_ula_auto_adds_no_route() {
@@ -106,7 +118,7 @@ test_config_is_not_run_as_shell_code() {
     calls=$(_run start "$cfg")
     assert_eq "no command from the file ran" "" "$(ls "$TMPDIR"/pwned* 2>/dev/null)"
     assert_calls_contain "valid keys still applied, PATH not taken from the file" "$calls" \
-        "ip tunnel add omr-6in4-user2 mode sit remote 10.255.255.10 local 10.255.255.9"
+        "ip tunnel add 6in4-user2 mode sit remote 10.255.255.10 local 10.255.255.9"
     assert_calls_lack "invalid LOCALIP6 ignored" "$calls" "\$(touch"
     assert_calls_lack "invalid ULA ignored" "$calls" "ip route replace"
 }
@@ -115,6 +127,7 @@ test_config_is_not_run_as_shell_code() {
 
 for t in \
     test_start_sets_tunnel_address_and_ula_route \
+    test_user_100_and_up_fit_the_name_limit \
     test_ula_auto_adds_no_route \
     test_config_is_not_run_as_shell_code \
 ; do

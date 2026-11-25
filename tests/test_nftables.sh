@@ -215,13 +215,13 @@ else
     pass "the input chain accepts MLD queries without an ip6 nexthdr match"
 fi
 
-# #4382: the router's IPv6 arrives through the omr-6in4-user* sit tunnel, a
+# #4382: the router's IPv6 arrives through the 6in4-user* sit tunnel, a
 # vpn interface in shorewall6/interfaces. Left out of VPN_IFACES, everything
 # the router routes into it hits the forward chain's trailing reject.
-if nft_body "$VARS" | grep -E '^define VPN_IFACES' | grep -q '"omr-6in4-user\*"'; then
-    pass "VPN_IFACES includes the 6in4 tunnel (omr-6in4-user*)"
+if nft_body "$VARS" | grep -E '^define VPN_IFACES' | grep -q '"6in4-user\*"'; then
+    pass "VPN_IFACES includes the 6in4 tunnel (6in4-user*)"
 else
-    fail "VPN_IFACES lacks omr-6in4-user*; the router's IPv6 is rejected in forward (#4382)"
+    fail "VPN_IFACES lacks 6in4-user*; the router's IPv6 is rejected in forward (#4382)"
 fi
 # With the tunnel in VPN_IFACES, an unrestricted net->vpn accept lets any new
 # IPv6 connection from the internet reach a LAN using a public prefix.

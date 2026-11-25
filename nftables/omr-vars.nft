@@ -21,7 +21,7 @@ define OMR_ADDR6  = fd00::a00:2
 # (the vpn/vpncl zone assignments there, e.g. `vpn tun+ nosmurfs,tcpflags`).
 # nft's iifname/oifname support a trailing "*" wildcard natively, so each
 # Shorewall `+`-suffixed interface name maps 1:1 to a `*`-suffixed one here.
-# omr-6in4-user* (shorewall6/interfaces) is the 6in4 tunnel (omr6in4@.service)
+# 6in4-user* (omr-6in4-user* before 0.1102) is the 6in4 tunnel (omr6in4@.service)
 # that carries the router's IPv6 (openmptcprouter#4382).
-define VPN_IFACES = { "gt-tun*", "gt-udp-tun*", "mlvpn*", "tun*", "wg*", "dsvpn*", "mqvpn*", "gre-user*", "vx-user*", "omr-6in4-user*", "omr-bonding", "tap_softether" }
+define VPN_IFACES = { "gt-tun*", "gt-udp-tun*", "mlvpn*", "tun*", "wg*", "dsvpn*", "mqvpn*", "gre-user*", "vx-user*", "6in4-user*", "omr-6in4-user*", "omr-bonding", "tap_softether" }
 define VPNCL_IFACES = { "client-wg*" }

@@ -77,6 +77,12 @@ if [ "$1 $2" = "link show" ] && [ "$3" = "${IP_LINK_SHOW_EXISTS:-}" ] && [ -n "$
     exit 0
 fi
 [ "$1 $2" = "link show" ] && exit 1
+# IP_BRIDGE_RACE: another user's start makes the bridge first.
+if [ -n "${IP_BRIDGE_RACE:-}" ] && [ "$1 $2 $4 $5" = "link add type bridge" ]; then
+    mkdir -p "$SYSFS_NET/$3"
+    echo "RTNETLINK answers: File exists" >&2
+    exit 2
+fi
 exit 0
 EOF
 chmod +x "$FAKE_BIN/ip"
@@ -146,6 +152,14 @@ test_l2_reuses_existing_bridge() {
     calls=$(_run start "$cfg")
     assert_calls_lack "bridge NOT recreated (already existed)" "$calls" "link add br-vxlan5 type bridge"
     assert_calls_contain "still enslaves this client's device" "$calls" "ip link set vx-user_l2_join master br-vxlan5"
+}
+
+test_l2_bridge_made_by_another_user_meanwhile() {
+    local cfg calls
+    cfg=$(_write_cfg user_l2_race 'VNI=7' 'LOCALIP=10.0.0.1' 'REMOTEIP=10.0.0.5' 'MODE=l2' 'BRIDGE=br-vxlan7')
+    calls=$(IP_BRIDGE_RACE=1 _run start "$cfg")
+    assert_calls_contain "joins the bridge the other user made" "$calls" "ip link set vx-user_l2_race master br-vxlan7"
+    assert_calls_contain "and comes up" "$calls" "ip link set vx-user_l2_race up"
 }
 
 test_l2_without_bridge_var_skips_bridging_entirely() {
@@ -227,6 +241,7 @@ for t in \
     test_l3_is_the_implicit_default_when_mode_unset \
     test_l2_creates_bridge_when_missing \
     test_l2_reuses_existing_bridge \
+    test_l2_bridge_made_by_another_user_meanwhile \
     test_l2_without_bridge_var_skips_bridging_entirely \
     test_existing_device_is_deleted_before_recreation \
     test_stop_deletes_device_l3_no_bridge_touched \

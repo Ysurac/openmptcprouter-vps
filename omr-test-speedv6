@@ -40,17 +40,5 @@ trap : HUP INT TERM
 if [ -z "$INTERFACE" ]; then
 	curl -6 $HOST >/dev/null || echo
 else
-	domain=$(echo $HOST | awk -F/ '{print $3}')
-	hostip=$(dig +nocmd +noall +answer AAAA $domain | grep -v CNAME | awk '{print $5}' | tr '\n' ' ')
-	if [ -n "$(ipset list 2>/dev/null | grep ss_rules6)" ]; then
-		for ip in $hostip; do
-			ipset add ss_rules6_dst_bypass_all $ip
-		done
-	fi
 	curl -6 --interface $INTERFACE $HOST >/dev/null || echo
-	if [ -n "$(ipset list 2>/dev/null | grep ss_rules6)" ]; then
-		for ip in $hostip; do
-			ipset del ss_rules6_dst_bypass_all $ip
-		done
-	fi
 fi

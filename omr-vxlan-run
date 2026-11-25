@@ -55,7 +55,9 @@ if [ "$1" = "start" ]; then
                 # the same VNI, so their LANs merge into one broadcast domain)
                 if [ -n "${BRIDGE}" ]; then
                         if [ ! -d "${SYSFS_NET}/${BRIDGE}" ]; then
-                                ip link add ${BRIDGE} type bridge
+                                # Another user of the bridge, started at the same
+                                # time at boot, may have just made it ("File exists")
+                                ip link add ${BRIDGE} type bridge 2>/dev/null || [ -d "${SYSFS_NET}/${BRIDGE}" ]
                         fi
                         ip link set ${BRIDGE} up
                         ip link set ${DEV} master ${BRIDGE}

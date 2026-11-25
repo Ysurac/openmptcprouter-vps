@@ -1,3 +1,20 @@
+omr-server (0.1102) unstable; urgency=medium
+
+    * debian9-x86_64.sh: update the 6.18 kernel (the default) to 6.18.65 build 20261124 (every PSABI from the same day, so the x64v2 build date exception is gone)
+    * debian9-x86_64.sh: update KERNEL=7.3 to 7.3.6 build 20261124 (every PSABI from the same day)
+    * debian9-x86_64.sh: update omr-admin to 0.19+20261125 (5ad6079): optional omr_bgp module (public IPv4/IPv6 pools over BGP), /global_options, MQVPN automatic fixed IPs, /mptcp bbr_loss_thresh, /add_user userids up to 253; the 6in4 tunnel is a VPN interface again in its nftables rules, a service port the firewall refused is opened again at the next call, /openvpn refuses a port already taken, /add_user undoes a user ss-go, SoftEther or MQVPN did not take, audit fixes
+    * debian9-x86_64.sh: update Xray to 26.11.9 (26.10.29 was withdrawn upstream). Since 26.10.31 Xray no longer takes MPTCP from the Go default, only from tcpMptcp, which every OMR inbound sets
+    * omr-bypass: leave replies unmarked, so an SSH session or a router's tunnel from an address in the bypass list is answered the way it came in instead of out through vpn1; only words of each set's own family reach nft (one IPv6 address in the IPv4 list made it add the whole list one element at a time)
+    * omr-6in4-run: name the tunnel 6in4-user<id> (omr-6in4-user100 and up were longer than the 15 characters Linux allows, so users 100 to 253 got no IPv6); the former name is removed at start and stop, and both are in VPN_IFACES
+    * omr-geoban: read conntrack -L before /proc/net/nf_conntrack in the lockout check (the file writes IPv6 in full, so routers connected over IPv6 were never found); one download file per run, as check, asn and ranges run without the lock
+    * omr-vxlan-run: an L2 bridge another user of the same VNI made at the same time (at boot) no longer fails the start with "File exists"
+    * omr-traffic-log: end when conntrack -E does, for systemd to restart it (the journal readers kept the pipe open: the unit stayed active and logged no flow)
+    * omr-test-speed, omr-test-speedv6: remove the ss_rules ipset blocks, router-side code that never ran on the VPS
+    * debian9-x86_64.sh: print "Update mode" on updates only; write /root/wireguard-client.conf only with the VPS address, and write again one left with an empty Endpoint; drop the "If you see any error here, I really don't care" line before the Python modules install, whose failures do matter (Debian 13 installs them with apt under set -e, older releases need fastapi, starlette and python-multipart from pip for omr-admin)
+    * tests: the MaxMind checksum test failed when the real sum started with 0 (about 1 run in 16)
+
+ -- OpenMPTCProuter <contact@openmptcprouter.com>  Tue, 24 Nov 2026 00:00:00 +0100
+
 omr-server (0.1101) unstable; urgency=medium
 
     * debian9-x86_64.sh: update the 6.18 kernel (the default) to 6.18.64 build 20261122; its x64v2 packages are dated 20261123 (that build ran past midnight), so KERNEL_REV is set apart for that PSABI

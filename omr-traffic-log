@@ -70,7 +70,10 @@ glorytun_map() {
 	# shortcut: lets the journal backlog fill the map before conntrack events
 	# arrive; flows opened in the first second are attributed at DESTROY instead.
 	sleep 1
-	exec stdbuf -oL conntrack -E -e NEW,DESTROY -o extended,id -b 8388608
+	stdbuf -oL conntrack -E -e NEW,DESTROY -o extended,id -b 8388608
+	# The other writers keep the pipe open: without this, a dead conntrack
+	# left the unit active, logging no flow, and Restart= never fired.
+	kill 0
 } | exec $AWK -v maxflows="$MAX_FLOWS" '
 # The VPS own addresses. Reloaded at each new tunnel address, as a tunnel
 # interface only gets its address once its daemon is up.

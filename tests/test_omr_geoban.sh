@@ -381,7 +381,9 @@ assert_eq "status names the lists applied" "from maxmind" "$(mm status | sed -n 
 
 before="$(md5sum < "$S/maxmind-country.csv.gz")"
 cp "$T/mm/GeoLite2-Country-CSV.zip.sha256" "$T/sha.keep"
-sed -i 's/^./0/; s/_20261106/_20261110/' "$T/mm/GeoLite2-Country-CSV.zip.sha256"
+# Another first digit, whatever it is (a sum starting with 0 stayed valid).
+sed -i 's/^0/1/;t;s/^./0/' "$T/mm/GeoLite2-Country-CSV.zip.sha256"
+sed -i 's/_20261106/_20261110/' "$T/mm/GeoLite2-Country-CSV.zip.sha256"
 mm update 2> "$T/err"; rc=$?
 check "a zip that does not match its checksum fails the update" [ "$rc" != 0 ]
 check "and says so" grep -q 'does not match its checksum' "$T/err"

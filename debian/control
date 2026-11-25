@@ -17,14 +17,14 @@ Depends:
  nftables,
  omr-shadowsocks-libev (= 3.3.5-3),
  omr-simple-obfs (= 0.0.5-1),
- omr-vps-admin (>= 0.18+20261111),
+ omr-vps-admin (>= 0.19+20261125),
  omr-mlvpn (= 3.0.0+20211028.git.ddafba3),
  omr-glorytun (= 0.3.4-5),
  omr-glorytun-tcp (= 0.0.35-6),
  omr-dsvpn (= 0.1.4-2),
  mqvpn (= 0.19.2+20261112-1),
  v2ray (= 5.54.2),
- xray (= 26.7.11),
+ xray (= 26.11.9),
  shadowsocks-go (= 1.14.0),
  ${misc:Depends}
 Recommends:

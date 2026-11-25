@@ -55,10 +55,11 @@ if command -v ipset > /dev/null 2>&1; then
 	done
 fi
 
-# The words of each list that can be an address, a prefix or a range: nft
-# would read anything else as part of the command.
-ipv4=$(jq -r --arg intf "$INTERFACE" '[.[$intf].ipv4[]? | strings | splits("\\s+") | select(test("^[0-9A-Fa-f:./-]+$"))] | join(",")' /etc/openmptcprouter-vps-admin/omr-bypass.json)
-ipv6=$(jq -r --arg intf "$INTERFACE" '[.[$intf].ipv6[]? | strings | splits("\\s+") | select(test("^[0-9A-Fa-f:./-]+$"))] | join(",")' /etc/openmptcprouter-vps-admin/omr-bypass.json)
+# The words of each list that can be an address, a prefix or a range of its
+# family: nft would read anything else as part of the command, and one word of
+# the other family makes it refuse the whole set, so each word is added alone.
+ipv4=$(jq -r --arg intf "$INTERFACE" '[.[$intf].ipv4[]? | strings | splits("\\s+") | select(test("^[0-9./-]+$"))] | join(",")' /etc/openmptcprouter-vps-admin/omr-bypass.json)
+ipv6=$(jq -r --arg intf "$INTERFACE" '[.[$intf].ipv6[]? | strings | splits("\\s+") | select(test("^[0-9A-Fa-f:./-]*:[0-9A-Fa-f:./-]*$"))] | join(",")' /etc/openmptcprouter-vps-admin/omr-bypass.json)
 
 # Nothing to bypass (an empty list, or none for ${INTERFACE}): take away the
 # table and the rule a previous list left, and don't wait for a route nothing
@@ -74,7 +75,8 @@ fi
 
 # Mark what goes to the bypassed addresses, forwarded (prerouting) or sent by
 # the VPS itself (output: a route chain, so a changed mark is routed again),
-# for the rule below. This used ipset and iptables, but the installer only
+# for the rule below. Replies are left alone: an SSH session or a router's
+# tunnel from a bypassed address must be answered the way it came in. This used ipset and iptables, but the installer only
 # installs iptables on Debian 10, and the tables iptables-nft makes went away
 # with every nftables reload. The table is replaced in one transaction.
 nft -f - <<-EOF
@@ -93,12 +95,14 @@ table inet omr_bypass {
 	}
 	chain prerouting {
 		type filter hook prerouting priority mangle; policy accept;
+		ct direction reply return
 		ip daddr @dst4 meta mark set ${MARK}
 		ip6 daddr @dst6 meta mark set ${MARK}
 	}
 	chain output {
 		type route hook output priority mangle; policy accept;
 		fib daddr type local return
+		ct direction reply return
 		ip daddr @dst4 meta mark set ${MARK}
 		ip6 daddr @dst6 meta mark set ${MARK}
 	}
